@@ -1,0 +1,305 @@
+/* Cloud Module Styles */
+
+.cloud-container {
+    display: flex;
+    height: calc(100vh - 60px);
+    overflow: hidden;
+}
+
+.cloud-sidebar {
+    width: 250px;
+    background: var(--surface-hi);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 8px;
+    transition: width 0.3s;
+}
+
+.cloud-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--cloud-nav-text);
+    transition: all 0.2s;
+    margin-bottom: 2px;
+}
+
+.cloud-nav-item:hover {
+    background: var(--cloud-row-hover);
+}
+
+.cloud-nav-item.active {
+    background: var(--cloud-nav-bg-active);
+    color: var(--cloud-nav-text-active);
+    font-weight: 600;
+}
+
+.cloud-explorer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+}
+
+.cloud-header {
+    background: var(--surface-hi);
+    border-bottom: 1px solid var(--border);
+}
+
+.cloud-table-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1fr 40px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.cloud-file-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1fr 40px;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--cloud-row-border);
+    font-size: 0.85rem;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.1s;
+    color: var(--text-main);
+}
+
+.cloud-file-row:hover {
+    background: var(--cloud-row-hover);
+}
+
+.cloud-file-name {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    overflow: hidden;
+}
+
+.cloud-file-name span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Info Panel */
+.cloud-info-panel {
+    width: 320px;
+    background: var(--bg-card);
+    border-left: 1px solid var(--border);
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+    animation: slideInRight 0.3s ease;
+}
+
+[data-theme="light"] .cloud-info-panel {
+    background: #f8fafc;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.info-panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.info-panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+}
+
+.info-tab {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.info-tab.active {
+    color: #ffffff;
+    border-bottom-color: #4285f4;
+    font-weight: 600;
+}
+
+[data-theme="light"] .info-tab.active {
+    color: #4285f4;
+}
+
+.info-content {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.info-file-preview {
+    width: 100%;
+    height: 160px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.info-panel-header #info-title {
+    font-weight: 700;
+    background: linear-gradient(to bottom, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+[data-theme="light"] .info-panel-header #info-title {
+    background: none;
+    -webkit-text-fill-color: initial;
+    color: var(--text-main);
+}
+
+.info-section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+    margin-bottom: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+
+.info-detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.info-detail-label {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    color: var(--text-dim);
+}
+
+.info-detail-value {
+    font-size: 0.85rem;
+    word-break: break-all;
+    color: var(--text-main);
+}
+
+/* Suggested Cards */
+.cloud-suggested-card {
+    background: var(--surface-hi);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 200px;
+}
+
+.cloud-suggested-card:hover {
+    border-color: var(--indigo);
+    background: var(--cloud-row-hover);
+    transform: translateY(-2px);
+}
+
+.suggested-preview {
+    height: 100px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    overflow: hidden;
+}
+
+/* Context Menu */
+.cloud-context-menu {
+    position: fixed;
+    z-index: 2000;
+    background: var(--surface-hi);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    min-width: 200px;
+    padding: 6px 0;
+    display: none;
+    backdrop-filter: blur(10px);
+}
+
+.context-item {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.1s;
+    color: var(--text-main);
+}
+
+.context-item:hover {
+    background: var(--indigo-dim);
+    color: #fff;
+}
+
+.context-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 0;
+}
+
+/* Modal */
+.cloud-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 3000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    padding: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+}
+
+@media (max-width: 1100px) {
+    .cloud-info-panel {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 1000;
+        box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    }
+}

@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Null-Void Engine</title>
+    <script>
+        (function () {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            // Resetear brillo a defecto antes de cargar ajustes del servidor
+            document.body.style.filter = 'none';
+        })();
+    </script>
+    <style>
+        :root,
+        [data-theme="dark"] {
+            --bg: #07090f;
+            --surface: rgba(10, 15, 28, 0.6);
+            --surface-hi: rgba(15, 22, 40, 0.8);
+            --border: rgba(99, 102, 241, 0.16);
+            --border-hi: rgba(99, 102, 241, 0.4);
+
+            /* Colores de acento */
+            --indigo: #6366f1;
+            --indigo-dim: rgba(99, 102, 241, 0.14);
+            --text-main: #e2e8f0;
+            --text-dim: #818cf8;
+            --text-muted: #3d5068;
+
+            /* Colores para métricas */
+            --cpu: #f87171;
+            --ram: #c084fc;
+            --temp: #fb923c;
+            --bg-card: #0f172a;
+            color-scheme: dark;
+        }
+
+        [data-theme="light"] {
+            --bg: #f3f4f6;
+            --surface: rgba(255, 255, 255, 0.8);
+            --surface-hi: rgba(255, 255, 255, 0.95);
+            --border: rgba(99, 102, 241, 0.12);
+            --border-hi: rgba(99, 102, 241, 0.3);
+            --text-main: #1f2937;
+            --text-dim: #4f46e5;
+            --text-muted: #6b7280;
+            --indigo: #4f46e5;
+            --indigo-dim: rgba(79, 70, 229, 0.08);
+            --cpu: #dc2626;
+            --ram: #9333ea;
+            --temp: #ea580c;
+            --bg-card: #ffffff;
+            color-scheme: light;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text-main);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+
+        #shell {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ══════════════════ TOPBAR ══════════════════ */
+        #topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 clamp(16px, 4vw, 32px);
+            height: 60px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-hi);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .tb-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-box {
+            width: 24px;
+            height: 24px;
+            background: var(--indigo);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 800;
+            border-radius: 4px;
+        }
+
+        .logo-text {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: 0.02em;
+        }
+
+        .tb-brand-sub {
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 1px;
+            display: block;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--indigo-dim);
+            border: 1px solid rgba(99, 102, 241, 0.38);
+            border-radius: 20px;
+            padding: 3px 12px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        .badge-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--indigo);
+            box-shadow: 0 0 8px rgba(99, 102, 241, 1);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .tb-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .tb-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .tb-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+        }
+
+        #btn-logout {
+            background: transparent;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-family: inherit;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #f87171;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #btn-logout:hover {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: #f87171;
+        }
+
+        .btn-theme {
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 0;
+        }
+
+        .btn-theme:hover {
+            background: var(--indigo-dim);
+            border-color: var(--indigo);
+            color: var(--indigo);
+        }
+
+        /* ══════════════════ MAIN & VIEWS ══════════════════ */
+        #main {
+            flex: 1;
+            padding: clamp(16px, 3vh, 32px) clamp(16px, 4vw, 32px);
+            max-width: 1100px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+            animation: fadeUp 0.4s ease both;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── SECTION DIVIDER ── */
+        .sec-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            margin-top: 24px;
+        }
+
+        .sec-row:first-child {
+            margin-top: 0;
+        }
+
+        .sec-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .sec-line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--border), transparent);
+        }
+
+        /* ══════════════════ MENU — STATUS CARDS ══════════════════ */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .s-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            transition: all 0.2s;
+        }
+
+        .s-card:hover {
+            border-color: var(--border-hi);
+            transform: translateY(-2px);
+            background: var(--surface-hi);
+        }
+
+        .s-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .s-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--text-dim);
+        }
+
+        .s-icon {
+            font-size: 1rem;
+            opacity: 0.7;
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+        }
+
+        .s-val {
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 6px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .s-sub {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* ══════════════════ MENU — NAV GRID ══════════════════ */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .nav-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .nav-btn:hover {
+            border-color: var(--indigo);
+            background: var(--surface-hi);
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .nav-btn.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .nav-icon {
+            font-size: 1.4rem;
+            filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.4));
+            transition: transform 0.2s;
+        }
+
+        .nav-btn:hover .nav-icon {
+            transform: scale(1.1);
+        }
+
+        .nav-label {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .nav-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: block;
+            line-height: 1.4;
+        }
+
+        /* ══════════════════ COMMON BUTTONS ══════════════════ */
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: transparent;
+            border: none;
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+            margin-bottom: 20px;
+            padding: 0;
+        }
+
+        .btn-back:hover {
+            color: var(--text-main);
+        }
+
+        .btn-primary {
+            height: 40px;
+            padding: 0 24px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+            background: linear-gradient(135deg, #5b52f0, #8b45f5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* ══════════════════ MONITOR ══════════════════ */
+        .monitor-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .monitor-title {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .m-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .m-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .m-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .m-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+            font-variant-numeric: tabular-nums;
+            transition: color 0.3s;
+        }
+
+        .m-card.cpu .m-value {
+            color: var(--cpu);
+            text-shadow: 0 0 20px rgba(248, 113, 113, 0.2);
+        }
+
+        .m-card.ram .m-value {
+            color: var(--ram);
+            text-shadow: 0 0 20px rgba(192, 132, 252, 0.2);
+        }
+
+        .m-card.temp .m-value {
+            color: var(--temp);
+            text-shadow: 0 0 20px rgba(251, 146, 60, 0.2);
+        }
+
+        .m-bar {
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .m-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .m-card.cpu .m-bar-fill {
+            background: var(--cpu);
+            box-shadow: 0 0 8px var(--cpu);
+        }
+
+        .m-card.ram .m-bar-fill {
+            background: var(--ram);
+            box-shadow: 0 0 8px var(--ram);
+        }
+
+        .m-card.temp .m-bar-fill {
+            background: var(--temp);
+            box-shadow: 0 0 8px var(--temp);
+        }
+
+        .m-hist {
+            height: 50px;
+            position: relative;
+        }
+
+        canvas.spark {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* ══════════════════ BACKUPS ══════════════════ */
+        .backup-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+        }
+
+        .backup-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .backup-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+
+        .backup-desc code {
+            font-family: monospace;
+            color: var(--text-dim);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .futuristic-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+            border-radius: 8px;
+            padding: 12px 14px 12px 38px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .futuristic-input:focus {
+            outline: none;
+            border-color: var(--indigo);
+            background: rgba(99, 102, 241, 0.05);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 31px;
+            font-size: 1.1rem;
+            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.1));
+            pointer-events: none;
+        }
+
+        .input-group-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .btn-browse-input {
+            position: absolute;
+            right: 8px;
+            background: var(--indigo-dim);
+            border: 1px solid var(--border-hi);
+            color: var(--text-main);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-browse-input:hover {
+            background: var(--indigo);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+        }
+
+        #backup-result {
+            margin-top: 14px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            min-height: 20px;
+        }
+
+        /* ══════════════════ FOOTER ══════════════════ */
+        #footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* ══════════════════ RESPONSIVE ══════════════════ */
+        @media(max-width:900px) {
+
+            .status-grid,
+            .nav-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media(max-width:560px) {
+
+            .status-grid,
+            .nav-grid,
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="shell">
+
+        <div id="topbar">
+            <div class="tb-left">
+                <div class="logo">
+                    <div class="logo-box">NV</div>
+                    <span class="logo-text">Null-Void Engine</span>
+                </div>
+                <div class="badge" id="net-badge" title="Estado de la conexión a Internet">
+                    <span class="badge-dot" id="net-dot"></span> <span id="net-text">Online</span>
+                </div>
+            </div>
+            <div class="tb-right">
+                <button class="btn-theme" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema">
+                    <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    </svg>
+                </button>
+                <button class="btn-icon" id="btn-notifications-history" title="Historial de notificaciones"
+                    style="margin-right: 12px; position: relative;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                </button>
+                <button class="btn-theme" id="btn-shutdown" title="Apagar aplicación"
+                    style="border-color: rgba(248, 113, 113, 0.4); color: #f87171;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                        <line x1="12" y1="2" x2="12" y2="12"></line>
+                    </svg>
+                </button>
+                <button class="btn-theme" id="btn-settings" onclick="openSettingsModal()" title="Ajustes de Usuario">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+                <div class="tb-user">
+                    <div class="tb-avatar" id="nav-avatar">U</div>
+                    <span id="nav-username">Usuario</span>
+                </div>
+                <button id="btn-logout">Salir</button>
+            </div>
+        </div>
+
+        <div id="main">
+
+            <div id="view-menu" class="view active">
+                <div class="sec-row"><span class="sec-tag">Estado del sistema</span>
+                    <div class="sec-line"></div>
+                </div>
+                <div class="status-grid">
+                    <div class="s-card">
+                        <div class="s-top"><span class="s-label">CPU Usage</span><span class="s-icon">🔥</span></div>
+                        <div class="s-val" id="sc-cpu" style="color:var(--cpu)">--%</div>
+                        <div class="s-sub">Procesador central</div>
+                    </div>
+                    <div class="s-card">
+                        <div class="s-top"><span class="s-label">RAM Usage</span><span class="s-icon">🧠</span></div>
+                        <div class="s-val" id="sc-ram" style="color:var(--ram)">--%</div>
+                        <div class="s-sub">Memoria virtual</div>
+                    </div>
+                    <div class="s-card">
+                        <div class="s-top"><span class="s-label">Temperature</span><span class="s-icon">🌡️</span></div>
+                        <div class="s-val" id="sc-temp" style="color:var(--temp)">--°C</div>
+                        <div class="s-sub">Sensor térmico</div>
+                    </div>
+                </div>
+
+                <div class="sec-row"><span class="sec-tag">Acciones principales</span>
+                    <div class="sec-line"></div>
+                </div>
+                <div class="nav-grid" id="app-launcher-grid">
+                </div>
+            </div>
+
+            <div id="view-admin" class="view">
+                <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+                <div class="monitor-head">
+                    <div class="monitor-title">Panel de Administración</div>
+                    <div class="badge"
+                        style="background: rgba(248, 113, 113, 0.1); color: #f87171; border-color: rgba(248, 113, 113, 0.3);">
+                        ALERTA CRÍTICA</div>
+                </div>
+                <div class="sec-row" style="margin-top: 20px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <button class="btn-mini active" id="admin-tab-btn-alerts" onclick="setAdminSubTab('alerts')">Alertas Críticas</button>
+                        <button class="btn-mini" id="admin-tab-btn-security" onclick="setAdminSubTab('security')">Registro de Auditoría (Logs)</button>
+                    </div>
+                    <div class="sec-line"></div>
+                </div>
+
+                <!-- Sub-pestaña Alertas -->
+                <div id="admin-subtab-alerts">
+                    <div id="admin-alerts-list" style="display: grid; gap: 12px;"></div>
+                    <div style="margin-top: 40px; padding: 20px; background: rgba(99, 102, 241, 0.03); border: 1px dashed var(--border); border-radius: 12px; text-align: center;">
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">Estas alertas permanecerán visibles hasta que se cumpla la fecha del evento.</p>
+                    </div>
+                </div>
+
+                <!-- Sub-pestaña Seguridad -->
+                <div id="admin-subtab-security" style="display: none;">
+                    <div class="table-container" style="background: var(--surface-hi); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                            <thead>
+                                <tr style="background: rgba(0,0,0,0.1); text-align: left;">
+                                    <th style="padding: 12px; color: var(--text-muted);">Timestamp</th>
+                                    <th style="padding: 12px; color: var(--text-muted);">Tipo</th>
+                                    <th style="padding: 12px; color: var(--text-muted);">Usuario</th>
+                                    <th style="padding: 12px; color: var(--text-muted);">IP</th>
+                                    <th style="padding: 12px; color: var(--text-muted);">Detalles</th>
+                                </tr>
+                            </thead>
+                            <tbody id="security-logs-body">
+                                <!-- Logs -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="view-invoices" class="view" style="height: calc(100vh - 120px);">
+                <div
+                    style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background: var(--surface-hi); padding: 15px 20px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 15px;">
+                    <button class="btn-back" onclick="showView('menu')" style="margin: 0;">← Volver</button>
+
+                    <div style="width: 1px; height: 24px; background: var(--border);"></div>
+
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim);">VISTAS:</span>
+                        <button onclick="filterInvoices('all')" class="btn-mini">Limpiar filtros</button>
+                        <select id="filter-year" onchange="filterInvoices('date')" class="select-mini">
+                            <option value="">Sin filtro (Año)</option>
+                        </select>
+                        <select id="filter-month" onchange="filterInvoices('date')" class="select-mini">
+                            <option value="">Sin filtro (Mes)</option>
+                            <option value="01">Enero</option>
+                            <option value="02">Febrero</option>
+                            <option value="03">Marzo</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Mayo</option>
+                            <option value="06">Junio</option>
+                            <option value="07">Julio</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Septiembre</option>
+                            <option value="10">Octubre</option>
+                            <option value="11">Noviembre</option>
+                            <option value="12">Diciembre</option>
+                        </select>
+                        <select id="filter-client" onchange="filterInvoices('client')" class="select-mini">
+                            <option value="">Sin filtro (Cliente)</option>
+                        </select>
+                        <select id="filter-status" onchange="filterInvoices('status')" class="select-mini">
+                            <option value="">Sin filtro (Estado)</option>
+                            <option value="pagada">Pagadas</option>
+                            <option value="no_pagada">No Pagadas</option>
+                            <option value="a_cuenta">A Cuenta</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                        <button onclick="generateSyntheticData()" class="btn-mini"
+                            style="background: rgba(99, 102, 241, 0.1); color: var(--indigo); border: 1px solid var(--indigo);">+
+                            Datos Sintéticos</button>
+                        <button onclick="document.getElementById('invoice-file-input').click()" class="btn-primary"
+                            style="padding: 8px 16px; font-size: 0.75rem;">SUBIR FACTURA (PDF)</button>
+                        <button id="btn-delete-selected" onclick="openDeleteModal()" class="btn-mini"
+                            style="display: none; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);">
+                            Eliminar Seleccionados (<span id="selected-count">0</span>)
+                        </button>
+                        <input type="file" id="invoice-file-input" style="display: none;" accept=".pdf"
+                            onchange="handleInvoiceFileChange(this)">
+                    </div>
+                </div>
+                <div
+                    style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;">
+                    <div style="overflow: auto; flex: 1;">
+                        <table id="invoice-table"
+                            style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+                            <thead
+                                style="position: sticky; top: 0; background: var(--surface-hi); z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                                <tr>
+                                    <th
+                                        style="padding: 12px; border-bottom: 2px solid var(--border); width: 40px; text-align: center;">
+                                        <input type="checkbox" id="master-checkbox"
+                                            onclick="toggleAllInvoices(this.checked)">
+                                    </th>
+                                    <th onclick="toggleSort('invoice_number')"
+                                        style="padding: 12px; border-bottom: 2px solid var(--border); width: 100px; cursor: pointer; user-select: none;">
+                                        Nº SERIE <span id="sort-arrow-invoice_number">↑</span>
+                                    </th>
+                                    <th onclick="toggleSort('date')"
+                                        style="padding: 12px; border-bottom: 2px solid var(--border); width: 120px; cursor: pointer; user-select: none;">
+                                        FECHA <span id="sort-arrow-date" style="opacity: 0.3;">↕</span></th>
+                                    <th style="padding: 12px; border-bottom: 2px solid var(--border);">CLIENTE</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid var(--border);">REFERENCIA</th>
+                                    <th
+                                        style="padding: 12px; border-bottom: 2px solid var(--border); text-align: right; width: 120px;">
+                                        TOTAL</th>
+                                    <th
+                                        style="padding: 12px; border-bottom: 2px solid var(--border); width: 150px; text-align: center;">
+                                        ESTADO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoice-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div
+                        style="background: var(--surface-hi); padding: 10px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 30px;">
+                        <div style="font-size: 0.75rem; color: var(--text-dim);">PAGADO: <span id="total-paid"
+                                style="color: #10b981; font-weight: bold;">0.00€</span></div>
+                        <div style="font-size: 0.75rem; color: var(--text-dim);">PENDIENTE: <span id="total-unpaid"
+                                style="color: #ef4444; font-weight: bold;">0.00€</span></div>
+                        <div style="font-size: 0.75rem; color: var(--text-dim); font-weight: bold;">TOTAL: <span
+                                id="total-general">0.00€</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-invoice-detail" class="view">
+                <div
+                    style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 25px; gap: 10px;">
+                    <button onclick="window.print()" class="btn-mini"
+                        style="background: rgba(255,255,255,0.05); padding: 8px 16px;">Imprimir / PDF</button>
+                    <button onclick="showView('invoices')" class="btn-mini"
+                        style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; font-weight: 900; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%;">✕</button>
+                </div>
+                <div id="invoice-full-content" style="padding: 0; background: transparent; border: none;">
+                </div>
+            </div>
+
+            <div id="delete-confirm-modal"
+                style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 11000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+                <div
+                    style="background: var(--surface-hi); width: 400px; padding: 30px; border-radius: 20px; border: 1px solid rgba(239, 68, 68, 0.3); text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
+                    <h3 style="margin-bottom: 10px; color: #fca5a5;">¿ELIMINAR FACTURAS?</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px;">Esta acción es
+                        irreversible. Se eliminarán <b id="delete-modal-count">0</b> facturas.<br><br>Escribe
+                        <b>CONFIRMAR</b> para proceder:
+                    </p>
+                    <div class="tab-btn-group">
+                        <button class="tab-btn active" onclick="showAdminTab('apps')">Módulos</button>
+                        <button class="tab-btn" onclick="showAdminTab('users')">Usuarios</button>
+                        <button class="tab-btn" onclick="showAdminTab('security')">Seguridad</button>
+                    </div>
+                    <input type="text" id="delete-confirm-input" placeholder="Escribe CONFIRMAR..."
+                        oninput="validateDeleteConfirm(this.value)"
+                        style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); padding: 12px; border-radius: 8px; color: #fff; text-align: center; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; outline: none;">
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="closeDeleteModal()" class="btn-mini"
+                            style="flex: 1; padding: 12px;">Cancelar</button>
+                        <button id="btn-final-delete" onclick="executeDelete()" disabled class="btn-primary"
+                            style="flex: 1; background: #ef4444; border: none; opacity: 0.3; cursor: not-allowed;">Eliminar</button>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .btn-mini {
+                    background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    color: var(--text-main);
+                    padding: 6px 12px;
+                    font-size: 0.7rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .btn-mini:hover {
+                    background: rgba(255, 255, 255, 0.08);
+                    border-color: var(--indigo);
+                }
+
+                .select-mini {
+                    background: var(--surface-hi);
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    color: var(--text-main);
+                    padding: 5px;
+                    font-size: 0.7rem;
+                    outline: none;
+                    cursor: pointer;
+                }
+
+                #invoice-table th {
+                    color: var(--text-dim);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+
+                #invoice-table td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+                    transition: background 0.2s;
+                }
+
+                .row-pagada {
+                    background: var(--inv-paid-bg) !important;
+                    color: var(--inv-paid-text) !important;
+                }
+
+                .row-no_pagada {
+                    background: var(--inv-unpaid-bg) !important;
+                    color: var(--inv-unpaid-text) !important;
+                }
+
+                .row-a_cuenta {
+                    background: var(--inv-pending-bg) !important;
+                    color: var(--inv-pending-text) !important;
+                }
+
+                :root,
+                [data-theme="dark"] {
+                    --inv-paid-bg: rgba(16, 185, 129, 0.15);
+                    --inv-paid-text: #10b981;
+                    --inv-unpaid-bg: rgba(239, 68, 68, 0.15);
+                    --inv-unpaid-text: #fca5a5;
+                    --inv-pending-bg: rgba(245, 158, 11, 0.15);
+                    --inv-pending-text: #fbbf24;
+                }
+
+                [data-theme="light"] {
+                    --inv-paid-bg: #dcfce7;
+                    --inv-paid-text: #166534;
+                    --inv-unpaid-bg: #fee2e2;
+                    --inv-unpaid-text: #991b1b;
+                    --inv-pending-bg: #fef3c7;
+                    --inv-pending-text: #92400e;
+                }
+
+                .status-badge {
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                    font-size: 0.65rem;
+                    font-weight: 800;
+                    cursor: pointer;
+                    border: 1px solid transparent;
+                }
+            </style>
+
+            <!-- Vista Excel -->
+            <div id="view-budgets" class="view">
+                <button class="btn-back" onclick="showView('menu')" style="margin-bottom: 15px;">← Volver al
+                    Panel</button>
+
+                <div class="monitor-head" style="margin-bottom: 10px; align-items: flex-start;">
+                    <div class="monitor-title">Hoja de Cálculo</div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span id="excel-status"
+                                style="font-size: 0.7rem; color: var(--text-dim); display: none;">Guardado</span>
+                            <button onclick="exportSpreadsheet()"
+                                style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 6px 12px; font-size: 0.7rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"
+                                title="Exportar a .nvx">
+                                📤 Exportar
+                            </button>
+                            <button onclick="document.getElementById('import-input').click()"
+                                style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 6px 12px; font-size: 0.7rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"
+                                title="Importar .nvx">
+                                📥 Importar
+                            </button>
+                            <input type="file" id="import-input" style="display: none;" accept=".nvx,.json"
+                                onchange="importSpreadsheet(event)">
+                            <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></div>
+                            <button onclick="saveSpreadsheet()"
+                                style="background: var(--indigo); border: none; border-radius: 8px; color: #fff; padding: 6px 16px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: opacity 0.2s;"
+                                onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">Guardar
+                                Cambios</button>
+                        </div>
+                        <div class="badge"
+                            style="background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                            REAL-TIME GRID</div>
+                    </div>
+                </div>
+
+                <!-- Barra de Fórmulas -->
+                <div
+                    style="display: flex; align-items: center; gap: 10px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; margin-bottom: 12px;">
+                    <div id="formula-bar-label"
+                        style="width: 35px; text-align: center; font-size: 0.75rem; font-weight: 700; color: var(--text-dim);">
+                    </div>
+                    <div style="width: 1px; height: 18px; background: var(--border);"></div>
+                    <div
+                        style="font-family: serif; font-weight: bold; color: var(--text-muted); font-style: italic; font-size: 0.9rem; user-select: none;">
+                        fx</div>
+                    <input type="text" id="formula-bar-input" autocomplete="off" placeholder="Selecciona una celda..."
+                        style="flex: 1; background: transparent; border: none; outline: none; color: var(--text-main); font-size: 0.85rem;"
+                        oninput="handleFormulaBarInput(event)" onkeydown="handleFormulaBarKey(event)"
+                        onblur="handleFormulaBarBlur()">
+                </div>
+
+                <div style="display: flex; gap: 15px; flex: 1; min-height: 450px; align-items: stretch;">
+                    <!-- Panel Python (Izquierda) -->
+                    <div id="python-panel"
+                        style="width: 260px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; gap: 10px; position: relative;">
+                        <h3
+                            style="font-size: 0.8rem; font-weight: 800; color: #ffd700; display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                            PYTHON CONSOLE
+                        </h3>
+                        <textarea id="python-code" spellcheck="false"
+                            style="flex: 1; width: 100%; background: var(--py-bg); border: 1px solid var(--py-border); border-radius: 8px; color: var(--py-text); font-family: 'Consolas', monospace; font-size: 0.8rem; padding: 10px; outline: none; resize: none; line-height: 1.4;"
+                            placeholder="# Escribe tu código aquí...
+# ej: set_cell('A1', 10)" oninput="handlePythonInput(event)" onkeydown="handlePythonKey(event)"></textarea>
+                        <div id="python-autocomplete"
+                            style="display: none; position: absolute; background: var(--surface-hi); border: 1px solid var(--indigo); border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 1000; min-width: 150px; overflow: hidden;">
+                        </div>
+                        <div id="python-status" style="font-size: 0.65rem; color: var(--text-dim); min-height: 20px;">
+                            Listo.</div>
+                        <button onclick="runPythonScript()" id="btn-run-python"
+                            style="background: #ffd700; color: #000; border: none; border-radius: 6px; padding: 8px; font-size: 0.75rem; font-weight: 900; cursor: pointer; width: 100%;">EJECUTAR</button>
+                    </div>
+
+                    <div
+                        style="flex: 1; overflow: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; position: relative;">
+                        <table id="excel-grid" style="border-collapse: collapse; min-width: 100%; table-layout: fixed;">
+                        </table>
+                    </div>
+
+                    <div id="excel-debug-panel"
+                        style="width: 240px; background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 15px; display: flex; flex-direction: column;">
+                        <div
+                            style="color: #ef4444; font-size: 0.75rem; font-weight: bold; margin-bottom: 12px; display: flex; align-items: center; gap: 5px;">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                                viewBox="0 0 24 24">
+                                <path
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                                </path>
+                            </svg>
+                            DEBUGGER
+                        </div>
+                        <div id="excel-debug-logs"
+                            style="font-family: monospace; font-size: 0.7rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                :root,
+                [data-theme="dark"] {
+                    --excel-border: rgba(255, 255, 255, 0.15);
+                    --excel-border-light: rgba(255, 255, 255, 0.1);
+                    --excel-bg-cell: rgba(0, 0, 0, 0.2);
+                    --excel-bg-cell-hover: rgba(255, 255, 255, 0.03);
+                    --excel-bg-rownum: rgba(255, 255, 255, 0.03);
+                    --excel-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    --py-bg: rgba(0, 0, 0, 0.4);
+                    --py-text: #a5b4fc;
+                    --py-border: var(--border);
+                }
+
+                [data-theme="light"] {
+                    --excel-border: rgba(0, 0, 0, 0.2);
+                    --excel-border-light: rgba(0, 0, 0, 0.15);
+                    --excel-bg-cell: rgba(255, 255, 255, 0.6);
+                    --excel-bg-cell-hover: rgba(0, 0, 0, 0.04);
+                    --excel-bg-rownum: rgba(0, 0, 0, 0.03);
+                    --excel-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                    --py-bg: rgba(0, 0, 0, 0.05);
+                    --py-text: #4338ca;
+                    --py-border: rgba(99, 102, 241, 0.2);
+                }
+
+                #excel-grid th {
+                    background: var(--surface-hi);
+                    color: var(--text-main);
+                    font-size: 0.65rem;
+                    font-weight: 700;
+                    padding: 8px 6px;
+                    border: 1px solid var(--excel-border);
+                    text-align: center;
+                    position: sticky;
+                    top: 0;
+                    z-index: 2;
+                    box-shadow: var(--excel-shadow);
+                }
+
+                #excel-grid .row-num {
+                    background: var(--excel-bg-rownum);
+                    color: var(--text-muted);
+                    font-size: 0.65rem;
+                    font-weight: 700;
+                    padding: 6px;
+                    border: 1px solid var(--excel-border);
+                    text-align: center;
+                    width: 40px;
+                    position: sticky;
+                    left: 0;
+                    z-index: 1;
+                }
+
+                #excel-grid td {
+                    border: 1px solid var(--excel-border-light);
+                    padding: 0;
+                    height: 32px;
+                    background: var(--excel-bg-cell);
+                    transition: background 0.2s;
+                }
+
+                #excel-grid td:hover {
+                    background: var(--excel-bg-cell-hover);
+                }
+
+                #excel-grid input {
+                    width: 100%;
+                    height: 100%;
+                    background: transparent;
+                    border: none;
+                    color: var(--text-main);
+                    padding: 0 8px;
+                    font-size: 0.85rem;
+                    outline: none;
+                }
+
+                #excel-grid input:focus {
+                    background: rgba(99, 102, 241, 0.15);
+                    box-shadow: inset 0 0 0 2px var(--indigo);
+                }
+
+                #view-invoices.active {
+                    display: flex;
+                    flex-direction: column;
+                }
+            </style>
+
+            <div id="view-monitor" class="view">
+                <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+                <div class="monitor-head">
+                    <div class="monitor-title">Telemetría · Tiempo Real</div>
+                    <div class="badge" id="power-tag">⚡ Cargando datos...</div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="m-card cpu">
+                        <div class="m-top">
+                            <span class="m-label">CPU · Utility</span>
+                            <span class="badge"
+                                style="color:var(--cpu); border-color:var(--cpu); background:rgba(248,113,113,0.1)">LIVE</span>
+                        </div>
+                        <div class="m-value" id="m-cpu">--%</div>
+                        <div class="m-bar">
+                            <div class="m-bar-fill" id="bar-cpu" style="width:0%"></div>
+                        </div>
+                        <div class="m-hist"><canvas id="spark-cpu" class="spark"></canvas></div>
+                    </div>
+                    <div class="m-card ram">
+                        <div class="m-top">
+                            <span class="m-label">RAM · Virtual</span>
+                            <span class="badge"
+                                style="color:var(--ram); border-color:var(--ram); background:rgba(192,132,252,0.1)">LIVE</span>
+                        </div>
+                        <div class="m-value" id="m-ram">--%</div>
+                        <div class="m-bar">
+                            <div class="m-bar-fill" id="bar-ram" style="width:0%"></div>
+                        </div>
+                        <div class="m-hist"><canvas id="spark-ram" class="spark"></canvas></div>
+                    </div>
+                    <div class="m-card temp">
+                        <div class="m-top">
+                            <span class="m-label">Temp · Sensor</span>
+                            <span class="badge"
+                                style="color:var(--temp); border-color:var(--temp); background:rgba(251,146,60,0.1)">LIVE</span>
+                        </div>
+                        <div class="m-value" id="m-temp">--°C</div>
+                        <div class="m-bar">
+                            <div class="m-bar-fill" id="bar-temp" style="width:0%"></div>
+                        </div>
+                        <div class="m-hist"><canvas id="spark-temp" class="spark"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-backups" class="view">
+                <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+                <div class="sec-row"><span class="sec-tag">Copias de seguridad</span>
+                    <div class="sec-line"></div>
+                </div>
+                <div class="backup-panel">
+                    <div class="backup-title">Gestor de Respaldos</div>
+                    <div class="backup-desc">
+                        Comprime de forma segura cualquier directorio en un archivo ZIP.
+                    </div>
+
+                    <div class="input-group">
+                        <label>Directorio Origen</label>
+                        <div class="input-icon">📁</div>
+                        <div class="input-group-container" onclick="browseDir('bkp-source')">
+                            <input type="text" id="bkp-source" class="futuristic-input"
+                                placeholder="Haz clic para seleccionar carpeta de origen..." readonly 
+                                style="cursor: pointer; background: rgba(99, 102, 241, 0.03);">
+                            <div class="btn-browse-input" style="pointer-events: none;">🔍</div>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Directorio Destino</label>
+                        <div class="input-icon">🎯</div>
+                        <div class="input-group-container" onclick="browseDir('bkp-dest')">
+                            <input type="text" id="bkp-dest" class="futuristic-input"
+                                placeholder="Haz clic para seleccionar carpeta de destino..." readonly 
+                                style="cursor: pointer; background: rgba(99, 102, 241, 0.03);">
+                            <div class="btn-browse-input" style="pointer-events: none;">🔍</div>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary"
+                        style="margin-top: 10px; width: 100%; box-shadow: 0 4px 14px rgba(99,102,241,0.4);"
+                        id="btn-backup" onclick="doBackup()">Iniciar Respaldo Manual</button>
+                    <div id="backup-result"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <style>
+        .notif-item {
+            padding: 12px 16px;
+            border-radius: 10px;
+            background: rgba(99, 102, 241, 0.05);
+            margin-bottom: 8px;
+            border: 1px solid rgba(99, 102, 241, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .notif-item:hover {
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateX(4px);
+        }
+
+        .notif-title {
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            font-size: 0.95rem;
+        }
+
+        .notif-time {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .notif-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+    </style>
+    <!-- Modal de Historial de Notificaciones -->
+    <div id="notif-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+        <div
+            style="background: var(--bg-card); width: 90%; max-width: 500px; max-height: 80vh; border-radius: 16px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+            <div
+                style="padding: 20px; border-bottom: 1px solid rgba(99, 102, 241, 0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">Historial de
+                    Notificaciones</h2>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button id="clear-all-notifs"
+                        style="background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.2); color: #f87171; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;">Limpiar
+                        todo</button>
+                    <button id="close-notif-modal"
+                        style="background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 1.5rem;">&times;</button>
+                </div>
+            </div>
+            <div id="notif-history-list" style="padding: 10px; overflow-y: auto; flex: 1;">
+            </div>
+        </div>
+    <!-- Modal de Ajustes Globales -->
+    <div id="settings-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+        <div
+            style="background: var(--bg-card); width: 90%; max-width: 400px; border-radius: 16px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+            <div
+                style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-main);">Ajustes de Interfaz</h2>
+                <button onclick="closeSettingsModal()"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+                
+                <!-- Ajuste de Brillo -->
+                <div class="setting-item">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim);">Brillo de Pantalla</label>
+                        <span id="setting-brightness-val" style="font-size: 0.8rem; color: var(--indigo); font-weight: bold;">100%</span>
+                    </div>
+                    <input type="range" id="setting-brightness" min="30" max="150" value="100" 
+                           style="width: 100%; accent-color: var(--indigo); cursor: pointer;"
+                           oninput="saveUISettings('brightness', this.value)">
+                </div>
+
+                <div style="font-size: 0.7rem; color: var(--text-muted); background: var(--indigo-dim); padding: 10px; border-radius: 8px; border: 1px dashed var(--indigo);">
+                    💡 Estos ajustes se guardan en tu perfil y se aplicarán automáticamente cada vez que inicies sesión.
+                </div>
+
+            </div>
+            <div style="padding: 15px; background: var(--surface-hi); text-align: center;">
+                <button class="btn-primary" onclick="closeSettingsModal()" style="width: 100%;">Cerrar y Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // ── LÓGICA DE LA APLICACIÓN ─────────────────────────────────
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+        const TOKEN = getCookie('token') || '';
+        const CURRENT_USER = getCookie('user') || 'Usuario';
+
+        // ── IDENTIFICADOR DE PESTAÑA ÚNICO ──
+        if (!sessionStorage.getItem('tabId')) {
+            sessionStorage.setItem('tabId', 'tab-' + Math.random().toString(36).substr(2, 9));
+        }
+        const TAB_ID = sessionStorage.getItem('tabId');
+
+        const HEADERS = {
+            'Content-Type': 'application/json',
+            'X-Token': TOKEN,
+            'X-Tab-Id': TAB_ID
+        };
+
+        // ── REGISTRO DE MÓDULOS (APPS) ───────────────────────────────
+        let APPS = [];
+
+        async function fetchApps() {
+            try {
+                const res = await fetch('/api/system/apps', { headers: HEADERS });
+                APPS = await res.json();
+                renderAppLauncher();
+            } catch (err) {
+                console.error("Error cargando apps:", err);
+            }
+        }
+
+        function handleAppAction(app) {
+            if (app.url) {
+                location.href = app.url;
+            } else if (app.action) {
+                if (typeof app.action === 'string') {
+                    eval(app.action);
+                } else {
+                    app.action();
+                }
+            } else {
+                showView(app.id);
+            }
+        }
+
+        function renderAppLauncher() {
+            const grid = document.getElementById('app-launcher-grid');
+            if (!grid) return;
+
+            grid.innerHTML = APPS.map(app => `
+                <div class="nav-btn" onclick="handleAppAction(APPS.find(a => a.id === '${app.id}'))" id="nav-btn-${app.id}">
+                    <div class="nav-icon" style="position: relative;">
+                        ${app.icon}
+                        ${app.badge ? `<span id="${app.badge}" style="display: none; position: absolute; top: -5px; right: -5px; width: 10px; height: 10px; background: #f87171; border-radius: 50%; border: 2px solid var(--surface-hi); box-shadow: 0 0 8px rgba(248, 113, 113, 0.6);"></span>` : ''}
+                    </div>
+                    <div>
+                        <span class="nav-label">${app.name}</span>
+                        <span class="nav-desc">${app.desc}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        fetchApps();
+
+        document.getElementById('nav-username').textContent = CURRENT_USER;
+        document.getElementById('nav-avatar').textContent = CURRENT_USER.charAt(0).toUpperCase();
+
+        // ── ESTADO DE RED (INTERNET) ──
+        function updateNetStatus() {
+            const badge = document.getElementById('net-badge');
+            const text = document.getElementById('net-text');
+            const dot = document.getElementById('net-dot');
+
+            if (navigator.onLine) {
+                text.textContent = 'Online';
+                text.style.color = 'var(--text-dim)';
+                badge.style.borderColor = 'rgba(99,102,241,0.38)';
+                badge.style.background = 'var(--indigo-dim)';
+                dot.style.background = 'var(--indigo)';
+                dot.style.boxShadow = '0 0 8px rgba(99,102,241,1)';
+                dot.style.animation = 'pulse 2s infinite';
+            } else {
+                text.textContent = 'Offline';
+                text.style.color = '#f87171';
+                badge.style.borderColor = 'rgba(248,113,113,0.38)';
+                badge.style.background = 'rgba(248,113,113,0.1)';
+                dot.style.background = '#f87171';
+                dot.style.boxShadow = '0 0 8px rgba(248,113,113,0.8)';
+                dot.style.animation = 'none';
+            }
+        }
+        window.addEventListener('online', updateNetStatus);
+        window.addEventListener('offline', updateNetStatus);
+        updateNetStatus(); // Estado inicial
+
+        function showView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + name).classList.add('active');
+
+            // Ajustar ancho del contenedor principal
+            const main = document.getElementById('main');
+            if (name === 'budgets' || name === 'invoice-detail') {
+                main.style.maxWidth = '95%';
+            } else {
+                main.style.maxWidth = '1100px';
+            }
+
+            if (name === 'monitor') startMetrics(); else stopMetrics();
+            if (name === 'invoices') fetchInvoices();
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', async () => {
+            await fetch('/api/logout', { method: 'POST', headers: HEADERS }).catch(() => { });
+            location.href = '/';
+        });
+
+        let metricsTimer = null;
+
+        function startMetrics() {
+            fetchMetrics();
+            if (!metricsTimer) metricsTimer = setInterval(fetchMetrics, 1000);
+        }
+        function stopMetrics() {
+            clearInterval(metricsTimer);
+            metricsTimer = null;
+        }
+
+        async function fetchMetrics() {
+            try {
+                const params = new URLSearchParams({
+                    token: TOKEN,
+                    tabId: TAB_ID,
+                    _t: Date.now() // Cache buster
+                });
+                const res = await fetch(`/api/metrics?${params.toString()}`);
+
+                if (res.status === 401) {
+                    location.href = '/?error=session_invalidated';
+                    return;
+                }
+
+                if (res.status === 403) {
+                    location.href = '/?error=tab_active';
+                    return;
+                }
+
+                const data = await res.json();
+                if (!data.ok) return;
+
+                // Textos del Monitor
+                document.getElementById('m-cpu').textContent = data.cpu + '%';
+                document.getElementById('m-ram').textContent = data.ram + '%';
+                document.getElementById('m-temp').textContent = data.temp + '°C';
+
+                // Barras
+                document.getElementById('bar-cpu').style.width = Math.min(data.cpu, 100) + '%';
+                document.getElementById('bar-ram').style.width = Math.min(data.ram, 100) + '%';
+                document.getElementById('bar-temp').style.width = Math.min(data.temp, 100) + '%';
+
+                // Cards del Menú
+                document.getElementById('sc-cpu').textContent = data.cpu + '%';
+                document.getElementById('sc-ram').textContent = data.ram + '%';
+                document.getElementById('sc-temp').textContent = data.temp + '°C';
+
+                if (data.power) document.getElementById('power-tag').innerHTML = '⚡ ' + data.power;
+
+                if (data.hist) {
+                    drawSpark('spark-cpu', data.hist.cpu, '#f87171');
+                    drawSpark('spark-ram', data.hist.ram, '#c084fc');
+                    drawSpark('spark-temp', data.hist.temp, '#fb923c');
+                }
+            } catch (e) { }
+        }
+
+        function drawSpark(id, data, color) {
+            const c = document.getElementById(id);
+            if (!c || !data || data.length < 2) return;
+            const W = c.offsetWidth, H = c.offsetHeight;
+            c.width = W; c.height = H;
+            const ctx = c.getContext('2d');
+            ctx.clearRect(0, 0, W, H);
+
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const rng = (max - min) || 1;
+            const pad = H * 0.15;
+            const pts = data.map((v, i) => ({
+                x: (i / (data.length - 1)) * W,
+                y: H - pad - ((v - min) / rng) * (H - pad * 2)
+            }));
+
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, color + '40');
+            grad.addColorStop(1, color + '00');
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, H);
+            pts.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.lineTo(pts[pts.length - 1].x, H);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            ctx.beginPath();
+            pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            const lp = pts[pts.length - 1];
+            ctx.beginPath();
+            ctx.arc(lp.x, lp.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+
+        startMetrics();
+
+        // ── GESTIÓN DE TEMA ──
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'dark';
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+            updateThemeIcon(next);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-icon-svg');
+            if (!icon) return;
+            if (theme === 'light') {
+                icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+            } else {
+                icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+            }
+        }
+
+        updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+
+        async function loadBackupConfig() {
+            try {
+                const res = await fetch('/api/config/backup?token=' + TOKEN);
+                const data = await res.json();
+                if (data.ok && data.config) {
+                    document.getElementById('bkp-source').value = data.config.source;
+                    document.getElementById('bkp-dest').value = data.config.destination;
+                }
+            } catch (e) {
+                console.error("Error loading backup config:", e);
+            }
+        }
+        loadBackupConfig();
+
+        async function doBackup() {
+            const btn = document.getElementById('btn-backup');
+            const out = document.getElementById('backup-result');
+            const source = document.getElementById('bkp-source').value;
+            const dest = document.getElementById('bkp-dest').value;
+
+            btn.disabled = true;
+            out.textContent = '⏳ Comprimiendo archivos... esto puede tardar un poco.';
+            out.style.color = 'var(--text-muted)';
+            out.style.animation = 'pulse 2s infinite';
+
+            try {
+                const res = await fetch('/api/backup?token=' + TOKEN, {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ source: source, destination: dest })
+                });
+                const data = await res.json();
+                out.style.animation = 'none';
+
+                if (data.ok) {
+                    out.textContent = data.result;
+                    out.style.color = data.result.startsWith('✅') ? '#10b981' : '#f87171';
+                } else {
+                    out.textContent = '❌ Error: ' + data.error;
+                    out.style.color = '#f87171';
+                }
+            } catch (e) {
+                out.style.animation = 'none';
+                out.textContent = '❌ Error de conexión con el servidor.';
+                out.style.color = '#f87171';
+            }
+            btn.disabled = false;
+        }
+
+        document.getElementById('btn-shutdown').addEventListener('click', async () => {
+            if (confirm('¿Estás seguro de que deseas apagar la aplicación? El servidor se detendrá.')) {
+                const shutdownScreen = `
+                    <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#07090f; color:#e2e8f0; font-family:sans-serif; text-align:center; padding: 20px;">
+                        <div style="font-size: 4rem; margin-bottom: 20px;">🔌</div>
+                        <h1 style="font-size:2rem; margin-bottom:1rem; font-weight: 800; letter-spacing: -0.02em;">Servidor Apagado</h1>
+                        <p style="color:#818cf8; font-size: 1.1rem;">La aplicación se ha cerrado de forma segura.</p>
+                        <div style="margin-top: 30px; padding: 10px 20px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; color: #3d5068; font-size: 0.8rem;">
+                            Puedes cerrar esta pestaña o ventana del navegador.
+                        </div>
+                    </div>
+                `;
+
+                try {
+                    fetch('/api/system/shutdown', { method: 'POST', headers: HEADERS }).catch(() => { });
+                    setTimeout(() => {
+                        document.body.innerHTML = shutdownScreen;
+                    }, 500);
+                } catch (e) {
+                    document.body.innerHTML = shutdownScreen;
+                }
+            }
+        });
+
+        // ── HISTORIAL DE NOTIFICACIONES ──
+        const notifBtn = document.getElementById('btn-notifications-history');
+        const notifModal = document.getElementById('notif-modal');
+        const notifClose = document.getElementById('close-notif-modal');
+        const notifList = document.getElementById('notif-history-list');
+
+        notifBtn.addEventListener('click', async () => {
+            notifModal.style.display = 'flex';
+            notifList.innerHTML = '<p style="text-align: center; color: var(--text-sub); padding: 40px;">Cargando historial...</p>';
+
+            try {
+                const res = await fetch('/api/system/notifications/history?token=' + TOKEN);
+                const data = await res.json();
+
+                if (data.length === 0) {
+                    notifList.innerHTML = '<p style="text-align: center; color: var(--text-sub); padding: 40px;">No hay notificaciones recientes.</p>';
+                    return;
+                }
+
+                notifList.innerHTML = data.map(n => `
+                    <div class="notif-item" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <div class="notif-title">${n.title}</div>
+                            <div class="notif-time">
+                                <span>${n.date} a las ${n.time}</span>
+                                <span class="notif-badge" style="background: rgba(99,102,241,0.1); color: var(--indigo);">${n.category}</span>
+                            </div>
+                        </div>
+                        <button onclick="deleteNotification('${n.id}')" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; padding: 8px; margin-left: 10px;">&times;</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                notifList.innerHTML = '<p style="text-align: center; color: #f87171; padding: 40px;">Error al cargar el historial.</p>';
+            }
+        });
+
+        notifClose.addEventListener('click', () => {
+            notifModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', (e) => {
+            if (e.target === notifModal) notifModal.style.display = 'none';
+        });
+
+        async function deleteNotification(id) {
+            try {
+                await fetch('/api/system/notifications/delete?token=' + TOKEN, {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ id: id })
+                });
+                notifBtn.click();
+            } catch (e) { console.error("Error deleting notification:", e); }
+        }
+
+        document.getElementById('clear-all-notifs').addEventListener('click', async () => {
+            if (confirm('¿Borrar todo el historial de notificaciones?')) {
+                try {
+                    await fetch('/api/system/notifications/clear?token=' + TOKEN, { method: 'POST', headers: HEADERS });
+                    notifBtn.click();
+                } catch (e) { console.error("Error clearing notifications:", e); }
+            }
+        });
+
+        async function fetchAdminAlerts() {
+            try {
+                const res = await fetch('/api/events?token=' + TOKEN);
+                const events = await res.json();
+
+                const now = new Date();
+                const todayStr = now.toISOString().split('T')[0];
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                const alerts = events.filter(ev => {
+                    const isTodayOrTomorrow = (ev.date === todayStr || ev.date === tomorrowStr);
+                    return !ev.completed && (isTodayOrTomorrow || ev.isImportant);
+                });
+
+                const list = document.getElementById('admin-alerts-list');
+                const badge = document.getElementById('admin-badge');
+
+                if (alerts.length > 0) {
+                    badge.style.display = 'block';
+                    list.innerHTML = alerts.map(ev => {
+                        const isToday = ev.date === todayStr;
+                        const isTomorrow = ev.date === tomorrowStr;
+                        const isCritical = isToday || ev.isImportant;
+
+                        let label = 'MAÑANA';
+                        let icon = '⏳';
+                        let color = 'var(--text-dim)';
+
+                        if (isToday) {
+                            label = 'PARA HOY';
+                            icon = '🚨';
+                            color = '#f87171';
+                        } else if (ev.isImportant && !isTomorrow) {
+                            label = 'IMPORTANTE';
+                            icon = '⭐';
+                            color = '#fbbf24';
+                        }
+
+                        return `
+                        <div style="background: var(--surface-hi); border: 1px solid ${isCritical ? color : 'var(--border)'}; border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 166px; transition: all 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                            <div style="font-size: 2rem; opacity: 0.8;">${icon}</div>
+                            <div style="flex: 1;">
+                                <div style="font-size: 0.7rem; font-weight: 800; color: ${color}; text-transform: uppercase; margin-bottom: 4px;">
+                                    ${label}
+                                </div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">${ev.title}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">${ev.date} · ${ev.startTime ? 'A las ' + ev.startTime : 'Todo el día'}</div>
+                            </div>
+                            <button onclick="location.href='/calendar?date=${ev.date}'" style="background: ${color}; border: none; border-radius: 8px; color: #000; padding: 8px 16px; font-size: 0.75rem; font-weight: 900; cursor: pointer;">
+                                GESTIONAR
+                            </button>
+                        </div>
+                    `;
+                    }).join('');
+                } else {
+                    badge.style.display = 'none';
+                    list.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted); background: var(--surface); border-radius: 12px; border: 1px dashed var(--border);">
+                            <div style="font-size: 2rem; margin-bottom: 12px;">✅</div>
+                            <p>No hay alertas críticas para hoy o mañana.</p>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.error("Error al cargar alertas de administración:", e);
+            }
+        }
+
+        // ── LÓGICA DE EXCEL (SPREADSHEET) ──
+
+        // Cargar alertas al inicio y cada minuto
+        fetchAdminAlerts();
+        setInterval(fetchAdminAlerts, 60000);
+
+        // ── LÓGICA DE FACTURAS (ERP ORGANIZER) ──
+        let allInvoices = [];
+        let selectedInvoices = new Set();
+        let currentSortField = 'invoice_number';
+        let currentSortDir = 'asc';
+
+        async function fetchInvoices() {
+            try {
+                const res = await fetch('/api/invoices?token=' + TOKEN);
+                allInvoices = await res.json();
+
+                selectedInvoices.clear();
+                updateDeleteButton();
+                if (document.getElementById('master-checkbox')) document.getElementById('master-checkbox').checked = false;
+
+                applySort();
+                updateFilterOptions();
+                renderInvoiceTable(allInvoices);
+            } catch (e) { console.error("Error fetching invoices:", e); }
+        }
+
+        function applySort() {
+            allInvoices.sort((a, b) => {
+                let cmp = 0;
+                if (currentSortField === 'date') {
+                    // Convertir DD/MM/YYYY a YYYYMMDD para comparar
+                    const da = a.date.split('/').reverse().join('');
+                    const db = b.date.split('/').reverse().join('');
+                    cmp = da.localeCompare(db);
+                } else {
+                    cmp = a.invoice_number.localeCompare(b.invoice_number, undefined, { numeric: true });
+                }
+                return currentSortDir === 'asc' ? cmp : -cmp;
+            });
+
+            // Actualizar flechas en la UI
+            ['invoice_number', 'date'].forEach(field => {
+                const arrow = document.getElementById('sort-arrow-' + field);
+                if (arrow) {
+                    if (field === currentSortField) {
+                        arrow.textContent = currentSortDir === 'asc' ? '↑' : '↓';
+                        arrow.style.opacity = '1';
+                    } else {
+                        arrow.textContent = '↕';
+                        arrow.style.opacity = '0.3';
+                    }
+                }
+            });
+        }
+
+        function toggleSort(field) {
+            if (currentSortField === field) {
+                currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortField = field;
+                currentSortDir = 'asc';
+            }
+            applySort();
+            filterInvoices('sort');
+        }
+
+        // --- Lógica de Selección y Borrado ---
+        function toggleInvoiceSelection(id) {
+            if (selectedInvoices.has(id)) selectedInvoices.delete(id);
+            else selectedInvoices.add(id);
+            updateDeleteButton();
+        }
+
+        function toggleAllInvoices(checked) {
+            allInvoices.forEach(inv => {
+                if (checked) selectedInvoices.add(inv.id);
+                else selectedInvoices.delete(inv.id);
+            });
+            updateDeleteButton();
+            renderInvoiceTable(allInvoices);
+        }
+
+        function updateDeleteButton() {
+            const btn = document.getElementById('btn-delete-selected');
+            const count = document.getElementById('selected-count');
+            if (selectedInvoices.size > 0) {
+                btn.style.display = 'inline-flex';
+                count.textContent = selectedInvoices.size;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        function openDeleteModal() {
+            document.getElementById('delete-modal-count').textContent = selectedInvoices.size;
+            document.getElementById('delete-confirm-input').value = '';
+            document.getElementById('btn-final-delete').disabled = true;
+            document.getElementById('btn-final-delete').style.opacity = '0.3';
+            document.getElementById('btn-final-delete').style.cursor = 'not-allowed';
+            document.getElementById('delete-confirm-modal').style.display = 'flex';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-confirm-modal').style.display = 'none';
+        }
+
+        function validateDeleteConfirm(val) {
+            const btn = document.getElementById('btn-final-delete');
+            if (val === 'CONFIRMAR') {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.3';
+                btn.style.cursor = 'not-allowed';
+            }
+        }
+
+        async function executeDelete() {
+            const ids = Array.from(selectedInvoices).map(Number);
+            try {
+                const res = await fetch('/api/invoices/delete?token=' + TOKEN, {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ ids })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    selectedInvoices.clear();
+                    closeDeleteModal();
+                    fetchInvoices();
+                } else {
+                    alert("Error del servidor: " + (data.error || "Desconocido"));
+                }
+            } catch (e) {
+                alert("Error de conexión: " + e.message);
+            }
+        }
+
+        function updateFilterOptions() {
+            const years = [...new Set(allInvoices.map(i => i.date.split('/')[2]))].sort();
+            const clients = [...new Set(allInvoices.map(i => i.client))].sort();
+
+            const yearSelect = document.getElementById('filter-year');
+            const clientSelect = document.getElementById('filter-client');
+
+            yearSelect.innerHTML = '<option value="">Sin filtro (Año)</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+            clientSelect.innerHTML = '<option value="">Sin filtro (Cliente)</option>' + clients.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function renderInvoiceTable(data) {
+            const body = document.getElementById('invoice-table-body');
+            body.innerHTML = '';
+
+            let paid = 0, unpaid = 0, total = 0;
+
+            data.forEach(inv => {
+                const row = document.createElement('tr');
+                row.className = `row-${inv.status}`;
+                row.style.cursor = 'pointer';
+
+                const amount = parseFloat(inv.total) || 0;
+                total += amount;
+                if (inv.status === 'pagada') paid += amount;
+                else if (inv.status === 'no_pagada') unpaid += amount;
+
+                row.innerHTML = `
+                        <td style="text-align: center;" onclick="event.stopPropagation()">
+                            <input type="checkbox" ${selectedInvoices.has(inv.id) ? 'checked' : ''} onchange="toggleInvoiceSelection(${inv.id})">
+                        </td>
+                        <td onclick="viewInvoiceDetail(${inv.id})" style="font-weight: 800; font-family: monospace;">${inv.invoice_number}</td>
+                        <td onclick="viewInvoiceDetail(${inv.id})">${inv.date}</td>
+                        <td onclick="viewInvoiceDetail(${inv.id})" style="font-weight: 600;">${inv.client}</td>
+                        <td onclick="viewInvoiceDetail(${inv.id})" style="color: var(--text-muted); font-size: 0.7rem;">${inv.reference || '-'}</td>
+                        <td onclick="viewInvoiceDetail(${inv.id})" style="text-align: right; font-weight: 800;">${amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€</td>
+                        <td style="text-align: center;">
+                            <span class="status-badge" onclick="event.stopPropagation(); toggleInvoiceStatus(${inv.id}, '${inv.status}')" 
+                                  style="background: rgba(255,255,255,0.1); border: 1px solid currentColor;">
+                                ${inv.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                        </td>
+                    `;
+                body.appendChild(row);
+            });
+
+            document.getElementById('total-paid').textContent = paid.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + '€';
+            document.getElementById('total-unpaid').textContent = unpaid.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + '€';
+            document.getElementById('total-general').textContent = total.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + '€';
+        }
+
+        async function toggleInvoiceStatus(id, current) {
+            const next = current === 'no_pagada' ? 'pagada' : (current === 'pagada' ? 'a_cuenta' : 'no_pagada');
+            try {
+                await fetch('/api/invoices/update_status?token=' + TOKEN, {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ id, status: next })
+                });
+                fetchInvoices();
+            } catch (e) { }
+        }
+
+        function filterInvoices(type) {
+            const year = document.getElementById('filter-year').value;
+            const month = document.getElementById('filter-month').value;
+            const client = document.getElementById('filter-client').value;
+            const status = document.getElementById('filter-status').value;
+
+            let filtered = allInvoices;
+
+            if (type === 'all') {
+                document.getElementById('filter-year').value = '';
+                document.getElementById('filter-month').value = '';
+                document.getElementById('filter-client').value = '';
+                document.getElementById('filter-status').value = '';
+            } else {
+                if (year) filtered = filtered.filter(i => i.date.split('/')[2] === year);
+                if (month) filtered = filtered.filter(i => i.date.split('/')[1] === month);
+                if (client) filtered = filtered.filter(i => i.client === client);
+                if (status) filtered = filtered.filter(i => i.status === status);
+            }
+
+            renderInvoiceTable(filtered);
+        }
+
+        async function generateSyntheticData() {
+            try {
+                await fetch('/api/invoices/synthetic?token=' + TOKEN, { method: 'POST' });
+                fetchInvoices();
+            } catch (e) { }
+        }
+
+        async function handleInvoiceFileChange(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/invoices/upload?token=' + TOKEN, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.ok) fetchInvoices();
+                else alert("Error: " + data.error);
+            } catch (e) { } finally { input.value = ''; }
+        }
+
+        function viewInvoiceDetail(id) {
+            const inv = allInvoices.find(i => i.id === id);
+            if (!inv) return;
+
+            // Inyectar el contenido en la nueva vista full
+            const cleanHtml = formatInvoiceData(inv);
+            document.getElementById('invoice-full-content').innerHTML = cleanHtml;
+
+            // Navegar a la vista de detalle
+            showView('invoice-detail');
+        }
+
+        function formatInvoiceData(inv) {
+            const raw = inv.raw_text || "";
+            if (!raw) return '<div style="text-align: center; padding: 40px; color: #666;">> No hay datos disponibles para esta factura.</div>';
+
+            const lines = raw.split('\n');
+            let items = [];
+            let mainDescription = "";
+            let displayClient = inv.client;
+
+            // Limpieza de cliente
+            const addressPatterns = ["calle", "avda", "c/", "avenida", "carretera", "paseo", "planta"];
+            const isAddress = addressPatterns.some(p => displayClient.toLowerCase().includes(p));
+
+            if (isAddress) {
+                const clientSearch = raw.match(/(?:RECEPTOR|CLIENTE)[:\s]+([A-Z0-9\s\.]{5,40}(?:S\.A\.|S\.L\.|S\.A\.U\.)?)/i);
+                if (clientSearch && clientSearch[1] && !addressPatterns.some(p => clientSearch[1].toLowerCase().includes(p))) {
+                    displayClient = clientSearch[1].trim();
+                } else {
+                    displayClient = "Cliente Registrado";
+                }
+            }
+
+            for (let line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.length < 5) continue;
+                if (trimmed.toLowerCase().includes("localización") || trimmed.toLowerCase().includes("reparación")) {
+                    mainDescription = trimmed;
+                    continue;
+                }
+                const parts = trimmed.split(/\s+/);
+                if (/^\d+[\.,]\d*/.test(parts[0]) && parts.length >= 5) {
+                    const qty = parts[0];
+                    const total = parts[parts.length - 1];
+                    const price = parts[parts.length - 3];
+                    const desc = parts.slice(2, parts.length - 3).join(' ');
+                    if (desc.length > 2) items.push({ qty, desc, price, total });
+                }
+            }
+
+            const statusColors = {
+                'pagada': { color: '#10b981', label: '✓ DOCUMENTO LIQUIDADO' },
+                'no_pagada': { color: '#ef4444', label: '⚠ PENDIENTE DE COBRO' },
+                'a_cuenta': { color: '#fbbf24', label: '● ABONO PARCIAL' }
+            };
+            const s = statusColors[inv.status] || statusColors['no_pagada'];
+
+            return `
+                <div style="font-family: 'Times New Roman', Times, serif; color: var(--text-main); line-height: 1.6; max-width: 850px; margin: 0 auto; padding: 40px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                    
+                    <!-- Header -->
+                    <div style="border-bottom: 2px solid var(--border); padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;">
+                        <div style="font-family: 'Inter', sans-serif;">
+                            <div style="font-size: 0.65rem; font-weight: 800; color: var(--indigo); letter-spacing: 2px; margin-bottom: 10px;">CLIENTE / RECEPTOR</div>
+                            <h1 style="margin: 0; font-size: 1.6rem; color: var(--text-main); font-weight: 900;">${displayClient}</h1>
+                        </div>
+                        <div style="text-align: right; font-family: 'Inter', sans-serif;">
+                            <div style="font-size: 0.7rem; font-weight: 800; color: ${s.color}; margin-bottom: 8px; letter-spacing: 1px;">${s.label}</div>
+                            <div style="font-size: 0.9rem; color: var(--text-dim);">Ref: <span style="color: var(--text-main); font-weight: 700;">${inv.invoice_number}</span></div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">${inv.date}</div>
+                        </div>
+                    </div>
+
+                    <!-- I. Memoria -->
+                    <div style="margin-bottom: 40px;">
+                        <div style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;">I. MEMORIA TÉCNICA</div>
+                        <div style="font-size: 1.1rem; color: var(--text-main); font-style: italic; line-height: 1.4; opacity: 0.9;">
+                            ${mainDescription || "Intervención técnica programada."}
+                        </div>
+                    </div>
+
+                    <!-- II. Conceptos -->
+                    <div style="margin-bottom: 40px;">
+                        <div style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px;">II. CONCEPTOS Y CUANTÍAS</div>
+                        <table style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px;">
+                                    <th style="padding: 10px 5px; text-align: left; width: 60px;">Cant.</th>
+                                    <th style="padding: 10px 5px; text-align: left;">Descripción Detallada</th>
+                                    <th style="padding: 10px 5px; text-align: right; width: 80px;">P.U.</th>
+                                    <th style="padding: 10px 5px; text-align: right; width: 90px;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(item => `
+                                    <tr style="border-bottom: 1px solid var(--border);">
+                                        <td style="padding: 15px 5px; color: var(--indigo); font-family: monospace; font-size: 0.85rem;">${item.qty}</td>
+                                        <td style="padding: 15px 5px; color: var(--text-main); font-size: 0.85rem; font-family: 'Times New Roman', serif;">${item.desc}</td>
+                                        <td style="padding: 15px 5px; color: var(--text-dim); font-size: 0.8rem; text-align: right; font-family: monospace;">${item.price}</td>
+                                        <td style="padding: 15px 5px; color: var(--text-main); font-size: 0.85rem; text-align: right; font-weight: 700; font-family: monospace;">${item.total}</td>
+                                    </tr>
+                                `).join('')}
+                                ${items.length === 0 ? '<tr><td colspan="4" style="padding: 30px; color: var(--text-muted); text-align: center; font-style: italic;">Sin desglose automático disponible.</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Summary -->
+                    <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+                        <div style="width: 280px; border-top: 3px solid var(--text-main); padding-top: 20px; text-align: right;">
+                            <div style="font-family: 'Inter', sans-serif; font-size: 0.6rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;">Importe Total Bruto</div>
+                            <div style="font-size: 2.5rem; font-weight: 200; color: var(--text-main); letter-spacing: -2px; font-family: 'Inter', sans-serif;">
+                                ${parseFloat(inv.total).toLocaleString('es-ES', { minimumFractionDigits: 2 })}<span style="font-size: 1.2rem; font-weight: 400; margin-left: 5px;">€</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 80px; text-align: center; font-family: 'Inter', sans-serif; font-size: 0.65rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; opacity: 0.7;">
+                        Documento generado electrónicamente · Null-Void ERP
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeInvoiceModal() {
+            showView('invoices');
+        }
+
+        // Inicializar si estamos en la vista
+        if (document.getElementById('view-invoices').classList.contains('active')) fetchInvoices();
+    </script>
+    <script src="/static/js/dashboard/admin.js"></script>
+    <script>
+        async function fetchSecurityLogs() {
+            try {
+                const res = await fetch('/api/security/logs?token=' + TOKEN);
+                const logs = await res.json();
+                const body = document.getElementById('security-logs-body');
+                if (!body) return;
+                
+                body.innerHTML = logs.map(log => {
+                    let badgeColor = '#94a3b8';
+                    if (log.type === 'LOGIN') badgeColor = '#10b981';
+                    if (log.type === 'FAIL') badgeColor = '#f59e0b';
+                    if (log.type === 'BLOCK' || log.type === 'ERROR') badgeColor = '#ef4444';
+                    
+                    const date = new Date(log.timestamp).toLocaleString();
+                    
+                    return `
+                        <tr style="border-bottom: 1px solid var(--border); color: var(--text-main);">
+                            <td style="padding: 12px; font-family: monospace; font-size: 0.8rem;">${date}</td>
+                            <td style="padding: 12px;">
+                                <span style="background: ${badgeColor}22; color: ${badgeColor}; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid ${badgeColor}44;">
+                                    ${log.type}
+                                </span>
+                            </td>
+                            <td style="padding: 12px; font-weight: 600;">${log.user}</td>
+                            <td style="padding: 12px; font-family: monospace; color: var(--text-muted);">${log.ip}</td>
+                            <td style="padding: 12px; font-size: 0.8rem;">${log.details}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Error cargando logs:", err);
+            }
+        }
+
+        // Integrar con el cambio de pestañas de Admin
+        const originalShowAdminTab = showAdminTab;
+        showAdminTab = function(tab) {
+            originalShowAdminTab(tab);
+            if (tab === 'security') fetchSecurityLogs();
+        };
+    </script>
+    <script>
+        function setAdminSubTab(tab) {
+            document.getElementById('admin-subtab-alerts').style.display = tab === 'alerts' ? 'block' : 'none';
+            document.getElementById('admin-subtab-security').style.display = tab === 'security' ? 'block' : 'none';
+            
+            document.getElementById('admin-tab-btn-alerts').classList.toggle('active', tab === 'alerts');
+            document.getElementById('admin-tab-btn-security').classList.toggle('active', tab === 'security');
+            
+            if (tab === 'security') fetchSecurityLogs();
+        }
+
+        async function fetchSecurityLogs() {
+            try {
+                const res = await fetch('/api/security/logs?token=' + TOKEN);
+                const logs = await res.json();
+                const body = document.getElementById('security-logs-body');
+                if (!body) return;
+                
+                body.innerHTML = logs.map(log => {
+                    let color = '#94a3b8';
+                    if (log.type === 'LOGIN') color = '#10b981';
+                    if (log.type === 'FAIL') color = '#f59e0b';
+                    if (log.type === 'BLOCK' || log.type === 'REGISTER') color = '#ef4444';
+                    
+                    const date = new Date(log.timestamp).toLocaleString();
+                    return `
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 12px; font-family: monospace; color: var(--text-muted);">${date}</td>
+                            <td style="padding: 12px;"><span style="color: ${color}; font-weight: 800; font-size: 0.7rem;">[${log.type}]</span></td>
+                            <td style="padding: 12px; font-weight: 700;">${log.user}</td>
+                            <td style="padding: 12px; font-family: monospace; opacity: 0.7;">${log.ip}</td>
+                            <td style="padding: 12px; font-size: 0.75rem;">${log.details}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) { console.error(err); }
+        }
+    </script>
+
+    <script>
+        function openSettingsModal() { document.getElementById('settings-modal').style.display = 'flex'; }
+        function closeSettingsModal() { document.getElementById('settings-modal').style.display = 'none'; }
+        async function browseDir(targetId) {
+            const container = document.getElementById(targetId).parentElement;
+            container.style.opacity = "0.5";
+            container.style.pointerEvents = "none";
+
+            try {
+                const res = await fetch('/api/backup/browse', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    document.getElementById(targetId).value = data.path;
+                }
+            } catch (e) {
+                console.error("Error seleccionando directorio:", e);
+            } finally {
+                container.style.opacity = "1";
+                container.style.pointerEvents = "auto";
+            }
+        }
+    </script>
+</body>
+
+</html>

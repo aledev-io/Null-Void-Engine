@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>
+    (function () {
+      const theme = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Null-Void Engine</title>
+  <meta name="description"
+    content="Aplicación de calendario personal para organizar tus tareas y eventos del día a día. Almacenamiento local, sin internet." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}" />
+  <style>
+    #btn-back-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 8px;
+      color: #818cf8;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+      backdrop-filter: blur(8px);
+    }
+    #btn-back-panel:hover {
+      background: rgba(99, 102, 241, 0.28);
+      border-color: rgba(99, 102, 241, 0.7);
+      color: #c7d2fe;
+    }
+    .type-selector {
+      display: flex;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 4px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+    .type-btn {
+      flex: 1;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+      border: none;
+      background: none;
+    }
+    .type-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px var(--primary-glow);
+    }
+    [data-theme="light"] .type-selector {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    [data-theme="light"] .type-btn.active {
+      color: #fff;
+    }
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+      .view-toggle {
+        display: none;
+      }
+      .cal-header {
+        padding: 8px 12px;
+        gap: 8px;
+      }
+      .header-right {
+        gap: 8px;
+      }
+      .current-date {
+        font-size: 0.8rem;
+      }
+      .btn-today {
+        padding: 2px 6px;
+        font-size: 9px;
+      }
+      .month-view {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+      }
+      .month-grid,
+      .month-weekdays {
+        min-width: 400px;
+      }
+      .month-cell {
+        min-height: 40px !important;
+        padding: 1px !important;
+      }
+      .cell-day-num {
+        width: 16px !important;
+        height: 16px !important;
+        font-size: 9px !important;
+      }
+      .event-chip {
+        font-size: 7.5px !important;
+        padding: 1px 2px !important;
+      }
+      .event-chip-dot {
+        display: none !important;
+      }
+      .week-header-row,
+      .week-body {
+        grid-template-columns: 25px repeat(7, 1fr) !important;
+      }
+      .week-day-num {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 11px !important;
+      }
+      .week-day-name {
+        font-size: 8px !important;
+      }
+      .time-slot-label {
+        font-size: 8px !important;
+      }
+    }
+    @media (max-width: 480px) {
+      .month-weekday {
+        font-size: 9px !important;
+      }
+      .current-date {
+        max-width: 120px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+    @media (max-width: 1100px) {
+      .sidebar {
+        display: none !important;
+      }
+      .shell {
+        height: auto !important;
+        overflow-y: visible !important;
+      }
+      .main {
+        overflow-y: visible !important;
+      }
+    }
+    @media (max-height: 600px) {
+      .sidebar {
+        display: none !important;
+      }
+      .cal-header {
+        padding: 4px 10px !important;
+        height: auto !important;
+      }
+      .month-cell {
+        min-height: 50px !important;
+      }
+    }
+    .reminders-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .reminder-chip {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      color: var(--primary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .reminder-chip button {
+      background: none;
+      border: none;
+      color: var(--primary);
+      cursor: pointer;
+      padding: 0;
+      font-size: 1rem;
+      line-height: 1;
+      opacity: 0.6;
+    }
+    .reminder-chip button:hover { opacity: 1; }
+    .reminder-add-row {
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <a href="/app" id="btn-back-panel">← Panel</a>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="app-logo">
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+            <rect x="1" y="4" width="24" height="21" rx="4" fill="var(--primary)" opacity="0.2" stroke="var(--primary)"
+              stroke-width="1.5" />
+            <rect x="7" y="1" width="2.5" height="6" rx="1.25" fill="var(--primary)" />
+            <rect x="16.5" y="1" width="2.5" height="6" rx="1.25" fill="var(--primary)" />
+            <line x1="1" y1="11" x2="25" y2="11" stroke="var(--primary)" stroke-width="1.5" opacity="0.5" />
+            <rect x="6" y="15" width="4" height="4" rx="1" fill="var(--primary)" />
+            <rect x="11" y="15" width="4" height="4" rx="1" fill="var(--primary)" opacity="0.5" />
+          </svg>
+          <span class="logo-text">Null-Void Engine</span>
+        </div>
+        <button class="btn-icon" id="btn-toggle-theme" title="Cambiar tema" aria-label="Cambiar tema">
+          <svg id="icon-theme" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        </button>
+        <button class="btn-icon" id="btn-notifications-history" title="Historial de notificaciones" aria-label="Historial de notificaciones">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+        </button>
+      </div>
+      <button class="btn-add-event" id="btn-add-event" aria-label="Crear nuevo evento">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round">
+          <line x1="8" y1="2" x2="8" y2="14" />
+          <line x1="2" y1="8" x2="14" y2="8" />
+        </svg>
+        <span>Nuevo evento</span>
+      </button>
+      <div class="mini-calendar">
+        <div class="mini-cal-header">
+          <button class="mini-cal-nav" id="mini-prev" aria-label="Mes anterior">&#8249;</button>
+          <span class="mini-cal-title" id="mini-cal-title"></span>
+          <button class="mini-cal-nav" id="mini-next" aria-label="Mes siguiente">&#8250;</button>
+        </div>
+        <div class="mini-cal-weekdays">
+          <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+        </div>
+        <div class="mini-cal-grid" id="mini-cal-grid"></div>
+      </div>
+      <div class="today-panel">
+        <div class="today-panel-header">
+          <span class="today-label">Hoy</span>
+          <span class="today-count" id="today-count">0 eventos</span>
+        </div>
+        <div class="today-tasks" id="today-tasks">
+          <p class="empty-today">Sin eventos hoy 🎉</p>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn-text" id="btn-notifications" title="Activar notificaciones de escritorio">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; opacity: 0.8;">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          Notificaciones
+        </button>
+        <button class="btn-text" id="btn-export">↓ Exportar</button>
+        <label class="btn-text" for="import-input" style="cursor:pointer">↑ Importar</label>
+        <input type="file" id="import-input" accept=".json" hidden />
+      </div>
+    </aside>
+    <main class="main-content">
+      <header class="cal-header">
+        <div class="cal-nav-group">
+          <button class="btn-nav" id="btn-prev" aria-label="Anterior">&#8249;</button>
+          <button class="btn-today" id="btn-today">Hoy</button>
+          <button class="btn-nav" id="btn-next" aria-label="Siguiente">&#8250;</button>
+        </div>
+        <h1 class="cal-title" id="cal-title"></h1>
+        <div class="view-toggle" role="group" aria-label="Cambiar vista">
+          <button class="view-btn active" id="view-month" data-view="month">Mes</button>
+          <button class="view-btn" id="view-week" data-view="week">Semana</button>
+          <button class="view-btn" id="view-day" data-view="day">Día</button>
+        </div>
+      </header>
+      <div class="cal-body" id="cal-body"></div>
+    </main>
+  </div>
+  <div class="modal-overlay" id="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 id="modal-title">Nuevo Evento</h2>
+        <button class="btn-modal-close" id="modal-close" aria-label="Cerrar">&#10005;</button>
+      </div>
+      <form class="modal-form" id="event-form" novalidate>
+        <div class="type-selector" id="type-selector">
+          <button type="button" class="type-btn active" data-type="event">Evento</button>
+          <button type="button" class="type-btn" data-type="task">Tarea</button>
+        </div>
+        <input type="text" id="event-title" class="form-input title-input" placeholder="Título del evento" required
+          maxlength="100" autocomplete="off" />
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-date">Fecha</label>
+            <input type="date" id="event-date" class="form-input" required />
+          </div>
+          <div class="form-group center-v">
+            <label class="check-label">
+              <input type="checkbox" id="event-allday" class="form-check" />
+              <span class="check-custom"></span>
+              <span>Todo el día</span>
+            </label>
+          </div>
+          <div class="form-group center-v hidden" id="group-completed">
+            <label class="check-label">
+              <input type="checkbox" id="event-completed" class="form-check" />
+              <span class="check-custom"></span>
+              <span style="color:var(--cat-salud); font-weight: 600;">Completada</span>
+            </label>
+          </div>
+          <div class="form-group center-v">
+            <label class="check-label">
+              <input type="checkbox" id="event-important" class="form-check" />
+              <span class="check-custom" style="border-color: #f87171;"></span>
+              <span style="color: #f87171; font-weight: 700;">⭐ Importante</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row" id="time-row">
+          <div class="form-group">
+            <label class="form-label" for="event-start">Inicio</label>
+            <input type="time" id="event-start" class="form-input" value="09:00" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-end">Fin</label>
+            <input type="time" id="event-end" class="form-input" value="10:00" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <div class="category-selector" id="category-selector">
+            <button type="button" class="cat-btn active" data-cat="personal"><span class="cat-dot"
+                style="background:var(--cat-personal)"></span>Personal</button>
+            <button type="button" class="cat-btn" data-cat="trabajo"><span class="cat-dot"
+                style="background:var(--cat-trabajo)"></span>Trabajo</button>
+            <button type="button" class="cat-btn" data-cat="salud"><span class="cat-dot"
+                style="background:var(--cat-salud)"></span>Salud</button>
+            <button type="button" class="cat-btn" data-cat="estudio"><span class="cat-dot"
+                style="background:var(--cat-estudio)"></span>Estudio</button>
+            <button type="button" class="cat-btn" data-cat="ocio"><span class="cat-dot"
+                style="background:var(--cat-ocio)"></span>Ocio</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="event-desc">Descripción</label>
+          <textarea id="event-desc" class="form-input form-textarea" placeholder="Notas adicionales..."
+            rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Recordatorios</label>
+          <div id="reminders-list" class="reminders-list">
+          </div>
+          <div class="reminder-add-row">
+            <select id="reminder-select" class="form-input">
+              <option value="" disabled selected>+ Añadir recordatorio...</option>
+              <option value="0">En el momento</option>
+              <option value="5">5 minutos antes</option>
+              <option value="10">10 minutos antes</option>
+              <option value="15">15 minutos antes</option>
+              <option value="30">30 minutos antes</option>
+              <option value="60">1 hora antes</option>
+              <option value="120">2 horas antes</option>
+              <option value="1440">1 día antes</option>
+              <option value="2880">2 días antes</option>
+              <option value="10080">1 semana antes</option>
+              <option value="20160">2 semanas antes</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-delete hidden" id="btn-delete-event">Eliminar</button>
+          <div class="modal-actions-right">
+            <button type="button" class="btn-secondary" id="btn-cancel">Cancelar</button>
+            <button type="submit" class="btn-primary" id="btn-save">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div id="notif-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+      <div style="background: var(--bg-card); width: 90%; max-width: 500px; max-height: 80vh; border-radius: 16px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+          <div style="padding: 20px; border-bottom: 1px solid rgba(99, 102, 241, 0.1); display: flex; justify-content: space-between; align-items: center;">
+              <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">Historial de Notificaciones</h2>
+              <div style="display: flex; gap: 12px; align-items: center;">
+                  <button id="clear-all-notifs" style="background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.2); color: #f87171; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;">Limpiar todo</button>
+                  <button id="close-notif-modal" style="background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 1.5rem;">&times;</button>
+              </div>
+          </div>
+          <div id="notif-history-list" style="padding: 10px; overflow-y: auto; flex: 1;">
+              <p style="text-align: center; color: var(--text-sub); padding: 40px;">Cargando historial...</p>
+          </div>
+      </div>
+  </div>
+  <style>
+      .notif-item {
+          padding: 12px 16px;
+          border-radius: 10px;
+          background: rgba(99, 102, 241, 0.05);
+          margin-bottom: 8px;
+          border: 1px solid rgba(99, 102, 241, 0.1);
+          transition: transform 0.2s;
+      }
+      .notif-item:hover {
+          background: rgba(99, 102, 241, 0.08);
+          transform: translateX(4px);
+      }
+      .notif-title {
+          font-weight: 600;
+          color: var(--text-main);
+          margin-bottom: 4px;
+          font-size: 0.95rem;
+      }
+      .notif-time {
+          font-size: 0.75rem;
+          color: var(--text-sub);
+          display: flex;
+          justify-content: space-between;
+      }
+      .notif-badge {
+          font-size: 0.65rem;
+          padding: 2px 6px;
+          border-radius: 4px;
+          text-transform: uppercase;
+          font-weight: 700;
+      }
+  </style>
+  <div class="toast" id="toast" aria-live="polite"></div>
+  <script src="{{ url_for('static', filename='js/storage.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/events.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>
+    window.addEventListener('calendar:synced', () => {
+      if (typeof App !== 'undefined') App.render();
+    });
+  </script>
+</body>
+</html>

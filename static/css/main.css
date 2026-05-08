@@ -1,0 +1,202 @@
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --bg-base:      #0e0e16;
+  --bg-surface:   #16161f;
+  --bg-elevated:  #1e1e2a;
+  --bg-hover:     #252534;
+  --bg-active:    #2e2e3e;
+
+  --primary:        #7c6af7;
+  --primary-hover:  #9d8ff9;
+  --primary-subtle: rgba(124,106,247,.15);
+  --primary-glow:   rgba(124,106,247,.35);
+
+  --text-primary:   #e8e6f0;
+  --text-secondary: #9490a8;
+  --text-muted:     #5c5a70;
+  --text-inverted:  #ffffff;
+
+  --border:        rgba(255,255,255,.07);
+  --border-strong: rgba(255,255,255,.13);
+
+  --cat-personal: #7c6af7;
+  --cat-trabajo:  #4bc8c8;
+  --cat-salud:    #6bd46b;
+  --cat-estudio:  #f5a623;
+  --cat-ocio:     #f97066;
+
+  --glass-bg:     rgba(22,22,31,.85);
+  --glass-border: rgba(255,255,255,.10);
+  --glass-shadow: 0 16px 48px rgba(0,0,0,.55);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --sidebar-w: 264px;
+  --header-h:  62px;
+
+  --t-fast:   120ms ease;
+  --t-normal: 240ms ease;
+  --t-slow:   380ms ease;
+
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-base:      #f2f2f8;
+  --bg-surface:   #ffffff;
+  --bg-elevated:  #f8f8fc;
+  --bg-hover:     #ededf7;
+  --bg-active:    #e4e4f2;
+
+  --primary:        #6454e8;
+  --primary-hover:  #7c6af7;
+  --primary-subtle: rgba(100,84,232,.10);
+  --primary-glow:   rgba(100,84,232,.25);
+
+  --text-primary:   #1a1828;
+  --text-secondary: #5a567a;
+  --text-muted:     #9490a8;
+
+  --border:        rgba(0,0,0,.07);
+  --border-strong: rgba(0,0,0,.13);
+
+  --glass-bg:     rgba(255,255,255,.88);
+  --glass-border: rgba(0,0,0,.09);
+  --glass-shadow: 0 12px 40px rgba(0,0,0,.14);
+
+  color-scheme: light;
+}
+
+/* ============================================================
+   RESET
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden;
+  transition: background var(--t-normal), color var(--t-normal);
+}
+button  { cursor: pointer; font-family: inherit; border: none; background: none; }
+input, textarea { font-family: inherit; }
+
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.app-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ============================================================
+   SHARED BUTTONS
+   ============================================================ */
+.btn-icon {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: all var(--t-fast);
+}
+.btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  padding: 9px 22px;
+  border-radius: var(--radius-md);
+  font-weight: 600; font-size: 14px;
+  box-shadow: 0 4px 14px var(--primary-glow);
+  transition: all var(--t-fast);
+}
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px var(--primary-glow);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  padding: 9px 22px;
+  border-radius: var(--radius-md);
+  font-weight: 500; font-size: 14px;
+  transition: all var(--t-fast);
+}
+.btn-secondary:hover { background: var(--bg-active); }
+
+.btn-delete {
+  color: #f97066;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 500; font-size: 14px;
+  border: 1px solid rgba(249,112,102,.3);
+  transition: all var(--t-fast);
+}
+.btn-delete:hover { background: rgba(249,112,102,.1); }
+
+.btn-text {
+  color: var(--text-muted);
+  font-size: 12px; font-weight: 500;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  transition: all var(--t-fast);
+  display: inline-block;
+}
+.btn-text:hover { color: var(--text-secondary); background: var(--bg-hover); }
+
+.hidden { display: none !important; }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.toast {
+  position: fixed;
+  bottom: 30px; left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 11px 26px;
+  border-radius: var(--radius-lg);
+  font-size: 14px; font-weight: 500;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-normal), transform var(--t-normal);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fadeIn  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes scaleIn { from { opacity:0; transform:scale(.96); }      to { opacity:1; transform:scale(1); } }
+.anim-fade  { animation: fadeIn  var(--t-normal) both; }
+.anim-scale { animation: scaleIn var(--t-normal) both; }

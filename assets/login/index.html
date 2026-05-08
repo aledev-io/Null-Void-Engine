@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Null-Void Engine</title>
+    <script>
+        (function () {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.body.style.filter = 'none';
+        })();
+    </script>
+    <style>
+        :root {
+            --bg: #07090f;
+            --panel-right-bg: #07090f;
+            --text-main: #fff;
+            --text-sub: #2d3f56;
+            --input-bg: rgba(10, 15, 28, 0.98);
+            --input-border: rgba(99, 102, 241, 0.16);
+            --input-text: #e2e8f0;
+            --label-color: #3d5068;
+            --footer-color: #131e2c;
+            --btn-theme-bg: rgba(255, 255, 255, 0.1);
+            --btn-theme-color: #fff;
+            --btn-theme-border: rgba(255, 255, 255, 0.2);
+        }
+
+        [data-theme="light"] {
+            --bg: #f8fafc;
+            --panel-right-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --input-bg: #f1f5f9;
+            --input-border: #cbd5e1;
+            --input-text: #1e293b;
+            --label-color: #475569;
+            --footer-color: #94a3b8;
+            --btn-theme-bg: rgba(0, 0, 0, 0.05);
+            --btn-theme-color: #475569;
+            --btn-theme-border: rgba(0, 0, 0, 0.1);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: auto;
+            transition: background 0.3s;
+        }
+
+        #root {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ── PANEL IZQUIERDO ── */
+        #panel-left {
+            flex: 1;
+            position: relative;
+            background-image: url('/assets/login/background.jpg');
+            background-size: cover;
+            background-position: center;
+            min-width: 0;
+        }
+
+        #panel-left::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(to right, var(--bg) 0%, var(--bg) 100%),
+                linear-gradient(to bottom, var(--bg) 0%, transparent 30%, var(--bg) 100%);
+            opacity: 0.85;
+            transition: background 0.3s;
+        }
+
+        [data-theme="dark"] #panel-left::after {
+            background:
+                linear-gradient(to right, rgba(7, 9, 15, 0.4) 0%, rgba(7, 9, 15, 0.95) 100%),
+                linear-gradient(to bottom, rgba(7, 9, 15, 0.7) 0%, transparent 30%, rgba(7, 9, 15, 0.6) 100%);
+            opacity: 1;
+        }
+
+        #branding {
+            position: absolute;
+            bottom: clamp(20px, 35vh, 300px);
+            left: clamp(20px, 4vw, 56px);
+            right: clamp(16px, 2vw, 32px);
+            z-index: 2;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(99, 102, 241, 0.14);
+            border: 1px solid rgba(99, 102, 241, 0.38);
+            border-radius: 20px;
+            padding: 4px 14px;
+            margin-bottom: 20px;
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: #818cf8;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            backdrop-filter: blur(6px);
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #6366f1;
+            box-shadow: 0 0 8px rgba(99, 102, 241, 1);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .main-title {
+            font-size: 3rem;
+            font-weight: 800;
+            line-height: 1.1;
+            color: #fff;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 0, 0, 0.8);
+            margin-bottom: 14px;
+        }
+
+        [data-theme="light"] .main-title {
+            color: #0f172a;
+            text-shadow: none;
+        }
+
+        .main-desc {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.75;
+            margin-bottom: 32px;
+            max-width: 400px;
+        }
+
+        [data-theme="light"] .main-desc {
+            color: #475569;
+        }
+
+        #panel-right {
+            width: clamp(300px, 40vw, 460px);
+            flex-shrink: 1;
+            background: var(--panel-right-bg);
+            border-left: 1px solid rgba(99, 102, 241, 0.07);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+            transition: background 0.3s;
+        }
+
+        #card {
+            width: 100%;
+            padding: 0 48px;
+            display: flex;
+            flex-direction: column;
+            margin-top: 20px;
+            animation: fadeUp 0.4s ease both;
+        }
+
+        .card-title {
+            font-size: 1.65rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            transition: opacity 0.2s, color 0.3s;
+        }
+
+        .card-sub {
+            font-size: 0.76rem;
+            color: var(--text-sub);
+            margin-bottom: 36px;
+            transition: opacity 0.2s, color 0.3s;
+        }
+
+        .field-label {
+            font-size: 0.67rem;
+            font-weight: 600;
+            color: var(--label-color);
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
+            display: block;
+            margin-bottom: 7px;
+            transition: color 0.3s;
+        }
+
+        .field-input+.field-label {
+            margin-top: 18px;
+        }
+
+        .field-input {
+            width: 100%;
+            height: 48px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 9px;
+            color: var(--input-text);
+            font-size: 0.92rem;
+            font-family: inherit;
+            padding: 0 16px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.3s, color 0.3s;
+            display: block;
+        }
+
+        .field-input:focus {
+            border-color: rgba(99, 102, 241, 0.55);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+        }
+
+        .field-input::placeholder {
+            color: #475569;
+            opacity: 0.5;
+        }
+
+        .field-input:-webkit-autofill,
+        .field-input:-webkit-autofill:hover,
+        .field-input:-webkit-autofill:focus {
+            -webkit-text-fill-color: var(--input-text);
+            -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        .msg-area {
+            min-height: 22px;
+            font-size: 0.74rem;
+            text-align: center;
+            margin-top: 12px;
+            transition: opacity 0.2s;
+        }
+
+        #error-msg,
+        #register-msg {
+            color: #f87171;
+        }
+
+        #register-msg.success {
+            color: #34d399;
+        }
+
+        .form-btn {
+            width: 100%;
+            height: 48px;
+            margin-top: 22px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: #fff;
+            font-size: 0.88rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            font-family: inherit;
+            border: none;
+            border-radius: 9px;
+            cursor: pointer;
+            box-shadow: 0 4px 22px rgba(99, 102, 241, 0.3);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .form-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+            background: linear-gradient(135deg, #5b52f0, #8b45f5);
+        }
+
+        .form-btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-btn .spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .form-btn.loading .btn-text {
+            display: none;
+        }
+
+        .form-btn.loading .spinner {
+            display: block;
+        }
+
+        .toggle-link {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 0.75rem;
+            color: #3d5068;
+        }
+
+        .toggle-link a {
+            color: #818cf8;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.15s;
+        }
+
+        .toggle-link a:hover {
+            color: #a5b4fc;
+        }
+
+        .btn-theme-float {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            background: var(--btn-theme-bg);
+            border: 1px solid var(--btn-theme-border);
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--btn-theme-color);
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease, background 0.3s, color 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-8px);
+            }
+
+            40% {
+                transform: translateX(8px);
+            }
+
+            60% {
+                transform: translateX(-5px);
+            }
+
+            80% {
+                transform: translateX(5px);
+            }
+        }
+
+        @media (max-width: 900px) {
+            #panel-left {
+                display: none;
+            }
+
+            #panel-right {
+                width: 100vw;
+            }
+
+            #card {
+                padding: 0 32px;
+            }
+        }
+
+        @media (max-height: 500px) {
+            #panel-left {
+                display: none;
+            }
+
+            #panel-right {
+                width: 100vw;
+            }
+
+            #card {
+                margin-top: 0;
+                padding: 20px 32px;
+            }
+
+            .main-title {
+                font-size: 2rem;
+            }
+
+            .card-title {
+                font-size: 1.4rem;
+            }
+
+            .card-sub {
+                margin-bottom: 15px;
+            }
+
+            .field-label+.field-label,
+            .field-input+.field-label {
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root">
+        <!-- Botón de tema -->
+        <button class="btn-theme-float" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema">
+            <svg id="theme-icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <!-- JS -->
+            </svg>
+        </button>
+
+        <!-- Panel izquierdo -->
+        <div id="panel-left">
+            <div id="branding">
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    Null-Void Engine
+                </div>
+                <div class="main-title">Null-Void<br>Engine</div>
+                <div class="main-desc">
+                    Gestión centralizada de rendimiento, temperatura y backups para tu equipo.
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel derecho -->
+        <div id="panel-right">
+            <div id="card">
+                <div class="card-icon"
+                    style="font-size: 2rem; margin-bottom: 12px; filter: drop-shadow(0 0 16px rgba(99,102,241,0.6));">⬡
+                </div>
+                <div class="card-title" id="card-title">Bienvenido</div>
+                <div class="card-sub" id="card-sub">Inicia sesión para continuar</div>
+
+                <!-- ── LOGIN FORM ── -->
+                <div id="login-form">
+                    <label class="field-label">Usuario</label>
+                    <input class="field-input" id="inp-user" type="text" placeholder="User" autocomplete="username" />
+
+                    <label class="field-label">Contraseña</label>
+                    <input class="field-input" id="inp-pass" type="password" placeholder="••••••••"
+                        autocomplete="current-password" />
+
+                    <div id="error-msg" class="msg-area"></div>
+
+                    <button id="btn-submit" class="form-btn" onclick="doLogin()">
+                        <span class="btn-text">Iniciar sesión</span>
+                        <div class="spinner"></div>
+                    </button>
+
+                    <div class="toggle-link">
+                        ¿No tienes cuenta? <a href="#" onclick="toggleForm(event)">Regístrate</a>
+                    </div>
+                </div>
+
+                <!-- ── REGISTER FORM ── -->
+                <div id="register-form" style="display:none;">
+                    <label class="field-label">Usuario</label>
+                    <input class="field-input" id="reg-user" type="text" placeholder="User" autocomplete="username" />
+
+                    <label class="field-label">Contraseña</label>
+                    <input class="field-input" id="reg-pass" type="password" placeholder="••••••••"
+                        autocomplete="new-password" />
+
+                    <label class="field-label">Confirmar contraseña</label>
+                    <input class="field-input" id="reg-pass2" type="password" placeholder="••••••••"
+                        autocomplete="new-password" />
+
+                    <div id="register-msg" class="msg-area"></div>
+
+                    <button id="btn-register" class="form-btn" onclick="doRegister()">
+                        <span class="btn-text">Crear cuenta</span>
+                        <div class="spinner"></div>
+                    </button>
+
+                    <div class="toggle-link">
+                        ¿Ya tienes cuenta? <a href="#" onclick="toggleForm(event)">Inicia sesión</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Redirección automática si el usuario ya tiene una sesión válida
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+        if (getCookie('token')) window.location.href = '/app';
+
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('error') === 'session_invalidated') {
+                const errEl = document.getElementById('error-msg');
+                if (errEl) {
+                    errEl.textContent = 'Sesión cerrada: se ha iniciado sesión en otra pestaña o dispositivo.';
+                    errEl.style.color = '#fbbf24';
+                }
+            } else if (params.get('error') === 'tab_active') {
+                const errEl = document.getElementById('error-msg');
+                if (errEl) {
+                    errEl.textContent = 'Acceso denegado: ya tienes otra pestaña de esta cuenta abierta.';
+                    errEl.style.color = '#f87171';
+                }
+            }
+        };
+
+        // Referencias a elementos del DOM
+        const userEl = document.getElementById('inp-user');
+        const passEl = document.getElementById('inp-pass');
+        const errEl = document.getElementById('error-msg');
+        const btnEl = document.getElementById('btn-submit');
+
+        const regUserEl = document.getElementById('reg-user');
+        const regPassEl = document.getElementById('reg-pass');
+        const regPass2El = document.getElementById('reg-pass2');
+        const regMsgEl = document.getElementById('register-msg');
+        const btnRegEl = document.getElementById('btn-register');
+
+        // Eventos de teclado para login
+        userEl.addEventListener('keydown', e => { if (e.key === 'Enter') passEl.focus(); });
+        passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+        [userEl, passEl].forEach(el => el.addEventListener('input', () => errEl.textContent = ''));
+
+        // Eventos de teclado para registro
+        if (regUserEl) {
+            regUserEl.addEventListener('keydown', e => { if (e.key === 'Enter') regPassEl.focus(); });
+            regPassEl.addEventListener('keydown', e => { if (e.key === 'Enter') regPass2El.focus(); });
+            regPass2El.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+            [regUserEl, regPassEl, regPass2El].forEach(el =>
+                el.addEventListener('input', () => {
+                    regMsgEl.textContent = '';
+                    regMsgEl.classList.remove('success');
+                })
+            );
+        }
+
+        // 2. Intercambio de formularios (Login ↔ Registro) con efecto visual
+        function toggleForm(e) {
+            if (e) e.preventDefault();
+            const login = document.getElementById('login-form');
+            const register = document.getElementById('register-form');
+            const title = document.getElementById('card-title');
+            const sub = document.getElementById('card-sub');
+            const isLogin = login.style.display !== 'none';
+
+            const current = isLogin ? login : register;
+            current.style.opacity = '0';
+
+            setTimeout(() => {
+                if (isLogin) {
+                    login.style.display = 'none';
+                    register.style.display = 'block';
+                    register.style.opacity = '0';
+                    title.textContent = 'Registro';
+                    sub.textContent = 'Crea tu cuenta para continuar';
+                    setTimeout(() => { register.style.opacity = '1'; if (regUserEl) regUserEl.focus(); }, 20);
+                } else {
+                    register.style.display = 'none';
+                    login.style.display = 'block';
+                    login.style.opacity = '0';
+                    title.textContent = 'Bienvenido';
+                    sub.textContent = 'Inicia sesión para continuar';
+                    setTimeout(() => { login.style.opacity = '1'; if (userEl) userEl.focus(); }, 20);
+                }
+                errEl.textContent = '';
+                regMsgEl.textContent = '';
+                regMsgEl.classList.remove('success');
+            }, 180);
+        }
+
+        // 3. Petición al servidor para validar credenciales (Login)
+        async function doLogin() {
+            const user = userEl.value.trim();
+            const pass = passEl.value;
+            if (!user || !pass) { errEl.textContent = 'Rellena todos los campos'; shake(); return; }
+            setLoading(btnEl, true);
+            errEl.textContent = '';
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    setLoading(btnEl, false);
+                    btnEl.querySelector('.btn-text').textContent = '✓ Acceso concedido';
+                    btnEl.style.background = 'linear-gradient(135deg, #059669, #047857)';
+                    setTimeout(() => window.location.href = '/app', 600);
+                } else {
+                    errEl.textContent = '⚠ ' + data.error;
+                    setLoading(btnEl, false);
+                    shake();
+                    passEl.value = '';
+                    passEl.focus();
+                }
+            } catch {
+                errEl.textContent = '⚠ Error de conexión con el servidor';
+                setLoading(btnEl, false);
+            }
+        }
+
+        // 4. Petición al servidor para crear cuenta (Registro)
+        async function doRegister() {
+            const user = regUserEl.value.trim();
+            const pass = regPassEl.value;
+            const pass2 = regPass2El.value;
+            if (!user || !pass || !pass2) {
+                regMsgEl.textContent = 'Rellena todos los campos';
+                regMsgEl.classList.remove('success');
+                shakeReg();
+                return;
+            }
+            if (pass !== pass2) {
+                regMsgEl.textContent = '⚠ Las contraseñas no coinciden';
+                regMsgEl.classList.remove('success');
+                shakeReg();
+                regPass2El.focus();
+                return;
+            }
+            if (pass.length < 6) {
+                regMsgEl.textContent = '⚠ La contraseña debe tener al menos 6 caracteres';
+                regMsgEl.classList.remove('success');
+                shakeReg();
+                return;
+            }
+            setLoading(btnRegEl, true);
+            regMsgEl.textContent = '';
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    setLoading(btnRegEl, false);
+                    btnRegEl.querySelector('.btn-text').textContent = '✓ Cuenta creada';
+                    btnRegEl.style.background = 'linear-gradient(135deg, #059669, #047857)';
+                    regMsgEl.classList.add('success');
+                    regMsgEl.textContent = 'Redirigiendo al inicio de sesión…';
+                    setTimeout(() => {
+                        btnRegEl.style.background = '';
+                        btnRegEl.querySelector('.btn-text').textContent = 'Crear cuenta';
+                        regUserEl.value = '';
+                        regPassEl.value = '';
+                        regPass2El.value = '';
+                        toggleForm(null);
+                        userEl.value = user;
+                        passEl.focus();
+                    }, 1200);
+                } else {
+                    regMsgEl.textContent = '⚠ ' + data.error;
+                    regMsgEl.classList.remove('success');
+                    setLoading(btnRegEl, false);
+                    shakeReg();
+                }
+            } catch {
+                regMsgEl.textContent = '⚠ Error de conexión con el servidor';
+                regMsgEl.classList.remove('success');
+                setLoading(btnRegEl, false);
+            }
+        }
+
+        function setLoading(btn, on) {
+            if (!btn) return;
+            btn.disabled = on;
+            btn.classList.toggle('loading', on);
+        }
+
+        function shake() {
+            const card = document.getElementById('card');
+            if (!card) return;
+            card.style.animation = 'none';
+            card.offsetHeight;
+            card.style.animation = 'shake 0.4s ease';
+        }
+
+        function shakeReg() {
+            const form = document.getElementById('register-form');
+            if (!form) return;
+            form.style.animation = 'none';
+            form.offsetHeight;
+            form.style.animation = 'shake 0.4s ease';
+        }
+
+        // 5. Gestión del Tema
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'dark';
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+            updateThemeIcon(next);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-icon-svg');
+            if (!icon) return;
+            if (theme === 'light') {
+                icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+            } else {
+                icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+            }
+        }
+        updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+
+    </script>
+</body>
+
+</html>

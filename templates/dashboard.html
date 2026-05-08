@@ -1,0 +1,4284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Null-Void Engine</title>
+    <script>
+        (function () {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <style>
+        :root,
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --surface-hi: rgba(51, 65, 85, 0.9);
+            --border: rgba(148, 163, 184, 0.2);
+            --border-hi: rgba(148, 163, 184, 0.4);
+            --indigo: #818cf8;
+            --indigo-dim: rgba(129, 140, 248, 0.2);
+            --text-main: #ffffff;
+            --text-dim: #f8fafc;
+            --text-muted: #cbd5e1;
+            --cpu: #f87171;
+            --ram: #c084fc;
+            --temp: #fb923c;
+            --bg-card: #1e293b;
+            --cloud-nav-text: #f1f5f9;
+            --cloud-nav-bg-active: rgba(129, 140, 248, 0.25);
+            --cloud-nav-text-active: #ffffff;
+            --cloud-row-border: rgba(255, 255, 255, 0.1);
+            --cloud-row-hover: rgba(255, 255, 255, 0.05);
+            color-scheme: dark;
+        }
+        [data-theme="light"] {
+            --bg: #f8fafc;
+            --surface: rgba(255, 255, 255, 0.85);
+            --surface-hi: rgba(255, 255, 255, 0.98);
+            --border: rgba(99, 102, 241, 0.2);
+            --border-hi: rgba(99, 102, 241, 0.5);
+            --text-main: #000000;
+            --text-dim: #3730a3;
+            --text-muted: #334155;
+            --indigo: #4338ca;
+            --indigo-dim: rgba(79, 70, 229, 0.15);
+            --cpu: #b91c1c;
+            --ram: #7e22ce;
+            --temp: #c2410c;
+            --bg-card: #ffffff;
+            --cloud-nav-text: #1a1c1e;
+            --cloud-nav-bg-active: #e8f0fe;
+            --cloud-nav-text-active: #174ea6;
+            --cloud-row-border: rgba(0, 0, 0, 0.1);
+            --cloud-row-hover: rgba(0, 0, 0, 0.04);
+            color-scheme: light;
+        }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html,
+        body {
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text-main);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        #shell {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 clamp(16px, 4vw, 32px);
+            height: 60px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-hi);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .tb-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .logo-box {
+            width: 24px;
+            height: 24px;
+            background: var(--indigo);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 800;
+            border-radius: 4px;
+        }
+        .logo-text {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: 0.02em;
+        }
+        .tb-brand-sub {
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 1px;
+            display: block;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--indigo-dim);
+            border: 1px solid rgba(99, 102, 241, 0.38);
+            border-radius: 20px;
+            padding: 3px 12px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+        .badge-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--indigo);
+            box-shadow: 0 0 8px rgba(99, 102, 241, 1);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.4;
+            }
+        }
+        .tb-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .tb-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+            position: relative;
+            cursor: pointer;
+        }
+        .tb-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+            transition: transform 0.2s;
+        }
+        .tb-avatar:hover {
+            transform: scale(1.05);
+        }
+        .profile-dropdown {
+            position: absolute;
+            top: calc(100% + 12px);
+            right: 0;
+            width: 320px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-hi);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            padding: 24px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1000;
+            animation: slideDown 0.2s ease-out;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .profile-dropdown.show {
+            display: flex;
+        }
+        .dropdown-header {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .large-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            margin: 0 auto 16px;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .large-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .avatar-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .large-avatar.interactive:hover .avatar-overlay {
+            opacity: 1;
+        }
+        .profile-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+        .profile-banner {
+            height: 100px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            width: 100%;
+        }
+        .profile-content {
+            padding: 0 24px 24px;
+            position: relative;
+        }
+        .profile-avatar-wrapper {
+            margin-top: -45px;
+            margin-bottom: 16px;
+            position: relative;
+            display: inline-block;
+        }
+        .profile-avatar-wrapper .large-avatar {
+            border: 6px solid var(--bg-card);
+            width: 90px;
+            height: 90px;
+            margin: 0;
+        }
+        .avatar-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        }
+        .avatar-modal.show {
+            display: flex;
+        }
+        .am-content {
+            background: #2b2d31;
+            width: 440px;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            animation: modalPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes modalPop {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        .am-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .am-title {
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+        .am-close {
+            color: #b5bac1;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .am-close:hover {
+            color: #fff;
+        }
+        .am-body {
+            padding: 16px;
+        }
+        .am-upload-card {
+            background: #1e1f22;
+            border-radius: 8px;
+            height: 160px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 1px solid transparent;
+            margin-bottom: 20px;
+        }
+        .am-upload-card:hover {
+            background: #35373c;
+        }
+        .am-upload-icon {
+            color: #b5bac1;
+            margin-bottom: 12px;
+        }
+        .am-upload-text {
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .avatar-overlay svg {
+            color: #fff;
+            width: 24px;
+            height: 24px;
+        }
+        .editor-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            backdrop-filter: blur(4px);
+        }
+        .editor-modal.show {
+            display: flex;
+        }
+        .em-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-hi);
+            width: 520px;
+            border-radius: 12px;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            animation: modalPop 0.2s ease-out;
+        }
+        .em-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .em-title {
+            color: var(--text-main);
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+        .em-body {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .em-preview-container {
+            width: 100%;
+            height: 300px;
+            background: #1e1f22;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #em-image {
+            max-width: none;
+            pointer-events: none;
+        }
+        .em-mask {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .em-circle {
+            width: 200px;
+            height: 200px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2000px rgba(30, 31, 34, 0.7);
+            cursor: move;
+            pointer-events: auto;
+            position: relative;
+        }
+        .em-controls {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .em-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: #4e5058;
+            border-radius: 2px;
+            outline: none;
+        }
+        .em-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .em-footer {
+            padding: 16px;
+            background: #1e1f22;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        .em-btn {
+            padding: 10px 24px;
+            border-radius: 3px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        .em-btn-cancel {
+            background: transparent;
+            color: #fff;
+        }
+        .em-btn-cancel:hover {
+            text-decoration: underline;
+        }
+        .em-btn-apply {
+            background: #5865f2;
+            color: #fff;
+        }
+        .em-btn-apply:hover {
+            background: #4752c4;
+        }
+        .save-bar {
+            position: fixed;
+            bottom: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 80px);
+            max-width: 800px;
+            background: #111214;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 9999;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .save-bar.show {
+            bottom: 20px;
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .sb-text {
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .sb-actions {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .sb-btn-reset {
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .sb-btn-reset:hover {
+            text-decoration: underline;
+        }
+        .sb-btn-save {
+            background: #248046;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .sb-btn-save:hover {
+            background: #1a6334;
+        }
+        .cfg-tab {
+            padding: 12px 20px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            font-weight: 600;
+        }
+        .cfg-tab:hover {
+            background: var(--surface-hi);
+            color: var(--text-main);
+        }
+        .cfg-tab.active {
+            color: var(--indigo);
+            background: var(--surface-hi);
+            border-left-color: var(--indigo);
+        }
+        .cfg-pane {
+            display: none;
+            color: var(--text-main);
+            animation: fadeIn 0.3s ease-out;
+        }
+        .cfg-pane h3 {
+            color: var(--text-main);
+            font-weight: 800;
+        }
+        .cfg-pane p {
+            color: var(--text-muted);
+        }
+        .cfg-pane.active {
+            display: block;
+        }
+        .cfg-pane .futuristic-input {
+            background: var(--surface-hi) !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text-main) !important;
+            padding: 8px 12px !important;
+            font-size: 0.9rem !important;
+            padding-right: 40px !important;
+        }
+        .pass-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .toggle-pass {
+            position: absolute;
+            right: 12px;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            color: var(--text-main);
+        }
+        .toggle-pass:hover {
+            opacity: 1;
+        }
+        .cfg-msg-area {
+            font-size: 0.75rem;
+            text-align: center;
+            margin-top: 12px;
+            min-height: 18px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .cfg-msg-area.error {
+            color: #f87171;
+        }
+        .cfg-msg-area.success {
+            color: #34d399;
+        }
+        .input-group-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .btn-browse-input {
+            position: absolute;
+            right: 8px;
+            background: var(--indigo-dim);
+            border: 1px solid var(--border-hi);
+            color: var(--text-main);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-browse-input:hover {
+            background: var(--indigo);
+            color: #fff;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .tb-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+        .dropdown-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+        .dropdown-email {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+        .btn-manage-account {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            border: 1px solid var(--border-hi);
+            border-radius: 100px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .btn-manage-account:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--indigo);
+        }
+        .dropdown-divider {
+            width: 100%;
+            height: 1px;
+            background: var(--border);
+            margin: 12px 0;
+        }
+        .dropdown-footer {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        #btn-logout-dropdown {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 24px;
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.2);
+            border-radius: 8px;
+            color: #f87171;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #btn-logout-dropdown:hover {
+            background: rgba(248, 113, 113, 0.2);
+            border-color: #f87171;
+        }
+        #btn-logout {
+            background: transparent;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-family: inherit;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #f87171;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #btn-logout:hover {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: #f87171;
+        }
+        .btn-theme {
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 0;
+        }
+        .btn-theme:hover {
+            background: var(--indigo-dim);
+            border-color: var(--indigo);
+            color: var(--indigo);
+        }
+        #main {
+            flex: 1;
+            padding: clamp(6px, 1vh, 12px) clamp(12px, 3vw, 24px);
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            transition: max-width 0.3s ease;
+        }
+        .view {
+            display: none;
+        }
+        .view.active {
+            display: block;
+            animation: fadeUp 0.4s ease both;
+        }
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .cloud-suggested-card {
+            background: var(--surface-hi);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .cloud-suggested-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+            border-color: var(--accent-blue);
+        }
+        .card-preview {
+            height: 120px;
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--border-color);
+            overflow: hidden;
+            position: relative;
+        }
+        .card-preview-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .cloud-suggested-card:hover .card-preview-img {
+            transform: scale(1.05);
+        }
+        .video-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.3);
+            font-size: 2rem;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .card-info {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .card-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-main);
+        }
+        .card-meta {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            color: var(--text-muted);
+        }
+        .cloud-context-menu {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            min-width: 180px;
+            background: var(--surface-hi);
+            border: 1px solid var(--border-hi);
+            border-radius: 10px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            padding: 6px;
+            backdrop-filter: blur(15px);
+            animation: contextFade 0.15s ease-out;
+        }
+        @keyframes contextFade {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        .has-submenu {
+            position: relative;
+        }
+        .cloud-submenu {
+            display: none;
+            position: absolute;
+            left: calc(100% - 4px);
+            top: -8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 160px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 10001;
+        }
+        .has-submenu:hover>.cloud-submenu {
+            display: block;
+        }
+        [data-theme="light"] .cloud-submenu {
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .context-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-main);
+            transition: all 0.2s;
+        }
+        .context-item:hover {
+            background: var(--indigo);
+            color: #fff;
+            transform: translateX(4px);
+        }
+        .context-sep {
+            height: 1px;
+            background: var(--border);
+            margin: 6px 4px;
+        }
+        .sec-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            margin-top: 24px;
+        }
+        .sec-row:first-child {
+            margin-top: 0;
+        }
+        .sec-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .sec-line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--border), transparent);
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .s-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            transition: all 0.2s;
+        }
+        .s-card:hover {
+            border-color: var(--border-hi);
+            transform: translateY(-2px);
+            background: var(--surface-hi);
+        }
+        .s-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .s-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--text-dim);
+        }
+        .s-icon {
+            font-size: 1rem;
+            opacity: 0.7;
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+        }
+        .s-val {
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 6px;
+            font-variant-numeric: tabular-nums;
+        }
+        .s-sub {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .nav-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        .nav-btn:hover {
+            border-color: var(--indigo);
+            background: var(--surface-hi);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+            transform: translateY(-2px);
+        }
+        .nav-btn:active {
+            cursor: grabbing;
+        }
+        .nav-btn {
+            cursor: grab;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s, background 0.2s, box-shadow 0.2s, opacity 0.2s;
+        }
+        .nav-btn.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .nav-icon {
+            font-size: 1.2rem;
+            filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.4));
+            transition: transform 0.2s;
+        }
+        .nav-btn:hover .nav-icon {
+            transform: scale(1.1);
+        }
+        .nav-label {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: var(--indigo);
+            display: block;
+            margin-bottom: 1px;
+        }
+        .nav-desc {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            display: block;
+            line-height: 1.3;
+        }
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: transparent;
+            border: none;
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+            margin-bottom: 20px;
+            padding: 0;
+        }
+        .btn-back:hover {
+            color: var(--text-main);
+        }
+        .btn-primary {
+            height: 40px;
+            padding: 0 24px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+            background: linear-gradient(135deg, #5b52f0, #8b45f5);
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .monitor-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .monitor-title {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .m-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .m-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .m-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .m-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+            font-variant-numeric: tabular-nums;
+            transition: color 0.3s;
+        }
+        .m-card.cpu .m-value {
+            color: var(--cpu);
+            text-shadow: 0 0 20px rgba(248, 113, 113, 0.2);
+        }
+        .m-card.ram .m-value {
+            color: var(--ram);
+            text-shadow: 0 0 20px rgba(192, 132, 252, 0.2);
+        }
+        .m-card.temp .m-value {
+            color: var(--temp);
+            text-shadow: 0 0 20px rgba(251, 146, 60, 0.2);
+        }
+        .m-bar {
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .m-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .m-card.cpu .m-bar-fill {
+            background: var(--cpu);
+            box-shadow: 0 0 8px var(--cpu);
+        }
+        .m-card.ram .m-bar-fill {
+            background: var(--ram);
+            box-shadow: 0 0 8px var(--ram);
+        }
+        .m-card.temp .m-bar-fill {
+            background: var(--temp);
+            box-shadow: 0 0 8px var(--temp);
+        }
+        .m-hist {
+            height: 50px;
+            position: relative;
+        }
+        canvas.spark {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .admin-panel-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 200px);
+        }
+        .admin-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-hi);
+            flex-shrink: 0;
+        }
+        .admin-panel-header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .admin-panel-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(124, 58, 237, 0.15));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--indigo);
+            flex-shrink: 0;
+        }
+        .admin-panel-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+        .admin-panel-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin: 2px 0 0 0;
+        }
+        .admin-panel-header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .admin-count-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 28px;
+            padding: 0 8px;
+            border-radius: 14px;
+            background: var(--indigo);
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .admin-alerts-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 200px;
+            scroll-behavior: smooth;
+        }
+        .admin-alerts-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+        .admin-alerts-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .admin-alerts-scroll::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 10px;
+        }
+        .admin-alerts-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.4);
+        }
+        .admin-alerts-grid {
+            display: flex;
+            flex-direction: column;
+        }
+        .admin-panel-footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+            background: var(--surface-hi);
+            flex-shrink: 0;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .admin-event-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 24px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+            cursor: pointer;
+            transition: background 0.15s ease;
+            position: relative;
+        }
+        .admin-event-row:last-child {
+            border-bottom: none;
+        }
+        .admin-event-row:hover {
+            background: rgba(99, 102, 241, 0.04);
+        }
+        .admin-event-row:active {
+            background: rgba(99, 102, 241, 0.08);
+        }
+        .admin-event-indicator {
+            width: 4px;
+            height: 36px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            transition: height 0.2s ease;
+        }
+        .admin-event-row:hover .admin-event-indicator {
+            height: 42px;
+        }
+        .admin-event-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .admin-event-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+        .admin-event-badge {
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 4px;
+            line-height: 1.4;
+        }
+        .admin-event-date {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .admin-event-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        }
+        .admin-event-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 1px;
+            line-height: 1.3;
+        }
+        .admin-event-star {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.15rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .admin-event-star:hover {
+            background: rgba(251, 191, 36, 0.12);
+            transform: scale(1.15);
+        }
+        .admin-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 40px;
+            text-align: center;
+        }
+        .admin-empty-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(99, 102, 241, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+        .admin-empty-icon svg {
+            color: var(--text-muted);
+            opacity: 0.4;
+        }
+        .admin-empty-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+        .admin-empty-sub {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+        [data-theme="light"] .admin-panel-container {
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+        }
+        [data-theme="light"] .admin-event-row:hover {
+            background: rgba(99, 102, 241, 0.03);
+        }
+        [data-theme="light"] .admin-panel-header,
+        [data-theme="light"] .admin-panel-footer {
+            background: rgba(248, 250, 252, 0.8);
+        }
+        .futuristic-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .futuristic-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--glow-color, var(--indigo));
+            box-shadow: 0 0 15px var(--glow-alpha, rgba(99, 102, 241, 0.3));
+        }
+        .futuristic-card:hover {
+            transform: translateY(-4px) scale(1.01);
+            background: var(--surface-hi);
+            border-color: var(--glow-color, var(--indigo));
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04), 0 0 20px var(--glow-alpha, rgba(99, 102, 241, 0.1));
+        }
+        [data-theme="light"] .alert-tag {
+            color: var(--text-dim) !important;
+            filter: brightness(0.8);
+        }
+        [data-theme="light"] .futuristic-card {
+            background: #fff;
+            border-color: rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+        }
+        .backup-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+        }
+        .backup-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+        .backup-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+        .backup-desc code {
+            font-family: monospace;
+            color: var(--text-dim);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .input-group {
+            margin-bottom: 16px;
+            position: relative;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .futuristic-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+            border-radius: 8px;
+            padding: 12px 14px 12px 38px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+        .futuristic-input:focus {
+            outline: none;
+            border-color: var(--indigo);
+            background: rgba(99, 102, 241, 0.05);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+        }
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 31px;
+            font-size: 1.1rem;
+            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.1));
+            pointer-events: none;
+        }
+        #backup-result {
+            margin-top: 14px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            min-height: 20px;
+        }
+        #footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        @media(max-width:900px) {
+            .status-grid,
+            .nav-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .smart-panel {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+            height: 320px;
+        }
+        @media(max-width: 1100px) {
+            .smart-panel {
+                grid-template-columns: 1fr 1fr;
+                height: auto;
+            }
+            .global-chat-box {
+                grid-column: span 2;
+                height: 300px;
+            }
+        }
+        @media(max-width: 768px) {
+            .smart-panel {
+                grid-template-columns: 1fr;
+            }
+            .global-chat-box {
+                grid-column: span 1;
+            }
+        }
+        .smart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .smart-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--indigo-dim);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+        .sc-header {
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sc-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: 0.5px;
+        }
+        .sc-badge {
+            font-size: 0.6rem;
+            background: var(--indigo-dim);
+            color: var(--indigo);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 800;
+        }
+        .sc-body {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        .chat-container {
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .chat-msg {
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            max-width: 85%;
+            line-height: 1.4;
+            animation: fadeUp 0.3s ease both;
+        }
+        .chat-msg.system {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--indigo);
+            border: 1px solid var(--indigo-dim);
+            align-self: flex-start;
+        }
+        .chat-msg.user {
+            background: var(--surface-hi);
+            color: var(--text-main);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+        .sc-footer {
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+        .sc-footer input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .sc-footer input:focus {
+            border-color: var(--indigo);
+        }
+        .sc-footer button {
+            background: var(--indigo);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .sc-footer button:hover {
+            opacity: 0.9;
+        }
+        .notes-box textarea {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            resize: none;
+            padding: 18px;
+            color: var(--text-dim);
+            font-family: inherit;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            outline: none;
+        }
+        .online-indicator {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #4ade80;
+        }
+        .smart-panel {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 40px;
+            height: 350px;
+        }
+        .smart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .sc-header {
+            padding: 12px 18px;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+        }
+        .chat-tabs {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+        .chat-tabs button {
+            flex: 1;
+            padding: 6px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .chat-tabs button.active {
+            background: var(--indigo);
+            color: #fff;
+        }
+        .sc-body {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        .chat-container {
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .chat-msg {
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            max-width: 85%;
+        }
+        .chat-msg.system {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--indigo);
+            align-self: flex-start;
+        }
+        .chat-msg.user {
+            background: var(--surface-hi);
+            color: var(--text-main);
+            align-self: flex-end;
+        }
+        .sc-footer {
+            padding: 10px;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+        .sc-footer input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #fff;
+            outline: none;
+        }
+        .sc-footer button {
+            background: var(--indigo);
+            border: none;
+            border-radius: 8px;
+            width: 36px;
+            color: #fff;
+            cursor: pointer;
+        }
+        .notes-card textarea {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            resize: none;
+            padding: 18px;
+            color: var(--text-dim);
+            outline: none;
+            font-size: 0.9rem;
+        }
+        .save-indicator {
+            margin-left: auto;
+            font-size: 0.6rem;
+            color: #4ade80;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        @media(max-width: 1100px) {
+            .smart-panel {
+                grid-template-columns: 1fr 1fr;
+                height: auto;
+            }
+            .info-card {
+                grid-column: span 2;
+            }
+        }
+        @media(max-width: 768px) {
+            .smart-panel {
+                grid-template-columns: 1fr;
+            }
+            .info-card {
+                grid-column: span 1;
+            }
+        }
+        @media(max-width:560px) {
+            .status-grid,
+            .nav-grid,
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        #main {
+            flex: 1;
+            padding: clamp(12px, 2vh, 24px) clamp(12px, 3vw, 24px);
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            transition: max-width 0.3s ease;
+        }
+        .view {
+            display: none;
+        }
+        .view.active {
+            display: block;
+            animation: fadeUp 0.4s ease both;
+        }
+        .floating-chat-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 100000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 15px;
+            pointer-events: none;
+        }
+        .floating-chat-container>* {
+            pointer-events: auto;
+        }
+        .cw-avatar {
+            width: 36px;
+            height: 36px;
+            background: var(--indigo);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 0.75rem;
+        }
+        .chat-fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #fff;
+            color: var(--indigo);
+            border: none;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .chat-fab:hover {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+        .chat-fab svg {
+            width: 26px;
+            height: 26px;
+        }
+        .chat-window {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 360px;
+            height: 580px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            z-index: 100001;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: chatScaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+            backdrop-filter: blur(20px);
+        }
+        .chat-window.active {
+            display: flex;
+        }
+        .cw-header {
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .cw-header h3 {
+            flex: 1;
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-main);
+        }
+        .cw-header-btns {
+            display: flex;
+            gap: 8px;
+        }
+        .cw-header-btns button {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            display: flex;
+        }
+        .cw-header-btns button:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+        .cw-body {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .cw-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+        .cw-empty svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            opacity: 0.2;
+            color: var(--indigo);
+        }
+        .cw-footer {
+            padding: 16px;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+        }
+        .cw-input-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.2s;
+        }
+        .cw-input-box:focus-within {
+            border-color: var(--indigo);
+        }
+        .cw-input-box input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            outline: none;
+        }
+        @keyframes chatFadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes chatScaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(40px);
+                transform-origin: bottom right;
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-chat-container">
+        <button class="chat-fab" onclick="toggleChatWindow()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+        </button>
+    </div>
+    <div class="chat-window" id="chat-window">
+        <div class="cw-header">
+            <div class="cw-avatar" style="width: 24px; height: 24px; font-size: 0.5rem;">NV</div>
+            <h3>Null-Void Assistant</h3>
+            <div class="cw-header-btns">
+                <button title="Reiniciar" onclick="resetChat()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                </button>
+                <button title="Cerrar" onclick="toggleChatWindow()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="cw-body" id="cw-messages">
+            <div class="cw-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 16v-4"></path>
+                    <path d="M12 8h.01"></path>
+                </svg>
+                <h3 style="color: var(--text-main); margin: 0;">Null-Void AI</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">¿En qué puedo ayudarte hoy?</p>
+            </div>
+        </div>
+        <div class="cw-footer">
+            <div class="cw-input-box">
+                <input type="text" placeholder="Escribe un mensaje..."
+                    onkeydown="if(event.key === 'Enter') sendChatMessage(this)">
+                <button
+                    style="background: transparent; border: none; color: var(--indigo); cursor: pointer; display: flex;"
+                    onclick="sendChatMessage(this.previousElementSibling)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="topbar">
+        <div class="tb-left">
+            <div class="logo">
+                <div class="logo-box">NV</div>
+                <span class="logo-text">Null-Void Engine</span>
+            </div>
+            <div class="badge" id="net-badge" title="Estado de la conexión a Internet">
+                <span class="badge-dot" id="net-dot"></span> <span id="net-text">Online</span>
+            </div>
+        </div>
+        <div class="tb-right">
+            <button class="btn-theme" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema">
+                <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                </svg>
+            </button>
+            <button class="btn-icon" id="btn-notifications-history" title="Historial de notificaciones"
+                style="margin-right: 12px; position: relative;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+            </button>
+            <div class="tb-user" id="profile-trigger">
+                <div class="tb-avatar" id="nav-avatar">U</div>
+                <span id="nav-username">Usuario</span>
+                <div class="profile-dropdown" id="profile-dropdown">
+                    <div class="dropdown-header">
+                        <div class="large-avatar" id="nav-avatar-large">U</div>
+                        <div class="dropdown-name" id="nav-username-large">Usuario</div>
+                        <div class="dropdown-email" id="nav-user-email">usuario@null-void.app</div>
+                    </div>
+                    <button class="btn-manage-account" onclick="showView('config')">Administrar cuenta</button>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-footer">
+                        <button id="btn-logout-dropdown">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            Cerrar sesión
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="view-menu" class="view active">
+            <div class="sec-row"><span class="sec-tag">Acciones principales</span>
+                <div class="sec-line"></div>
+            </div>
+            <div class="nav-grid" id="app-launcher-grid">
+            </div>
+        </div>
+        <div id="view-admin" class="view">
+            <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+            <div class="admin-panel-container">
+                <div class="admin-panel-header">
+                    <div class="admin-panel-header-left">
+                        <div class="admin-panel-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="admin-panel-title">Eventos Destacados</h2>
+                            <p class="admin-panel-subtitle">Revisión de alertas activas y eventos importantes</p>
+                        </div>
+                    </div>
+                    <div class="admin-panel-header-right">
+                        <span class="admin-count-badge" id="admin-count-badge">0</span>
+                        <div class="badge" id="admin-badge"
+                            style="background: rgba(248, 113, 113, 0.1); color: #f87171; border-color: rgba(248, 113, 113, 0.3); display: none;">
+                            ACTIVAS
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-alerts-scroll" id="admin-alerts-scroll">
+                    <div id="admin-alerts-list" class="admin-alerts-grid"></div>
+                </div>
+                <div class="admin-panel-footer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <span>Las alertas permanecen visibles hasta que se cumpla la fecha del evento.</span>
+                </div>
+            </div>
+        </div>
+        <div id="view-config" class="view">
+            <div class="view-header" style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px;">
+                <button class="btn-back" onclick="showView('menu')" style="margin: 0;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    Volver
+                </button>
+                <h2 class="view-title" style="margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--text-main);">
+                    Configuración
+                    de la Cuenta</h2>
+            </div>
+            <div class="config-grid"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; max-width: 1000px;">
+                <div class="profile-card">
+                    <div class="profile-banner"></div>
+                    <div class="profile-content">
+                        <div class="profile-avatar-wrapper">
+                            <div id="cfg-avatar-display" class="large-avatar interactive" onclick="openAvatarPicker()">
+                                <span>U</span>
+                                <div class="avatar-overlay">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <path
+                                            d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z">
+                                        </path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                </div>
+                            </div>
+                            <input type="file" id="avatar-upload-cfg" accept="image/png, image/jpeg, image/webp"
+                                style="display: none;">
+                        </div>
+                        <h3
+                            style="font-size: 1.1rem; margin-bottom: 20px; color: var(--text-main); display: flex; align-items: center; gap: 10px;">
+                            Información Personal
+                        </h3>
+                        <div class="input-group" style="margin-bottom: 16px;">
+                            <label
+                                style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">ID
+                                Usuario</label>
+                            <input type="text" class="futuristic-input" id="cfg-uid-field-static" readonly
+                                value="NV-00000"
+                                style="width: 100%; background: rgba(0,0,0,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--indigo); cursor: default; pointer-events: none; user-select: none; font-weight: 700; letter-spacing: 1px;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 16px;">
+                            <label
+                                style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">Nombre
+                                de Usuario</label>
+                            <input type="text" class="futuristic-input" id="cfg-username-field-static" readonly
+                                value="RoamingX"
+                                style="width: 100%; background: rgba(0,0,0,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--text-dim); cursor: default; pointer-events: none; user-select: none; font-weight: 500;">
+                        </div>
+                        <div class="input-group">
+                            <label
+                                style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">Correo
+                                Electrónico</label>
+                            <input type="email" class="futuristic-input" id="cfg-email-field-static" readonly
+                                value="roamingx@null-void.app"
+                                style="width: 100%; background: rgba(0,0,0,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--text-dim); cursor: default; pointer-events: none; user-select: none; font-weight: 500;">
+                        </div>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 15px; opacity: 0.6;">
+                            Identidad oficial gestionada por el motor Null-Void.</p>
+                    </div>
+                </div>
+                <div class="profile-card" style="display: flex; flex-direction: column; min-height: 400px;">
+                    <div style="display: flex; height: 100%; flex: 1;">
+                        <div
+                            style="width: 110px; background: rgba(0,0,0,0.1); border-right: 1px solid var(--border); padding: 10px 0;">
+                            <div class="cfg-tab active" onclick="switchCfgTab('user')">Usuario</div>
+                            <div class="cfg-tab" onclick="switchCfgTab('email')">Correo</div>
+                            <div class="cfg-tab" onclick="switchCfgTab('pass')">Seguridad</div>
+                            <div class="cfg-tab" onclick="switchCfgTab('sess')">Sesiones</div>
+                        </div>
+                        <div id="cfg-content-area" style="flex: 1; padding: 12px 15px; position: relative;">
+                            <div id="tab-user" class="cfg-pane active">
+                                <h3 style="font-size: 1rem; margin-bottom: 20px;">Editar Nombre</h3>
+                                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">Cambia
+                                    tu nombre de usuario público.</p>
+                                <input type="text" id="cfg-username-edit" class="futuristic-input"
+                                    placeholder="Nuevo nombre..."
+                                    style="width: 100%; background: rgba(255,255,255,0.05); margin-bottom: 16px;">
+                                <p style="font-size: 0.7rem; color: var(--text-muted);">Los cambios se aplicarán
+                                    globalmente una vez guardados.</p>
+                            </div>
+                            <div id="tab-email" class="cfg-pane">
+                                <h3 style="font-size: 1rem; margin-bottom: 20px;">Cambiar Correo</h3>
+                                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">
+                                    Introduce tu nueva dirección de correo electrónico.</p>
+                                <input type="email" id="cfg-email-edit" class="futuristic-input"
+                                    placeholder="nuevo-correo@ejemplo.com"
+                                    style="width: 100%; background: rgba(255,255,255,0.05);">
+                            </div>
+                            <div id="tab-pass" class="cfg-pane">
+                                <h3 style="font-size: 1rem; margin-bottom: 16px;">Seguridad de la Cuenta</h3>
+                                <div style="margin-bottom: 12px;">
+                                    <label
+                                        style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Contraseña
+                                        Actual</label>
+                                    <div class="pass-wrapper">
+                                        <input type="password" id="cfg-old-pass" class="futuristic-input"
+                                            placeholder="••••••••" style="width: 100%;">
+                                        <span class="toggle-pass" onclick="togglePassword('cfg-old-pass')">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                <circle cx="12" cy="12" r="3"></circle>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 12px;">
+                                    <label
+                                        style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Nueva
+                                        Contraseña</label>
+                                    <div class="pass-wrapper">
+                                        <input type="password" id="cfg-new-pass" class="futuristic-input"
+                                            placeholder="Mín. 8 caracteres" style="width: 100%;">
+                                        <span class="toggle-pass" onclick="togglePassword('cfg-new-pass')">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                <circle cx="12" cy="12" r="3"></circle>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 20px;">
+                                    <label
+                                        style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Confirmar
+                                        Nueva Contraseña</label>
+                                    <div class="pass-wrapper">
+                                        <input type="password" id="cfg-conf-pass" class="futuristic-input"
+                                            placeholder="Repite la contraseña" style="width: 100%;">
+                                        <span class="toggle-pass" onclick="togglePassword('cfg-conf-pass')">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                <circle cx="12" cy="12" r="3"></circle>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </div>
+                                <button class="sb-btn-save" onclick="confirmPasswordChange()"
+                                    style="width: 100%; background: var(--indigo); color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem;">Actualizar
+                                    Contraseña</button>
+                                <div id="cfg-pass-msg" class="cfg-msg-area"></div>
+                            </div>
+                            <div id="tab-sess" class="cfg-pane">
+                                <h3 style="font-size: 1rem; margin-bottom: 20px;">Dispositivos Conectados</h3>
+                                <div
+                                    style="background: var(--surface-hi); padding: 16px; border-radius: 12px; border: 1px solid var(--border);">
+                                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                                        <div style="width: 8px; height: 8px; background: #4ade80; border-radius: 50%;">
+                                        </div>
+                                        <div style="font-size: 0.9rem; font-weight: 600;">Linux / Chrome</div>
+                                        <span
+                                            style="font-size: 0.7rem; background: rgba(74, 222, 128, 0.1); color: #4ade80; padding: 2px 6px; border-radius: 4px;">ACTUAL</span>
+                                    </div>
+                                    <div
+                                        style="opacity: 0.6; display: flex; align-items: center; gap: 10px; font-size: 0.85rem;">
+                                        <div
+                                            style="width: 8px; height: 8px; background: var(--text-muted); border-radius: 50%;">
+                                        </div>
+                                        <div>Android / Null-Void Mobile</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> 
+            <p style="font-size: 0.75rem; color: var(--text-muted); opacity: 0.7; margin-top: 20px;">Tu cuenta está
+                protegida por encriptación de extremo a extremo.</p>
+            <div class="dropdown-divider" style="height: 1px; background: var(--border); margin: 10px 0 20px 0;">
+            </div>
+        </div> 
+        <div id="settings-save-bar" class="save-bar">
+            <div class="sb-text">Cuidado — tienes cambios sin guardar</div>
+            <div class="sb-actions">
+                <button class="sb-btn-reset" onclick="resetSettings()">Restablecer</button>
+                <button class="sb-btn-save" onclick="saveSettings()">Guardar cambios</button>
+            </div>
+        </div>
+        <div id="view-invoices" class="view" style="height: calc(100vh - 120px);">
+            <div
+                style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background: var(--surface-hi); padding: 10px 20px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 10px;">
+                <button class="btn-back" onclick="showView('menu')" style="margin: 0;">← Volver</button>
+                <div style="width: 1px; height: 24px; background: var(--border);"></div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim);">VISTAS:</span>
+                    <button onclick="filterInvoices('all')" class="btn-mini">Limpiar filtros</button>
+                    <select id="filter-year" onchange="filterInvoices('date')" class="select-mini">
+                        <option value="">Sin filtro (Año)</option>
+                    </select>
+                    <select id="filter-month" onchange="filterInvoices('date')" class="select-mini">
+                        <option value="">Sin filtro (Mes)</option>
+                        <option value="01">Enero</option>
+                        <option value="02">Febrero</option>
+                        <option value="03">Marzo</option>
+                        <option value="04">Abril</option>
+                        <option value="05">Mayo</option>
+                        <option value="06">Junio</option>
+                        <option value="07">Julio</option>
+                        <option value="08">Agosto</option>
+                        <option value="09">Septiembre</option>
+                        <option value="10">Octubre</option>
+                        <option value="11">Noviembre</option>
+                        <option value="12">Diciembre</option>
+                    </select>
+                    <select id="filter-client" onchange="filterInvoices('client')" class="select-mini">
+                        <option value="">Sin filtro (Cliente)</option>
+                    </select>
+                    <select id="filter-status" onchange="filterInvoices('status')" class="select-mini">
+                        <option value="">Sin filtro (Estado)</option>
+                        <option value="pagada">Pagadas</option>
+                        <option value="no_pagada">No Pagadas</option>
+                        <option value="a_cuenta">A Cuenta</option>
+                    </select>
+                </div>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+
+                    <button onclick="document.getElementById('invoice-file-input').click()" class="btn-primary"
+                        style="padding: 8px 16px; font-size: 0.75rem;">SUBIR FACTURA (PDF)</button>
+                    <button id="btn-delete-selected" onclick="openDeleteModal()" class="btn-mini"
+                        style="display: none; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);">
+                        Eliminar Seleccionados (<span id="selected-count">0</span>)
+                    </button>
+                    <input type="file" id="invoice-file-input" style="display: none;" accept=".pdf"
+                        onchange="handleInvoiceFileChange(this)">
+                </div>
+            </div>
+            <div
+                style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;">
+                <div style="overflow: auto; flex: 1;">
+                    <table id="invoice-table"
+                        style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+                        <thead
+                            style="position: sticky; top: 0; background: var(--surface-hi); z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                            <tr>
+                                <th
+                                    style="padding: 12px; border-bottom: 2px solid var(--border); width: 40px; text-align: center;">
+                                    <input type="checkbox" id="master-checkbox"
+                                        onclick="toggleAllInvoices(this.checked)">
+                                </th>
+                                <th onclick="toggleSort('invoice_number')"
+                                    style="padding: 12px; border-bottom: 2px solid var(--border); width: 100px; cursor: pointer; user-select: none;">
+                                    Nº SERIE <span id="sort-arrow-invoice_number">↑</span>
+                                </th>
+                                <th onclick="toggleSort('date')"
+                                    style="padding: 12px; border-bottom: 2px solid var(--border); width: 120px; cursor: pointer; user-select: none;">
+                                    FECHA <span id="sort-arrow-date" style="opacity: 0.3;">↕</span></th>
+                                <th style="padding: 12px; border-bottom: 2px solid var(--border);">CLIENTE</th>
+                                <th style="padding: 12px; border-bottom: 2px solid var(--border);">REFERENCIA</th>
+                                <th
+                                    style="padding: 12px; border-bottom: 2px solid var(--border); text-align: right; width: 120px;">
+                                    TOTAL</th>
+                                <th
+                                    style="padding: 12px; border-bottom: 2px solid var(--border); width: 150px; text-align: center;">
+                                    ESTADO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invoice-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div
+                    style="background: var(--surface-hi); padding: 10px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 30px;">
+                    <div style="font-size: 0.75rem; color: var(--text-dim);">PAGADO: <span id="total-paid"
+                            style="color: #10b981; font-weight: bold;">0.00€</span></div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim);">PENDIENTE: <span id="total-unpaid"
+                            style="color: #ef4444; font-weight: bold;">0.00€</span></div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); font-weight: bold;">TOTAL: <span
+                            id="total-general">0.00€</span></div>
+                </div>
+            </div>
+        </div>
+        <div id="view-invoice-detail" class="view">
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 25px; gap: 10px;">
+                <button onclick="window.print()" class="btn-mini"
+                    style="background: rgba(255,255,255,0.05); padding: 8px 16px;">Imprimir / PDF</button>
+                <button onclick="showView('invoices')" class="btn-mini"
+                    style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; font-weight: 900; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%;">✕</button>
+            </div>
+            <div id="invoice-full-content" style="padding: 0; background: transparent; border: none;">
+            </div>
+        </div>
+        <div id="delete-confirm-modal"
+            style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 11000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+            <div
+                style="background: var(--surface-hi); width: 400px; padding: 30px; border-radius: 20px; border: 1px solid rgba(239, 68, 68, 0.3); text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+                <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
+                <h3 style="margin-bottom: 10px; color: #fca5a5;">¿ELIMINAR FACTURAS?</h3>
+                <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px;">Esta acción es
+                    irreversible. Se eliminarán <b id="delete-modal-count">0</b> facturas.<br><br>Escribe
+                    <b>CONFIRMAR</b> para proceder:
+                </p>
+                <input type="text" id="delete-confirm-input" placeholder="Escribe CONFIRMAR..."
+                    oninput="validateDeleteConfirm(this.value)"
+                    style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); padding: 12px; border-radius: 8px; color: #fff; text-align: center; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; outline: none;">
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="closeDeleteModal()" class="btn-mini"
+                        style="flex: 1; padding: 12px;">Cancelar</button>
+                    <button id="btn-final-delete" onclick="executeDelete()" disabled class="btn-primary"
+                        style="flex: 1; background: #ef4444; border: none; opacity: 0.3; cursor: not-allowed;">Eliminar</button>
+                </div>
+            </div>
+        </div>
+        <style>
+            .btn-mini {
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                color: var(--text-main);
+                padding: 6px 12px;
+                font-size: 0.7rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .btn-mini:hover {
+                background: rgba(255, 255, 255, 0.08);
+                border-color: var(--indigo);
+            }
+            .select-mini {
+                background: var(--surface-hi);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                color: var(--text-main);
+                padding: 5px;
+                font-size: 0.7rem;
+                outline: none;
+                cursor: pointer;
+            }
+            #invoice-table th {
+                color: var(--text-dim);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            #invoice-table td {
+                padding: 10px 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+                transition: background 0.2s;
+            }
+            .row-pagada {
+                background: var(--inv-paid-bg) !important;
+                color: var(--inv-paid-text) !important;
+            }
+            .row-no_pagada {
+                background: var(--inv-unpaid-bg) !important;
+                color: var(--inv-unpaid-text) !important;
+            }
+            .row-a_cuenta {
+                background: var(--inv-pending-bg) !important;
+                color: var(--inv-pending-text) !important;
+            }
+            :root,
+            [data-theme="dark"] {
+                --inv-paid-bg: rgba(16, 185, 129, 0.15);
+                --inv-paid-text: #10b981;
+                --inv-unpaid-bg: rgba(239, 68, 68, 0.15);
+                --inv-unpaid-text: #fca5a5;
+                --inv-pending-bg: rgba(245, 158, 11, 0.15);
+                --inv-pending-text: #fbbf24;
+            }
+            [data-theme="light"] {
+                --inv-paid-bg: #dcfce7;
+                --inv-paid-text: #166534;
+                --inv-unpaid-bg: #fee2e2;
+                --inv-unpaid-text: #991b1b;
+                --inv-pending-bg: #fef3c7;
+                --inv-pending-text: #92400e;
+            }
+            .status-badge {
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 0.65rem;
+                font-weight: 800;
+                cursor: pointer;
+                border: 1px solid transparent;
+            }
+        </style>
+        <div id="view-budgets" class="view">
+            <button class="btn-back" onclick="showView('menu')" style="margin-bottom: 15px;">← Volver al
+                Panel</button>
+            <div class="monitor-head" style="margin-bottom: 10px; align-items: flex-start;">
+                <div class="monitor-title">Hoja de Cálculo</div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="excel-status"
+                            style="font-size: 0.7rem; color: var(--text-dim); display: none;">Guardado</span>
+                        <button onclick="exportSpreadsheet()"
+                            style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 6px 12px; font-size: 0.7rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"
+                            title="Exportar a .nvx">
+                            📤 Exportar
+                        </button>
+                        <button onclick="document.getElementById('import-input').click()"
+                            style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 6px 12px; font-size: 0.7rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"
+                            title="Importar .nvx">
+                            📥 Importar
+                        </button>
+                        <input type="file" id="import-input" style="display: none;" accept=".nvx,.json"
+                            onchange="importSpreadsheet(event)">
+                        <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></div>
+                        <button onclick="saveSpreadsheet()"
+                            style="background: var(--indigo); border: none; border-radius: 8px; color: #fff; padding: 6px 16px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: opacity 0.2s;"
+                            onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">Guardar
+                            Cambios</button>
+                    </div>
+                    <div class="badge"
+                        style="background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                        REAL-TIME GRID</div>
+                </div>
+            </div>
+            <div
+                style="display: flex; align-items: center; gap: 10px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; margin-bottom: 12px;">
+                <div id="formula-bar-label"
+                    style="width: 35px; text-align: center; font-size: 0.75rem; font-weight: 700; color: var(--text-dim);">
+                </div>
+                <div style="width: 1px; height: 18px; background: var(--border);"></div>
+                <div
+                    style="font-family: serif; font-weight: bold; color: var(--text-muted); font-style: italic; font-size: 0.9rem; user-select: none;">
+                    fx</div>
+                <input type="text" id="formula-bar-input" autocomplete="off" placeholder="Selecciona una celda..."
+                    style="flex: 1; background: transparent; border: none; outline: none; color: var(--text-main); font-size: 0.85rem;"
+                    oninput="handleFormulaBarInput(event)" onkeydown="handleFormulaBarKey(event)"
+                    onblur="handleFormulaBarBlur()">
+            </div>
+            <div class="excel-container"
+                style="display: flex; gap: 15px; flex: 1; min-height: 500px; align-items: stretch;">
+                <div id="python-panel"
+                    style="width: 260px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; gap: 10px; position: relative;">
+                    <h3
+                        style="font-size: 0.8rem; font-weight: 800; color: #ffd700; display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                        PYTHON CONSOLE
+                    </h3>
+                    <textarea id="python-code" spellcheck="false"
+                        style="flex: 1; width: 100%; background: var(--py-bg); border: 1px solid var(--py-border); border-radius: 8px; color: var(--py-text); font-family: 'Consolas', monospace; font-size: 0.8rem; padding: 10px; outline: none; resize: none; line-height: 1.4;"
+                        placeholder="# Escribe tu código aquí...
+# ej: set_cell('A1', 10)" oninput="handlePythonInput(event)" onkeydown="handlePythonKey(event)"></textarea>
+                    <div id="python-autocomplete"
+                        style="display: none; position: absolute; background: var(--surface-hi); border: 1px solid var(--indigo); border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 1000; min-width: 150px; overflow: hidden;">
+                    </div>
+                    <div id="python-status" style="font-size: 0.65rem; color: var(--text-dim); min-height: 20px;">
+                        Listo.</div>
+                    <button onclick="runPythonScript()" id="btn-run-python"
+                        style="background: #ffd700; color: #000; border: none; border-radius: 6px; padding: 8px; font-size: 0.75rem; font-weight: 900; cursor: pointer; width: 100%;">EJECUTAR</button>
+                </div>
+                <div
+                    style="flex: 1; overflow: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; position: relative;">
+                    <table id="excel-grid" style="border-collapse: collapse; min-width: 100%; table-layout: fixed;">
+                    </table>
+                </div>
+                <div id="excel-debug-panel"
+                    style="width: 240px; background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 15px; display: flex; flex-direction: column;">
+                    <div
+                        style="color: #ef4444; font-size: 0.75rem; font-weight: bold; margin-bottom: 12px; display: flex; align-items: center; gap: 5px;">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                            viewBox="0 0 24 24">
+                            <path
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                            </path>
+                        </svg>
+                        DEBUGGER
+                    </div>
+                    <div id="excel-debug-logs"
+                        style="font-family: monospace; font-size: 0.7rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <style>
+            :root,
+            [data-theme="dark"] {
+                --excel-border: rgba(255, 255, 255, 0.15);
+                --excel-border-light: rgba(255, 255, 255, 0.1);
+                --excel-bg-cell: rgba(0, 0, 0, 0.2);
+                --excel-bg-cell-hover: rgba(255, 255, 255, 0.03);
+                --excel-bg-rownum: rgba(255, 255, 255, 0.03);
+                --excel-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                --py-bg: rgba(0, 0, 0, 0.4);
+                --py-text: #a5b4fc;
+                --py-border: var(--border);
+            }
+            [data-theme="light"] {
+                --excel-border: rgba(0, 0, 0, 0.2);
+                --excel-border-light: rgba(0, 0, 0, 0.15);
+                --excel-bg-cell: rgba(255, 255, 255, 0.6);
+                --excel-bg-cell-hover: rgba(0, 0, 0, 0.04);
+                --excel-bg-rownum: rgba(0, 0, 0, 0.03);
+                --excel-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                --py-bg: rgba(0, 0, 0, 0.05);
+                --py-text: #4338ca;
+                --py-border: rgba(99, 102, 241, 0.2);
+            }
+            #excel-grid th {
+                background: var(--surface-hi);
+                color: var(--text-main);
+                font-size: 0.65rem;
+                font-weight: 700;
+                padding: 8px 6px;
+                border: 1px solid var(--excel-border);
+                text-align: center;
+                position: sticky;
+                top: 0;
+                z-index: 2;
+                box-shadow: var(--excel-shadow);
+            }
+            #excel-grid .row-num {
+                background: var(--excel-bg-rownum);
+                color: var(--text-muted);
+                font-size: 0.65rem;
+                font-weight: 700;
+                padding: 6px;
+                border: 1px solid var(--excel-border);
+                text-align: center;
+                width: 40px;
+                position: sticky;
+                left: 0;
+                z-index: 1;
+            }
+            #excel-grid td {
+                border: 1px solid var(--excel-border-light);
+                padding: 0;
+                height: 32px;
+                background: var(--excel-bg-cell);
+                transition: background 0.2s;
+            }
+            #excel-grid td:hover {
+                background: var(--excel-bg-cell-hover);
+            }
+            #excel-grid input {
+                width: 100%;
+                height: 100%;
+                background: transparent;
+                border: none;
+                color: var(--text-main);
+                padding: 0 8px;
+                font-size: 0.85rem;
+                outline: none;
+            }
+            #excel-grid input:focus {
+                background: rgba(99, 102, 241, 0.15);
+                box-shadow: inset 0 0 0 2px var(--indigo);
+            }
+            #view-invoices.active {
+                display: flex;
+                flex-direction: column;
+            }
+        </style>
+        <div id="view-monitor" class="view">
+            <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+            <div class="monitor-head">
+                <div class="monitor-title">Telemetría · Tiempo Real</div>
+                <div class="badge" id="power-tag">⚡ Cargando datos...</div>
+            </div>
+            <div class="metrics-grid">
+                <div class="m-card cpu">
+                    <div class="m-top">
+                        <span class="m-label">CPU · Utility</span>
+                        <span class="badge"
+                            style="color:var(--cpu); border-color:var(--cpu); background:rgba(248,113,113,0.1)">LIVE</span>
+                    </div>
+                    <div class="m-value" id="m-cpu">--%</div>
+                    <div class="m-bar">
+                        <div class="m-bar-fill" id="bar-cpu" style="width:0%"></div>
+                    </div>
+                    <div class="m-hist"><canvas id="spark-cpu" class="spark"></canvas></div>
+                </div>
+                <div class="m-card ram">
+                    <div class="m-top">
+                        <span class="m-label">RAM · Virtual</span>
+                        <span class="badge"
+                            style="color:var(--ram); border-color:var(--ram); background:rgba(192,132,252,0.1)">LIVE</span>
+                    </div>
+                    <div class="m-value" id="m-ram">--%</div>
+                    <div class="m-bar">
+                        <div class="m-bar-fill" id="bar-ram" style="width:0%"></div>
+                    </div>
+                    <div class="m-hist"><canvas id="spark-ram" class="spark"></canvas></div>
+                </div>
+                <div class="m-card temp">
+                    <div class="m-top">
+                        <span class="m-label">Temp · Sensor</span>
+                        <span class="badge"
+                            style="color:var(--temp); border-color:var(--temp); background:rgba(251,146,60,0.1)">LIVE</span>
+                    </div>
+                    <div class="m-value" id="m-temp">--°C</div>
+                    <div class="m-bar">
+                        <div class="m-bar-fill" id="bar-temp" style="width:0%"></div>
+                    </div>
+                    <div class="m-hist"><canvas id="spark-temp" class="spark"></canvas></div>
+                </div>
+            </div>
+        </div> 
+        <div id="view-backups" class="view">
+            <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+            <div class="sec-row"><span class="sec-tag">Copias de seguridad</span>
+                <div class="sec-line"></div>
+            </div>
+            <div class="backup-panel">
+                <div class="backup-title">Gestor de Respaldos</div>
+                <div class="backup-desc">
+                    Comprime de forma segura cualquier directorio en un archivo ZIP.
+                </div>
+                <div class="input-group">
+                    <label>Directorio Origen</label>
+                    <div class="input-icon">📁</div>
+                    <div class="input-group-container" onclick="browseDir('bkp-source')" style="cursor: pointer;">
+                        <input type="text" id="bkp-source" class="futuristic-input"
+                            placeholder="Haz clic para seleccionar carpeta de origen..." readonly
+                            style="cursor: pointer; background: rgba(129, 140, 248, 0.03); padding-right: 50px;">
+                        <div class="btn-browse-input" style="pointer-events: none;">🔍</div>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Directorio Destino</label>
+                    <div class="input-icon">🎯</div>
+                    <div class="input-group-container" onclick="browseDir('bkp-dest')" style="cursor: pointer;">
+                        <input type="text" id="bkp-dest" class="futuristic-input"
+                            placeholder="Haz clic para seleccionar carpeta de destino..." readonly
+                            style="cursor: pointer; background: rgba(129, 140, 248, 0.03); padding-right: 50px;">
+                        <div class="btn-browse-input" style="pointer-events: none;">🔍</div>
+                    </div>
+                </div>
+                <button class="btn-primary"
+                    style="margin-top: 10px; width: 100%; box-shadow: 0 4px 14px rgba(99,102,241,0.4);" id="btn-backup"
+                    onclick="doBackup()">Iniciar Respaldo Manual</button>
+                <div id="backup-result"></div>
+            </div>
+        </div>
+        <div id="view-marketplace" class="view">
+            <button class="btn-back" onclick="showView('menu')">← Volver al Panel</button>
+            <div class="monitor-head">
+                <div class="monitor-title">Tienda de Aplicaciones</div>
+                <div class="badge">SISTEMA MODULAR</div>
+            </div>
+            <div class="market-search-bar" style="margin-top: 20px; position: relative;">
+                <span
+                    style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); opacity: 0.5;">🔍</span>
+                <input type="text" id="marketplace-search" placeholder="Buscar por nombre o descripción..."
+                    style="width: 100%; padding: 12px 16px 12px 45px; border-radius: 12px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); font-family: inherit; font-size: 0.9rem; outline: none; transition: all 0.2s;"
+                    oninput="filterMarketplace()">
+            </div>
+            <div class="nav-grid" id="marketplace-grid">
+            </div>
+        </div>
+        <style>
+            #marketplace-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+                max-height: 70vh;
+                overflow-y: auto;
+                padding-right: 10px;
+                scrollbar-width: thin;
+                scrollbar-color: var(--indigo-dim) transparent;
+            }
+            #marketplace-grid::-webkit-scrollbar {
+                width: 6px;
+            }
+            #marketplace-grid::-webkit-scrollbar-thumb {
+                background: var(--indigo-dim);
+                border-radius: 10px;
+            }
+            .market-search-bar input:focus {
+                border-color: var(--indigo) !important;
+                box-shadow: 0 0 0 3px var(--indigo-dim);
+                background: var(--surface) !important;
+            }
+            .market-card {
+                background: var(--surface-hi);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 24px;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                transition: all 0.3s ease;
+            }
+            .market-card:hover {
+                border-color: var(--indigo);
+                transform: translateY(-4px);
+                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            }
+            .market-top {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+            .market-icon {
+                font-size: 2rem;
+                width: 56px;
+                height: 56px;
+                background: rgba(99, 102, 241, 0.1);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 12px;
+                border: 1px solid rgba(99, 102, 241, 0.2);
+            }
+            .market-info h3 {
+                font-size: 1rem;
+                margin: 0 0 4px 0;
+                color: var(--indigo);
+                font-weight: 800;
+            }
+            .market-info p {
+                font-size: 0.75rem;
+                color: var(--text-dim);
+                line-height: 1.4;
+                margin: 0;
+            }
+            .market-actions {
+                margin-top: auto;
+                display: flex;
+                gap: 10px;
+            }
+            .btn-install {
+                flex: 1;
+                padding: 10px;
+                border-radius: 8px;
+                border: none;
+                background: var(--indigo);
+                color: #fff;
+                font-weight: 700;
+                font-size: 0.75rem;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .btn-install:hover {
+                filter: brightness(1.1);
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+            }
+            .btn-uninstall {
+                flex: 1;
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid rgba(248, 113, 113, 0.3);
+                background: rgba(248, 113, 113, 0.1);
+                color: #f87171;
+                font-weight: 700;
+                font-size: 0.75rem;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .btn-uninstall:hover:not(:disabled) {
+                background: rgba(248, 113, 113, 0.2);
+                border-color: #f87171;
+            }
+            .btn-install:disabled,
+            .btn-uninstall:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+        </style>
+    </div>
+    <div id="view-cloud" class="view"
+        style="padding: 0; margin: 0; height: 100vh; width: 100%; flex-direction: column;">
+        <style>
+            #view-cloud {
+                background: #ffffff;
+                color: #3c4043;
+            }
+            #view-cloud.active {
+                display: flex !important;
+                animation: none !important;
+                flex: 1;
+            }
+            [data-theme="dark"] #view-cloud {
+                background: #0b0f1a;
+            }
+            [data-theme="dark"] #view-cloud .cloud-sidebar {
+                background: #0f172a;
+                border-right: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            [data-theme="dark"] #view-cloud .cloud-header {
+                background: #0b0f1a;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            [data-theme="dark"] .cloud-file-row:hover {
+                background: rgba(99, 102, 241, 0.1);
+            }
+            [data-theme="dark"] .cloud-nav-item.active {
+                background: rgba(99, 102, 241, 0.15);
+                color: #8ab4f8;
+            }
+            #cloud-quota-bar {
+                box-shadow: 0 0 8px rgba(66, 133, 244, 0.4);
+            }
+            .quota-accent {
+                color: #8ab4f8;
+                font-weight: 700;
+            }
+            [data-theme="light"] .quota-accent {
+                color: #1967d2;
+            }
+            .disk-accent {
+                color: #38bdf8;
+                opacity: 0.9;
+            }
+            [data-theme="light"] .disk-accent {
+                color: #1a73e8;
+            }
+            .quota-text-main {
+                color: #ffffff !important;
+                font-weight: 700;
+            }
+            .quota-text-disk {
+                color: #38bdf8 !important;
+                font-weight: 700;
+            }
+            .storage-label-text {
+                color: var(--text-main);
+            }
+            [data-theme="light"] .quota-text-main {
+                color: #3c4043 !important;
+            }
+            [data-theme="light"] .quota-text-disk {
+                color: #5f6368 !important;
+                font-weight: 600;
+            }
+            [data-theme="light"] .storage-label-text {
+                color: #000000 !important;
+            }
+            [data-theme="light"] #view-cloud {
+                background: #ffffff;
+            }
+            [data-theme="light"] #view-cloud .cloud-sidebar {
+                background: #f1f3f4;
+                border-right: 1px solid #dadce0;
+            }
+            [data-theme="light"] #view-cloud .cloud-header {
+                background: #ffffff;
+                border-bottom: 1px solid #dadce0;
+                box-shadow: 0 1px 2px rgba(60, 64, 67, 0.1);
+            }
+            [data-theme="light"] .cloud-file-row:hover {
+                background: #f8f9fa;
+            }
+            [data-theme="light"] .cloud-nav-item:hover {
+                background: #e8eaed;
+            }
+            [data-theme="light"] .cloud-nav-item.active {
+                background: #c2e7ff !important;
+                color: #0b57d0 !important;
+                font-weight: 800;
+            }
+            #cloud-preview-modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 10000;
+                align-items: center;
+                justify-content: center;
+            }
+            .preview-content {
+                background: var(--bg-card);
+                padding: 20px;
+                border-radius: 12px;
+                max-width: 90%;
+                max-height: 90%;
+                position: relative;
+                display: flex;
+                flex-direction: column;
+            }
+            [data-theme="dark"] .preview-close {
+                position: absolute;
+                top: -40px;
+                right: 0;
+                color: #fff;
+                font-size: 2rem;
+                cursor: pointer;
+            }
+            [data-theme="light"] .cloud-file-name {
+                color: #202124;
+                font-weight: 500;
+            }
+            [data-theme="light"] .cloud-file-info {
+                color: #3c4043;
+                font-weight: 500;
+            }
+            [data-theme="light"] .cloud-search-input {
+                background: #f1f3f4 !important;
+                color: #202124 !important;
+                border: 1px solid #dadce0 !important;
+            }
+            [data-theme="light"] .cloud-search-input {
+                background: #f1f3f4 !important;
+                color: #000 !important;
+            }
+            [data-theme="light"] .btn-new-drive {
+                background: #ffffff !important;
+                color: #202124 !important;
+                border: 1px solid #dadce0 !important;
+                box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3) !important;
+            }
+            [data-theme="light"] .cloud-table-header {
+                color: #202124 !important;
+                font-weight: 700 !important;
+            }
+            [data-theme="light"] .cloud-nav-item span {
+                color: #5f6368;
+            }
+            [data-theme="light"] .cloud-nav-item.active span {
+                color: #1967d2;
+            }
+            .cloud-sidebar {
+                transition: all 0.3s ease;
+            }
+            .cloud-header {
+                transition: all 0.3s ease;
+            }
+            .btn-new-drive {
+                background: linear-gradient(135deg, #ffffff 0%, #f1f3f4 100%) !important;
+                border: 1px solid #dadce0 !important;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+            }
+            [data-theme="dark"] .btn-new-drive {
+                background: linear-gradient(135deg, #303134 0%, #202124 100%) !important;
+                border: 1px solid #5f6368 !important;
+                color: #e8eaed !important;
+            }
+            .cloud-info-panel {
+                width: 320px;
+                background: var(--bg-card);
+                border-left: 1px solid var(--border);
+                display: none;
+                flex-direction: column;
+                overflow-y: auto;
+                animation: slideInRight 0.3s ease;
+            }
+            [data-theme="light"] .cloud-info-panel {
+                background: #f8fafc;
+                border-left: 1px solid #dadce0;
+            }
+            .info-panel-header {
+                padding: 16px 20px;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .info-panel-tabs {
+                display: flex;
+                border-bottom: 1px solid var(--border);
+                padding: 0 20px;
+            }
+            .info-tab {
+                padding: 12px 16px;
+                font-size: 0.85rem;
+                cursor: pointer;
+                color: var(--text-muted);
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s;
+            }
+            .info-tab.active {
+                color: #ffffff;
+                border-bottom-color: #4285f4;
+                font-weight: 600;
+            }
+            [data-theme="light"] .info-tab.active {
+                color: #4285f4;
+            }
+            .info-content {
+                padding: 24px 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            .info-file-preview {
+                width: 100%;
+                height: 160px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                border: 1px solid var(--border);
+            }
+            .info-section-title {
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                opacity: 0.8;
+                margin-bottom: 12px;
+                font-weight: 700;
+                color: var(--text-dim);
+            }
+            .info-detail-row {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin-bottom: 12px;
+            }
+            .info-detail-label {
+                font-size: 0.75rem;
+                opacity: 0.7;
+                color: var(--text-dim);
+            }
+            .info-detail-value {
+                font-size: 0.85rem;
+                word-break: break-all;
+                color: var(--text-main);
+            }
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                }
+                to {
+                    transform: translateX(0);
+                }
+            }
+            #main.cloud-active {
+                padding: 0 !important;
+                max-width: 100% !important;
+            }
+        </style>
+        <div class="cloud-header"
+            style="display: flex; align-items: center; justify-content: space-between; padding: 10px 24px; min-height: 60px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button onclick="showView('menu')"
+                    style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-main); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <span>🏠</span> <span style="color: var(--text-main);">Volver</span>
+                </button>
+                <div style="width: 1px; height: 24px; background: var(--border); margin: 0 10px;"></div>
+                <div id="cloud-breadcrumbs"
+                    style="display: flex; align-items: center; font-size: 1.1rem; color: var(--text-main); font-weight: 500;">
+                    <span class="breadcrumb-item active" style="color: var(--text-main);">Mi unidad</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div style="position: relative;">
+                    <input type="text" id="cloud-search" placeholder="Buscar en Drive..." class="cloud-search-input"
+                        style="background: var(--surface-hi); border: 1px solid var(--border); border-radius: 24px; padding: 8px 16px 8px 40px; color: #fff; font-size: 0.85rem; width: 300px; outline: none;"
+                        oninput="filterCloudFiles()">
+                    <span
+                        style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); opacity: 0.5;">🔍</span>
+                </div>
+                <button onclick="toggleTheme()" class="btn-theme"
+                    style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0; flex: 1; overflow: hidden;">
+            <div class="cloud-sidebar" style="width: 240px; display: flex; flex-direction: column; padding: 16px 8px;">
+                <button onclick="showCloudNewMenu(event)" class="btn-new-drive"
+                    style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); border: none; padding: 12px 24px; border-radius: 16px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 20px; width: fit-content; align-self: flex-start; margin-left: 8px; transition: box-shadow 0.2s;">
+                    <span style="font-size: 1.5rem; line-height: 1; font-weight: 300; color: #4285f4;">+</span>
+                    Nuevo
+                </button>
+                <div id="cloud-sidebar-nav" style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+                    <div class="cloud-nav-item active" onclick="handleCloudNavClick(this, 'home')">
+                        <span>🏠</span>
+                        Página principal
+                    </div>
+                    <div class="cloud-nav-item" onclick="handleCloudNavClick(this, 'drive')"><span>📂</span> Mi
+                        unidad
+                    </div>
+                    <div class="cloud-nav-item" onclick="handleCloudNavClick(this, 'computers')"><span>💻</span>
+                        Computadoras</div>
+                    <div class="context-divider" style="margin: 8px 0;"></div>
+                    <div class="cloud-nav-item" onclick="handleCloudNavClick(this, 'shared')"><span>👥</span>
+                        Compartidos conmigo</div>
+                    <div class="cloud-nav-item" onclick="handleCloudNavClick(this, 'home')"><span>🕒</span>
+                        Recientes
+                    </div>
+                    <div class="cloud-nav-item" onclick="handleCloudNavClick(this, 'starred')"><span>⭐</span>
+                        Destacados
+                    </div>
+                    <div class="context-divider" style="margin: 8px 0;"></div>
+                    <div class="cloud-nav-item" onclick="handleCloudNavClick(this, 'trash')"><span>🗑️</span>
+                        Papelera</div>
+                </div>
+                <div style="margin-top: 30px; padding: 16px 8px; border-top: 1px solid var(--border);">
+                    <div id="cloud-storage-title"
+                        style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--text-main); margin-bottom: 8px; font-weight: 800;">
+                        <span style="color: #4285f4; font-size: 1.1rem;">☁</span> <span
+                            class="storage-label-text">Almacenamiento</span>
+                    </div>
+                    <div id="cloud-quota-bg"
+                        style="height: 4px; background: var(--indigo-dim); border-radius: 2px; margin-bottom: 8px; overflow: hidden;">
+                        <div id="cloud-quota-bar"
+                            style="width: 0%; height: 100%; background: #4285f4; transition: width 0.3s;"></div>
+                    </div>
+                    <div id="cloud-quota-text"
+                        style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">
+                        <div style="font-weight: 600;">0 Bytes de 5 GB utilizados</div>
+                        <div style="font-size: 0.65rem; margin-top: 4px; opacity: 0.8; color: var(--indigo-light);">
+                            Disco: Cargando...</div>
+                    </div>
+                    <button onclick="document.getElementById('cloud-quota-input-modal').style.display='flex'"
+                        style="background: transparent; border: 1px solid var(--border); color: var(--text-main); padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; cursor: pointer; width: 100%; transition: all 0.2s;">
+                        Obtener más espacio
+                    </button>
+                </div>
+            </div>
+            <div id="cloud-explorer-main" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <div class="cloud-table-header"
+                    style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none;">
+                    <span>Nombre</span>
+                    <span>Propietario</span>
+                    <span>Fecha de modificación</span>
+                    <span>Tamaño del archivo</span>
+                    <span></span>
+                </div>
+                <div id="cloud-file-list" style="flex: 1; overflow-y: auto; padding: 0;">
+                </div>
+            </div>
+            <div id="cloud-info-panel" class="cloud-info-panel">
+                <div class="info-panel-header">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="info-icon" style="font-size: 1.2rem;">📄</span>
+                        <span id="info-title"
+                            style="display: inline-block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;">Selecciona
+                            un archivo</span>
+                    </div>
+                    <button onclick="toggleCloudInfoPanel()" class="info-close-btn"
+                        style="background: none; border: none; color: var(--text-main); cursor: pointer; font-size: 1.2rem; opacity: 0.8; transition: opacity 0.2s;">✕</button>
+                </div>
+                <div class="info-panel-tabs">
+                    <div class="info-tab active" onclick="switchCloudInfoTab(this, 'details')">Detalles</div>
+                    <div class="info-tab" onclick="switchCloudInfoTab(this, 'activity')">Actividad</div>
+                </div>
+                <div id="info-panel-body" class="info-content">
+                    <div style="text-align: center; opacity: 0.3; margin-top: 50px;">
+                        <span style="font-size: 4rem;">ℹ️</span>
+                        <p>Haz clic derecho en un archivo y selecciona "Información" para ver sus detalles</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="cloud-context-menu" class="cloud-context-menu">
+            <div id="ctx-item-actions" style="display: none;">
+                <div class="context-item" id="ctx-download-btn">
+                    <span style="font-size: 1.1rem;">📥</span> Descargar
+                </div>
+                <div class="context-item" id="ctx-rename-btn">
+                    <span style="font-size: 1.1rem;">✏️</span> Cambiar nombre
+                </div>
+                <div class="context-item" id="ctx-share-btn">
+                    <span style="font-size: 1.1rem;">🔗</span> Compartir
+                </div>
+                <div class="context-item has-submenu" id="ctx-organize-btn">
+                    <span style="font-size: 1.1rem;">📂</span> Organizar
+                    <span style="margin-left: auto; opacity: 0.5;">›</span>
+                    <div class="cloud-submenu">
+                        <div class="context-item" id="ctx-star-btn">
+                            <span style="font-size: 1rem;" id="ctx-star-icon">⭐</span> <span
+                                id="ctx-star-text">Destacar</span>
+                        </div>
+                        <div class="context-item" id="ctx-move-btn">
+                            <span style="font-size: 1rem;">🚚</span> Mover a
+                        </div>
+                    </div>
+                </div>
+                <div class="context-item" id="ctx-info-btn">
+                    <span style="font-size: 1.1rem;">ℹ️</span> Información
+                </div>
+                <div class="context-item" id="ctx-protect-btn">
+                    <span style="font-size: 1.1rem;" id="ctx-protect-icon">🔒</span> <span
+                        id="ctx-protect-text">Proteger</span>
+                </div>
+                <div class="context-sep" id="ctx-sep-item"></div>
+                <div class="context-item" id="ctx-delete-btn" style="color: #f87171;">
+                    <span style="font-size: 1.1rem;">🗑️</span> <span id="ctx-delete-text">Mover a la
+                        papelera</span>
+                </div>
+                <div class="context-item" id="ctx-restore-btn" style="display: none;">
+                    <span style="font-size: 1.1rem;">↩️</span> Restaurar
+                </div>
+                <div class="context-item" id="ctx-empty-trash-btn" style="display: none; color: #f87171;">
+                    <span style="font-size: 1.1rem;">🔥</span> Vaciar papelera
+                </div>
+            </div>
+            <div id="ctx-creation-actions">
+                <div class="context-item" onclick="createNewFolder()">
+                    <span style="font-size: 1.1rem;">📁</span> Carpeta nueva
+                </div>
+                <div class="context-sep"></div>
+                <div class="context-item" onclick="document.getElementById('cloud-upload-input').click()">
+                    <span style="font-size: 1.1rem;">📄</span> Subir archivo
+                </div>
+                <div class="context-item" onclick="document.getElementById('cloud-folder-upload-input').click()">
+                    <span style="font-size: 1.1rem;">📂</span> Subir carpeta
+                </div>
+            </div>
+        </div>
+        <input type="file" id="cloud-folder-upload-input" style="display: none;" webkitdirectory directory multiple
+            onchange="handleCloudUpload(event, true)">
+        <div id="cloud-quota-input-modal"
+            style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+            <div
+                style="background:var(--bg-card); padding:24px; border-radius:16px; border:1px solid var(--border); width:300px;">
+                <h3 style="margin:0 0 15px 0; font-size:1rem; color:#fff;">Ajustar Almacenamiento</h3>
+                <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:8px;">Límite
+                    en GB:</label>
+                <input type="number" id="cloud-quota-input"
+                    style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; color:#fff; padding:8px; margin-bottom:20px;">
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button onclick="document.getElementById('cloud-quota-input-modal').style.display='none'"
+                        style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; font-weight:600;">Cancelar</button>
+                    <button
+                        onclick="updateCloudQuota(); document.getElementById('cloud-quota-input-modal').style.display='none'"
+                        style="background:var(--indigo); border:none; color:#fff; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:700;">Guardar</button>
+                </div>
+            </div>
+        </div>
+        <div id="cloud-new-menu"
+            style="display: none; position: fixed; z-index: 10000; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); padding: 8px; min-width: 180px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+            <div class="context-item" onclick="document.getElementById('cloud-upload-input').click()">
+                <span>📄</span> Subir archivo
+            </div>
+            <div class="context-item" onclick="document.getElementById('cloud-folder-upload-input').click()">
+                <span>📂</span> Subir carpeta
+            </div>
+            <div class="context-item" onclick="handleCreateFolder()">
+                <span>📁</span> Carpeta nueva
+            </div>
+        </div>
+        <input type="file" id="cloud-upload-input" style="display: none;" multiple onchange="handleCloudUpload(event)">
+        <style>
+            .old-btn-hover {
+                background: #f1f3f4 !important;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important;
+            }
+            .cloud-nav-item {
+                padding: 8px 12px;
+                border-radius: 0 20px 20px 0;
+                margin-right: 8px;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                font-size: 0.85rem;
+                color: var(--cloud-nav-text);
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .cloud-nav-item:hover {
+                background: var(--cloud-row-hover);
+            }
+            .cloud-nav-item.active {
+                background: var(--cloud-nav-bg-active);
+                color: var(--cloud-nav-text-active);
+                font-weight: 600;
+            }
+            .cloud-file-row {
+                display: grid;
+                grid-template-columns: 2fr 1fr 1.2fr 1fr 40px;
+                align-items: center;
+                padding: 12px 24px;
+                border-bottom: 1px solid var(--cloud-row-border);
+                cursor: pointer;
+                transition: background 0.1s;
+            }
+            .cloud-file-row:hover {
+                background: var(--cloud-row-hover);
+            }
+            .cloud-file-name {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                color: var(--text-main);
+                font-size: 0.88rem;
+                font-weight: 600;
+            }
+            .cloud-file-info {
+                font-size: 0.8rem;
+                color: var(--text-muted);
+            }
+            .breadcrumb-item {
+                cursor: pointer;
+                opacity: 0.7;
+                transition: opacity 0.2s;
+            }
+            .breadcrumb-item:hover {
+                opacity: 1;
+                text-decoration: underline;
+            }
+            .breadcrumb-item.active {
+                opacity: 1;
+                cursor: default;
+            }
+            .breadcrumb-item.active:hover {
+                text-decoration: none;
+            }
+        </style>
+    </div>
+    </div>
+    <style>
+        .btn-new-drive {
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+            transition: all 0.2s ease !important;
+        }
+        .btn-new-drive:hover {
+            background: var(--surface-hi) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        }
+        .has-submenu {
+            position: relative;
+        }
+        .cloud-submenu {
+            display: none;
+            position: absolute;
+            left: calc(100% - 4px);
+            top: -8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 160px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 10001;
+        }
+        .has-submenu:hover>.cloud-submenu {
+            display: block;
+        }
+        [data-theme="light"] .cloud-submenu {
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .context-item {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: background 0.2s;
+            border-radius: 6px;
+        }
+        .context-item:hover {
+            background: rgba(99, 102, 241, 0.15);
+            color: #8ab4f8;
+        }
+        .context-sep {
+            height: 1px;
+            background: var(--border);
+            margin: 6px 0;
+        }
+        .notif-item {
+            padding: 12px 16px;
+            border-radius: 10px;
+            background: rgba(99, 102, 241, 0.05);
+            margin-bottom: 8px;
+            border: 1px solid rgba(99, 102, 241, 0.1);
+            transition: transform 0.2s;
+        }
+        .notif-item:hover {
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateX(4px);
+        }
+        .notif-title {
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            font-size: 0.95rem;
+        }
+        .notif-time {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            display: flex;
+            justify-content: space-between;
+        }
+        .notif-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+    </style>
+    <div id="cloud-preview-modal" onclick="closeCloudPreview()">
+        <div class="preview-content" onclick="event.stopPropagation()">
+            <span class="preview-close" onclick="closeCloudPreview()">&times;</span>
+            <div id="preview-body" style="overflow: auto; display: flex; justify-content: center; align-items: center;">
+            </div>
+            <div id="preview-footer"
+                style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <span id="preview-filename" style="font-weight: 600; color: var(--text-main);"></span>
+                <button id="preview-download-btn" class="cloud-btn primary"
+                    style="padding: 8px 16px;">Descargar</button>
+            </div>
+        </div>
+    </div>
+    <div id="notif-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+        <div
+            style="background: var(--bg-card); width: 90%; max-width: 500px; max-height: 80vh; border-radius: 16px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+            <div
+                style="padding: 20px; border-bottom: 1px solid rgba(99, 102, 241, 0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">Historial de
+                    Notificaciones</h2>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button id="clear-all-notifs"
+                        style="background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.2); color: #f87171; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer;">Limpiar
+                        todo</button>
+                    <button id="close-notif-modal"
+                        style="background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 1.5rem;">&times;</button>
+                </div>
+            </div>
+            <div id="notif-history-list" style="padding: 10px; overflow-y: auto; flex: 1;">
+            </div>
+        </div>
+    </div>
+    <div id="context-menu"
+        style="display: none; position: fixed; z-index: 10000; min-width: 180px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); padding: 6px; overflow: hidden; animation: menuFade 0.2s ease;">
+        <div class="context-item" onclick="showView('marketplace')">
+            <span class="context-icon">➕</span> Añadir Módulo
+        </div>
+        <div id="ctx-module-actions">
+            <div class="context-divider"></div>
+            <div class="context-item" onclick="moveModule('up')">
+                <span class="context-icon">⬅️</span> Mover a la izquierda
+            </div>
+            <div class="context-item" onclick="moveModule('down')">
+                <span class="context-icon">➡️</span> Mover a la derecha
+            </div>
+            <div class="context-divider"></div>
+            <div class="context-item delete" onclick="deleteModuleContext()">
+                <span class="context-icon">🗑️</span> Eliminar Módulo
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes menuFade {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        .has-submenu {
+            position: relative;
+        }
+        .cloud-submenu {
+            display: none;
+            position: absolute;
+            left: calc(100% - 4px);
+            top: -8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 160px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 10001;
+        }
+        .has-submenu:hover>.cloud-submenu {
+            display: block;
+        }
+        [data-theme="light"] .cloud-submenu {
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .context-item {
+            padding: 10px 14px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .context-item:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #fff;
+        }
+        .context-item.delete:hover {
+            background: rgba(248, 113, 113, 0.2);
+            color: #f87171;
+        }
+        .context-icon {
+            font-size: 1rem;
+        }
+        .context-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.05);
+            margin: 6px 0;
+        }
+    </style>
+    <div id="modal-avatar-picker" class="avatar-modal">
+        <div class="am-content">
+            <div class="am-header">
+                <span class="am-title">Seleccionar una imagen</span>
+                <span class="am-close" onclick="closeAvatarPicker()">&times;</span>
+            </div>
+            <div class="am-body">
+                <div class="am-upload-card" onclick="document.getElementById('avatar-upload-cfg').click()">
+                    <div class="am-upload-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <span class="am-upload-text">Subir imagen</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-avatar-editor" class="editor-modal">
+        <div class="em-content">
+            <div class="em-header">
+                <span class="em-title">Editar imagen</span>
+                <span class="am-close" onclick="closeAvatarEditor()">&times;</span>
+            </div>
+            <div class="em-body">
+                <div class="em-preview-container" id="em-container">
+                    <img id="em-image" src="" alt="Preview">
+                    <div class="em-mask">
+                        <div class="em-circle"></div>
+                    </div>
+                </div>
+                <div class="em-controls">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b5bac1" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    <input type="range" class="em-slider" id="em-zoom" min="1" max="3" step="0.01" value="1">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b5bac1" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="em-footer">
+                <button class="em-btn em-btn-cancel" onclick="closeAvatarEditor()">Cancelar</button>
+                <button class="em-btn em-btn-apply" id="em-apply">Aplicar</button>
+            </div>
+        </div>
+        <div id="modal-password-change" class="editor-modal">
+            <div class="em-content" style="max-width: 440px;">
+                <div class="em-header">
+                    <span class="em-title">Cambiar contraseña</span>
+                    <span class="am-close" onclick="closePasswordModal()">&times;</span>
+                </div>
+                <div class="em-body" style="align-items: stretch; padding: 20px;">
+                    <p style="color: #b5bac1; font-size: 0.9rem; margin-bottom: 20px;">Introduce tu contraseña actual y
+                        una nueva para actualizar el acceso.</p>
+                    <div style="margin-bottom: 16px;">
+                        <label
+                            style="display: block; font-size: 0.75rem; color: #b5bac1; margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">Contraseña
+                            actual</label>
+                        <input type="password" id="old-pass" class="futuristic-input"
+                            style="width: 100%; background: #1e1f22; border: none; padding: 12px; color: #fff; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label
+                            style="display: block; font-size: 0.75rem; color: #b5bac1; margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">Nueva
+                            contraseña</label>
+                        <input type="password" id="new-pass" class="futuristic-input"
+                            style="width: 100%; background: #1e1f22; border: none; padding: 12px; color: #fff; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label
+                            style="display: block; font-size: 0.75rem; color: #b5bac1; margin-bottom: 8px; text-transform: uppercase; font-weight: 700;">Confirmar
+                            contraseña</label>
+                        <input type="password" id="conf-pass" class="futuristic-input"
+                            style="width: 100%; background: #1e1f22; border: none; padding: 12px; color: #fff; border-radius: 4px;">
+                    </div>
+                    <div id="modal-pass-msg" class="cfg-msg-area" style="margin-top: 10px;"></div>
+                </div>
+                <div class="em-footer">
+                    <button class="em-btn em-btn-cancel" onclick="closePasswordModal()">Cancelar</button>
+                    <button class="em-btn em-btn-apply" onclick="confirmPasswordChange()">Hecho</button>
+                </div>
+            </div>
+        </div>
+        <div id="modal-dialog" class="editor-modal" style="z-index: 10002;">
+            <div class="em-content" style="max-width: 420px;">
+                <div class="em-header" style="border-bottom: 1px solid var(--border);">
+                    <span class="em-title" id="dialog-title">Null-Void</span>
+                    <span class="am-close" onclick="NV_CloseDialog()">&times;</span>
+                </div>
+                <div class="em-body" style="padding: 24px; flex-direction: column; align-items: stretch;">
+                    <p id="dialog-text"
+                        style="color: var(--text-dim); margin-bottom: 20px; line-height: 1.5; font-size: 0.95rem;"></p>
+                    <input type="text" id="dialog-input" class="futuristic-input"
+                        style="display: none; width: 100%; background: var(--surface); border: 1px solid var(--border-hi); border-radius: 8px; padding: 12px; color: var(--text-main); outline: none;">
+                </div>
+                <div class="em-footer"
+                    style="padding: 16px; display: flex; justify-content: flex-end; gap: 12px; background: rgba(0,0,0,0.05);">
+                    <button class="em-btn em-btn-cancel" id="dialog-cancel-btn" onclick="NV_CloseDialog()"
+                        style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                    <button class="em-btn em-btn-apply" id="dialog-confirm-btn"
+                        style="background: var(--indigo); color: #fff; border: none; padding: 8px 24px; border-radius: 6px; cursor: pointer; font-weight: 700; box-shadow: 0 4px 12px var(--indigo-dim);">Aceptar</button>
+                </div>
+            </div>
+        </div>
+        <script>
+            const TOKEN = "{{ token }}";
+            const HEADERS = { 'X-Token': TOKEN, 'Content-Type': 'application/json' };
+            const CURRENT_USER = "{{ user }}";
+        </script>
+        <script src="{{ url_for('static', filename='js/dashboard/utils.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/ui.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/system.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/admin.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/notifications.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/cloud.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/invoices.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/monitor.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/backups.js') }}"></script>
+        <script src="/assets/dashboard/excel.js"></script>
+        <script>
+            function openAvatarPicker() {
+                document.getElementById('modal-avatar-picker').classList.add('show');
+            }
+            function closeAvatarPicker() {
+                document.getElementById('modal-avatar-picker').classList.remove('show');
+            }
+            let offsetX = 0, offsetY = 0;
+            function openAvatarEditor(imgSrc) {
+                const img = document.getElementById('em-image');
+                img.src = imgSrc;
+                img.onload = () => {
+                    const D = 200;
+                    const baseScale = Math.min(460 / img.naturalWidth, 260 / img.naturalHeight);
+                    img.width = img.naturalWidth * baseScale;
+                    img.height = img.naturalHeight * baseScale;
+                    const minZoom = Math.max(D / img.width, D / img.height);
+                    const slider = document.getElementById('em-zoom');
+                    slider.min = minZoom;
+                    slider.value = minZoom;
+                    offsetX = 0; offsetY = 0;
+                    img.style.transform = `scale(${minZoom})`;
+                    document.querySelector('.em-circle').style.transform = `translate(0,0)`;
+                };
+                document.getElementById('modal-avatar-editor').classList.add('show');
+            }
+            function closeAvatarEditor() {
+                document.getElementById('modal-avatar-editor').classList.remove('show');
+            }
+            window.openAvatarPicker = openAvatarPicker;
+            window.closeAvatarPicker = closeAvatarPicker;
+            window.openAvatarEditor = openAvatarEditor;
+            window.closeAvatarEditor = closeAvatarEditor;
+            document.addEventListener('DOMContentLoaded', () => {
+                const userEl = document.getElementById('nav-username');
+                const avatarEl = document.getElementById('nav-avatar');
+                const userDisplay = CURRENT_USER || "Usuario";
+                if (userEl) userEl.textContent = userDisplay;
+                if (avatarEl) avatarEl.textContent = userDisplay.charAt(0).toUpperCase();
+                const avatarLarge = document.getElementById('nav-avatar-large');
+                const nameLarge = document.getElementById('nav-username-large');
+                const emailLarge = document.getElementById('nav-user-email');
+                const profileTrigger = document.getElementById('profile-trigger');
+                const profileDropdown = document.getElementById('profile-dropdown');
+                const avatarInput = document.getElementById('avatar-upload-cfg');
+                async function checkAvatar() {
+                    const url = `/api/system/user/avatar/${CURRENT_USER}`;
+                    try {
+                        const res = await fetch(url, { method: 'HEAD' });
+                        const imgUrl = `${url}?v=${Date.now()}`;
+                        const elements = [
+                            { el: avatarEl, size: 'small' },
+                            { el: avatarLarge, size: 'large' },
+                            { el: document.getElementById('cfg-avatar-display'), size: 'cfg' }
+                        ];
+                        elements.forEach(item => {
+                            if (!item.el) return;
+                            if (res.ok) {
+                                if (item.size === 'cfg') {
+                                    item.el.innerHTML = `<img src="${imgUrl}" alt="Avatar"> <div class="avatar-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></div>`;
+                                } else {
+                                    item.el.innerHTML = `<img src="${imgUrl}" alt="Avatar">`;
+                                }
+                            } else {
+                                item.el.innerHTML = `<span>${userDisplay.charAt(0).toUpperCase()}</span>`;
+                                if (item.size === 'cfg') {
+                                    item.el.innerHTML += `<div class="avatar-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></div>`;
+                                }
+                            }
+                        });
+                    } catch (err) {
+                        console.error("Error checking avatar:", err);
+                    }
+                }
+                const saveBar = document.getElementById('settings-save-bar');
+                if (saveBar) saveBar.classList.remove('show');
+                if (avatarLarge) avatarLarge.textContent = userDisplay.charAt(0).toUpperCase();
+                const cfgAvatar = document.getElementById('cfg-avatar-display');
+                if (cfgAvatar) cfgAvatar.textContent = userDisplay.charAt(0).toUpperCase();
+                checkAvatar();
+                if (nameLarge) nameLarge.textContent = userDisplay;
+                if (emailLarge) emailLarge.textContent = (userDisplay.toLowerCase() + "@null-void.app").replace(/\s+/g, '');
+                async function fetchUserInfo() {
+                    try {
+                        const res = await fetch('/api/system/user/info', { headers: { 'X-Token': TOKEN } });
+                        const data = await res.json();
+                        if (data.username) {
+                            const uidStatic = document.getElementById('cfg-uid-field-static');
+                            const userStatic = document.getElementById('cfg-username-field-static');
+                            const emailStatic = document.getElementById('cfg-email-field-static');
+                            const userEdit = document.getElementById('cfg-username-edit');
+                            const emailEdit = document.getElementById('cfg-email-edit');
+                            if (uidStatic) uidStatic.value = data.user_id || 'NV-SYSTEM';
+                            if (userStatic) userStatic.value = data.username;
+                            if (emailStatic) emailStatic.value = data.email;
+                            if (userEdit) userEdit.value = data.username;
+                            if (emailEdit) emailEdit.value = data.email;
+                        }
+                    } catch (err) {
+                        console.error("Error fetching user info:", err);
+                    }
+                }
+                fetchUserInfo();
+                profileTrigger?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    profileDropdown?.classList.toggle('show');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!profileTrigger?.contains(e.target)) {
+                        profileDropdown?.classList.remove('show');
+                    }
+                });
+                document.getElementById('btn-logout-dropdown')?.addEventListener('click', handleLogout);
+                avatarInput?.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        closeAvatarPicker();
+                        openAvatarEditor(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                });
+                const img = document.getElementById('em-image');
+                const circle = document.querySelector('.em-circle');
+                let isDragging = false;
+                let startX, startY;
+                const applyConstraints = () => {
+                    if (!img) return;
+                    const zoom = document.getElementById('em-zoom').value;
+                    const D = 200;
+                    const W_z = (img.width || img.offsetWidth) * zoom;
+                    const H_z = (img.height || img.offsetHeight) * zoom;
+                    const limitX = Math.max(0, (W_z - D) / 2);
+                    const limitY = Math.max(0, (H_z - D) / 2);
+                    offsetX = Math.max(-limitX, Math.min(limitX, offsetX));
+                    offsetY = Math.max(-limitY, Math.min(limitY, offsetY));
+                    img.style.transform = `scale(${zoom})`;
+                    if (circle) circle.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                };
+                document.getElementById('em-zoom')?.addEventListener('input', applyConstraints);
+                circle?.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startX = e.clientX - offsetX;
+                    startY = e.clientY - offsetY;
+                    circle.style.cursor = 'grabbing';
+                });
+                window.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    offsetX = (e.clientX - startX);
+                    offsetY = (e.clientY - startY);
+                    applyConstraints();
+                });
+                window.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    circle.style.cursor = 'move';
+                });
+                let pendingAvatarFile = null;
+                window.switchCfgTab = (tabId) => {
+                    document.querySelectorAll('.cfg-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
+                    const tabs = document.querySelectorAll('.cfg-tab');
+                    tabs.forEach(t => {
+                        if (t.getAttribute('onclick').includes(`'${tabId}'`)) {
+                            t.classList.add('active');
+                        }
+                    });
+                    const pane = document.getElementById('tab-' + tabId);
+                    if (pane) pane.classList.add('active');
+                };
+                window.resetSettings = () => {
+                    pendingAvatarFile = null;
+                    document.getElementById('settings-save-bar')?.classList.remove('show');
+                    const userEdit = document.getElementById('cfg-username-edit');
+                    const emailEdit = document.getElementById('cfg-email-edit');
+                    if (userEdit) userEdit.value = userDisplay;
+                    if (emailEdit) emailEdit.value = (userDisplay.toLowerCase() + "@null-void.app").replace(/\s+/g, '');
+                    const fileInput = document.getElementById('avatar-upload-cfg');
+                    if (fileInput) fileInput.value = '';
+                    checkAvatar();
+                };
+                window.saveSettings = async () => {
+                    const userEdit = document.getElementById('cfg-username-edit');
+                    const emailEdit = document.getElementById('cfg-email-edit');
+                    try {
+                        const profileRes = await fetch('/api/system/user/update', {
+                            method: 'POST',
+                            headers: { ...HEADERS, 'X-Token': TOKEN },
+                            body: JSON.stringify({ username: userEdit.value, email: emailEdit.value })
+                        });
+                        const profileData = await profileRes.json();
+                        if (!profileData.ok) {
+                            alert(profileData.error || "Error al actualizar perfil");
+                            return;
+                        }
+                        if (pendingAvatarFile) {
+                            const formData = new FormData();
+                            formData.append('avatar', pendingAvatarFile);
+                            await fetch('/api/system/user/avatar/upload', {
+                                method: 'POST', headers: { 'X-Token': TOKEN }, body: formData
+                            });
+                            pendingAvatarFile = null;
+                        }
+                        const userStatic = document.getElementById('cfg-username-field-static');
+                        const emailStatic = document.getElementById('cfg-email-field-static');
+                        if (userStatic) userStatic.value = userEdit.value;
+                        if (emailStatic) emailStatic.value = emailEdit.value;
+                        document.getElementById('settings-save-bar').classList.remove('show');
+                        checkAvatar();
+                        if (userEdit.value !== CURRENT_USER) {
+                            location.reload();
+                        }
+                    } catch (err) {
+                        console.error("Error saving settings:", err);
+                        alert("Error de conexión al guardar");
+                    }
+                };
+                document.getElementById('cfg-username-edit')?.addEventListener('input', () => {
+                    document.getElementById('settings-save-bar')?.classList.add('show');
+                });
+                document.getElementById('cfg-email-edit')?.addEventListener('input', () => {
+                    document.getElementById('settings-save-bar')?.classList.add('show');
+                });
+                window.openPasswordModal = () => {
+                    document.getElementById('modal-password-change').classList.add('show');
+                };
+                window.closePasswordModal = () => {
+                    document.getElementById('modal-password-change').classList.remove('show');
+                };
+                window.confirmPasswordChange = async () => {
+                    const isModal = document.getElementById('modal-password-change').classList.contains('show');
+                    const prefix = isModal ? '' : 'cfg-';
+                    const oldPass = document.getElementById(prefix + 'old-pass').value;
+                    const newPass = document.getElementById(prefix + 'new-pass').value;
+                    const confPass = document.getElementById(prefix + 'conf-pass').value;
+                    const msgEl = document.getElementById(isModal ? 'modal-pass-msg' : 'cfg-pass-msg');
+                    const showMsg = (text, type) => {
+                        if (!msgEl) return;
+                        msgEl.textContent = text;
+                        msgEl.className = 'cfg-msg-area ' + type;
+                        if (type === 'success') setTimeout(() => { msgEl.textContent = ''; }, 3000);
+                    };
+                    if (!oldPass || !newPass) {
+                        showMsg("⚠ Rellena todos los campos", "error");
+                        return;
+                    }
+                    if (newPass !== confPass) {
+                        showMsg("⚠ Las contraseñas no coinciden", "error");
+                        return;
+                    }
+                    if (newPass.length < 1) {
+                        showMsg("⚠ La nueva contraseña requiere al menos 1 caracter", "error");
+                        return;
+                    }
+                    if (newPass === oldPass) {
+                        showMsg("⚠ La nueva contraseña no puede ser igual a la anterior", "error");
+                        return;
+                    }
+                    try {
+                        const res = await fetch('/api/system/user/password', {
+                            method: 'POST',
+                            headers: { ...HEADERS, 'X-Token': TOKEN },
+                            body: JSON.stringify({ old_password: oldPass, new_password: newPass })
+                        });
+                        const data = await res.json();
+                        if (data.ok) {
+                            showMsg("✓ Contraseña actualizada", "success");
+                            document.getElementById(prefix + 'old-pass').value = '';
+                            document.getElementById(prefix + 'new-pass').value = '';
+                            document.getElementById(prefix + 'conf-pass').value = '';
+                        } else {
+                            showMsg("⚠ " + (data.error || "Error"), "error");
+                        }
+                    } catch (err) {
+                        showMsg("⚠ Error de conexión", "error");
+                    }
+                };
+                window.showSessions = () => {
+                    alert("Mostrando sesiones activas: \n- Linux / Chrome (Actual) \n- Android / App");
+                };
+                window.togglePassword = (id) => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.type = el.type === 'password' ? 'text' : 'password';
+                    }
+                };
+                document.getElementById('em-apply')?.addEventListener('click', async () => {
+                    const fileInput = document.getElementById('avatar-upload-cfg');
+                    const file = fileInput.files[0];
+                    if (!file) return;
+                    pendingAvatarFile = file;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const imgUrl = e.target.result;
+                        const cfgAvatar = document.getElementById('cfg-avatar-display');
+                        if (cfgAvatar) cfgAvatar.innerHTML = `<img src="${imgUrl}" alt="Avatar"> <div class="avatar-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></div>`;
+                    };
+                    reader.readAsDataURL(file);
+                    closeAvatarEditor();
+                    document.getElementById('settings-save-bar')?.classList.add('show');
+                });
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'theme' && e.newValue) {
+                        document.documentElement.setAttribute('data-theme', e.newValue);
+                        updateThemeIcon(e.newValue);
+                    }
+                });
+                updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+                updateNetStatus();
+                window.addEventListener('online', updateNetStatus);
+                window.addEventListener('offline', updateNetStatus);
+                window.addEventListener('click', () => {
+                    const menu = document.getElementById('context-menu');
+                    if (menu) menu.style.display = 'none';
+                });
+                window.addEventListener('contextmenu', (e) => {
+                    if (!document.getElementById('view-menu').classList.contains('active')) return;
+                    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+                    e.preventDefault();
+                    const navBtn = e.target.closest('.nav-btn');
+                    const appId = navBtn ? navBtn.dataset.appId : null;
+                    showContextMenu(e, appId);
+                });
+                document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+                document.getElementById('btn-logout-dropdown')?.addEventListener('click', handleLogout);
+                document.getElementById('btn-notifications-history')?.addEventListener('click', fetchNotificationHistory);
+                document.getElementById('close-notif-modal')?.addEventListener('click', () => {
+                    document.getElementById('notif-modal').style.display = 'none';
+                });
+                document.getElementById('clear-all-notifs')?.addEventListener('click', clearAllNotifications);
+                fetchApps();
+                fetchAdminAlerts();
+                setInterval(fetchAdminAlerts, 60000);
+                updateCloudQuotaInfo();
+                setInterval(updateCloudQuotaInfo, 30000);
+                showView('menu');
+                let currentChatMode = 'ai';
+                window.setSmartChat = (mode) => {
+                    currentChatMode = mode;
+                    const btnAi = document.getElementById('tab-btn-ai');
+                    const btnGlobal = document.getElementById('tab-btn-global');
+                    if (btnAi) btnAi.classList.toggle('active', mode === 'ai');
+                    if (btnGlobal) btnGlobal.classList.toggle('active', mode === 'global');
+                    const welcome = document.getElementById('chat-welcome-msg');
+                    if (welcome) {
+                        welcome.textContent = mode === 'ai' ? "IA Null-Void activa. ¿En qué puedo ayudarte?" : "Conectado al canal global.";
+                    }
+                };
+                window.sendSmartMessage = () => {
+                    const input = document.getElementById('smart-chat-input');
+                    const container = document.getElementById('smart-chat-log');
+                    if (!input || !input.value.trim()) return;
+                    const msg = input.value; input.value = '';
+                    const d = document.createElement('div'); d.className = 'chat-msg user';
+                    if (currentChatMode === 'ai') {
+                        d.textContent = msg;
+                        container.appendChild(d);
+                        setTimeout(() => {
+                            const b = document.createElement('div'); b.className = 'chat-msg system';
+                            b.textContent = "IA: Procesando... Actualmente en mantenimiento.";
+                            container.appendChild(b); container.scrollTop = container.scrollHeight;
+                        }, 800);
+                    } else {
+                        d.innerHTML = `<strong>${CURRENT_USER.split(' ')[0]}:</strong> ${msg}`;
+                        container.appendChild(d);
+                    }
+                    container.scrollTop = container.scrollHeight;
+                };
+                const mainNotes = document.getElementById('main-quick-notes');
+                const notesTag = document.getElementById('notes-save-tag');
+                if (mainNotes) {
+                    mainNotes.value = localStorage.getItem('nv_notes') || '';
+                    mainNotes.addEventListener('input', () => {
+                        localStorage.setItem('nv_notes', mainNotes.value);
+                        if (notesTag) {
+                            notesTag.style.opacity = '1';
+                            setTimeout(() => { notesTag.style.opacity = '0'; }, 1000);
+                        }
+                    });
+                }
+                if (document.getElementById('view-invoices')?.classList.contains('active')) fetchInvoices();
+                if (document.getElementById('view-cloud')?.classList.contains('active')) {
+                    fetchCloudFiles('', 'home');
+                }
+                window.toggleChatWindow = () => {
+                    const win = document.getElementById('chat-window');
+                    if (win) win.classList.toggle('active');
+                };
+                window.resetChat = () => {
+                    const container = document.getElementById('cw-messages');
+                    if (!container) return;
+                    container.innerHTML = `
+                        <div class="cw-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 16v-4"></path>
+                                <path d="M12 8h.01"></path>
+                            </svg>
+                            <h3 style="color: var(--text-main); margin: 0;">Null-Void AI</h3>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">¿En qué puedo ayudarte hoy?</p>
+                        </div>
+                    `;
+                };
+                window.sendChatMessage = (input) => {
+                    const msg = input.value.trim();
+                    if (!msg) return;
+                    const container = document.getElementById('cw-messages');
+                    if (!container) return;
+                    const empty = container.querySelector('.cw-empty');
+                    if (empty) empty.remove();
+                    const userDiv = document.createElement('div');
+                    userDiv.className = 'chat-msg user';
+                    userDiv.textContent = msg;
+                    container.appendChild(userDiv);
+                    input.value = '';
+                    container.scrollTop = container.scrollHeight;
+                    setTimeout(() => {
+                        const aiDiv = document.createElement('div');
+                        aiDiv.className = 'chat-msg system';
+                        aiDiv.textContent = "Soy el asistente de Null-Void. Actualmente estoy en modo de prueba.";
+                        container.appendChild(aiDiv);
+                        container.scrollTop = container.scrollHeight;
+                    }, 800);
+                };
+            });
+            async function browseDir(targetId) {
+                const container = document.getElementById(targetId).parentElement;
+                container.style.opacity = "0.5";
+                container.style.pointerEvents = "none";
+                try {
+                    const res = await fetch('/api/backup/browse', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        document.getElementById(targetId).value = data.path;
+                    }
+                } catch (e) {
+                    console.error("Error seleccionando directorio:", e);
+                } finally {
+                    container.style.opacity = "1";
+                    container.style.pointerEvents = "auto";
+                }
+            }
+        </script>
+</body>
+</html>
