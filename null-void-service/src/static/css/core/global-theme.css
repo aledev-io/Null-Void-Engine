@@ -1,0 +1,58 @@
+/* Global Theme Colors */
+
+:root,
+[data-theme="dark"] {
+    /* Base Backgrounds */
+    --bg-canvas: #0a0a0a;
+    /* Pure deep dark */
+    --bg-sidebar: #0f0f0f;
+    /* Slightly lighter for sidebars */
+    --bg-secondary: #171717;
+    /* Cards and inputs */
+    --bg-hover: #262626;
+    /* Hover states */
+
+    /* Borders */
+    --border: #333333;
+
+    /* Typography */
+    --text-main: #ededed;
+    --text-dim: #a3a3a3;
+
+    /* Primary Colors */
+    --primary: #5b21b6;
+    --primary-hover: #7c3aed;
+
+    /* Module Specific Fallbacks to Global Variables */
+    --bg: var(--bg-canvas);
+    --bg-card: var(--bg-sidebar);
+    --surface: var(--bg-secondary);
+    --surface-hi: var(--bg-hover);
+
+    /* AI Specific */
+    --user-bubble: #1f2937;
+    --ai-bubble: transparent;
+}
+
+[data-theme="light"] {
+    --bg-canvas: #f8f9fa;
+    --bg-sidebar: #f1f3f4;
+    --bg-secondary: #ffffff;
+    --bg-hover: #e8eaed;
+
+    --border: #dadce0;
+
+    --text-main: #202124;
+    --text-dim: #5f6368;
+
+    --primary: #1a73e8;
+    --primary-hover: #1967d2;
+
+    --bg: var(--bg-canvas);
+    --bg-card: var(--bg-sidebar);
+    --surface: var(--bg-secondary);
+    --surface-hi: var(--bg-hover);
+
+    --user-bubble: #e8f0fe;
+    --ai-bubble: #f1f3f4;
+}

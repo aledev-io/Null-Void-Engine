@@ -1,0 +1,76 @@
+services:
+  nullvoid-engine:
+    build: ./null-void-service
+    container_name: nullvoid-engine
+    network_mode: "host"
+    volumes:
+      - ./data:/app/data
+      - ./null-void-service/src:/app/src
+      - ./certs:/app/certs:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /sys/class/thermal:/sys/class/thermal:ro
+      - /sys/class/hwmon:/sys/class/hwmon:ro
+      - /sys/devices:/sys/devices:ro
+      - /sys:/host_sys:ro
+    env_file:
+      - .env
+    environment:
+      - DEBUG=true
+      - FLASK_PORT=5000
+      - HOST=0.0.0.0
+      - OLLAMA_HOST=http://127.0.0.1:11434
+      - GUNICORN_VERSION=true
+    command: >
+      /bin/sh -c "
+      if [ \"$$USE_HTTPS\" = 'true' ]; then
+        gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:5000 --workers 1 --reload --keyfile /app/certs/key.pem --certfile /app/certs/cert.pem --chdir src app:app;
+      else
+        gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:5000 --workers 1 --reload --chdir src app:app;
+      fi"
+    security_opt:
+      - no-new-privileges:true  
+    cap_drop:
+      - ALL 
+    cap_add:
+      - NET_BIND_SERVICE                    
+    read_only: false            
+    tmpfs:
+      - /tmp                    
+    restart: unless-stopped
+    depends_on:
+      - ollama
+
+  nullvoid-scraper:
+    build:
+      context: ./scraper_service
+    network_mode: "host"
+    container_name: nullvoid-scraper
+    volumes:
+      - ./data:/app/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    security_opt:
+      - no-new-privileges:true
+
+    restart: unless-stopped
+    network_mode: "host"
+
+
+
+volumes:
+  ollama-data:

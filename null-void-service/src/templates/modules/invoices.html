@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Null-Void Facturación</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script>
+        (function () {
+            let __theme = localStorage.getItem('theme');
+            if (!__theme) { __theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+            document.documentElement.setAttribute('data-theme', __theme);
+        })();
+    </script>
+    <style>
+        :root,
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --surface-hi: rgba(51, 65, 85, 0.9);
+            --border: rgba(148, 163, 184, 0.2);
+            --border-hi: rgba(148, 163, 184, 0.4);
+            --indigo: #818cf8;
+            --indigo-dim: rgba(129, 140, 248, 0.2);
+            --text-main: #ffffff;
+            --text-dim: #f8fafc;
+            --text-muted: #cbd5e1;
+            --text-sub: #94a3b8;
+            --bg-card: #1e293b;
+            color-scheme: dark;
+        }
+
+        [data-theme="light"] {
+            --bg: #f1f5f9;
+            --surface: #ffffff;
+            --surface-hi: #f8fafc;
+            --border: rgba(99, 102, 241, 0.12);
+            --border-hi: rgba(99, 102, 241, 0.3);
+            --text-main: #000000;
+            --text-dim: #3730a3;
+            --text-muted: #334155;
+            --text-sub: #94a3b8;
+            --indigo: #4338ca;
+            --indigo-dim: rgba(79, 70, 229, 0.15);
+            --bg-card: #ffffff;
+            color-scheme: light;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: var(--text-main);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+
+        .btn-back {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: var(--text-main);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background: rgba(99, 102, 241, 0.25);
+        }
+
+        .monitor-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .monitor-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--indigo), #c084fc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            border: 1px solid;
+        }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}" />
+</head>
+
+<body>
+    <div id="view-invoices"
+        style="display: flex; flex-direction: column; height: calc(100vh - 40px); padding: 20px clamp(16px, 4vw, 32px);">
+        <div
+            style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background: var(--surface-hi); padding: 10px 20px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 10px;">
+            <button class="btn-back" onclick="location.href='/app'" style="margin: 0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                Volver
+            </button>
+            <div style="width: 1px; height: 24px; background: var(--border);"></div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim);">VISTAS:</span>
+                <button onclick="filterInvoices('all')" class="btn-mini">Limpiar filtros</button>
+                <select id="filter-year" onchange="filterInvoices('date')" class="select-mini">
+                    <option value="">Sin filtro (Año)</option>
+                </select>
+                <select id="filter-month" onchange="filterInvoices('date')" class="select-mini">
+                    <option value="">Sin filtro (Mes)</option>
+                    <option value="01">Enero</option>
+                    <option value="02">Febrero</option>
+                    <option value="03">Marzo</option>
+                    <option value="04">Abril</option>
+                    <option value="05">Mayo</option>
+                    <option value="06">Junio</option>
+                    <option value="07">Julio</option>
+                    <option value="08">Agosto</option>
+                    <option value="09">Septiembre</option>
+                    <option value="10">Octubre</option>
+                    <option value="11">Noviembre</option>
+                    <option value="12">Diciembre</option>
+                </select>
+                <select id="filter-client" onchange="filterInvoices('client')" class="select-mini">
+                    <option value="">Sin filtro (Cliente)</option>
+                </select>
+                <select id="filter-status" onchange="filterInvoices('status')" class="select-mini">
+                    <option value="">Sin filtro (Estado)</option>
+                    <option value="pagada">Pagadas</option>
+                    <option value="no_pagada">No Pagadas</option>
+                    <option value="a_cuenta">A Cuenta</option>
+                </select>
+                <input type="text" id="filter-search" list="search-suggestions" oninput="filterInvoices('search')"
+                    placeholder="Buscar factura..." class="select-mini"
+                    style="width: 150px; background: var(--bg-card); color: var(--text-main); padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.75rem; outline: none; transition: border-color 0.2s;">
+                <datalist id="search-suggestions"></datalist>
+            </div>
+            <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+
+                <button onclick="document.getElementById('invoice-file-input').click()" class="btn-primary"
+                    style="padding: 8px 16px; font-size: 0.75rem;">SUBIR FACTURA (PDF)</button>
+                <button id="btn-delete-selected" onclick="openDeleteModal()" class="btn-mini"
+                    style="display: none; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);">
+                    Eliminar Seleccionados (<span id="selected-count">0</span>)
+                </button>
+                <input type="file" id="invoice-file-input" style="display: none;" accept=".pdf" multiple
+                    onchange="handleInvoiceFileChange(this)">
+            </div>
+        </div>
+        <div
+            style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="overflow: auto; flex: 1;">
+                <table id="invoice-table"
+                    style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+                    <thead
+                        style="position: sticky; top: 0; background: var(--surface-hi); z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <tr>
+                            <th
+                                style="padding: 12px; border-bottom: 2px solid var(--border); width: 40px; text-align: center;">
+                                <input type="checkbox" id="master-checkbox" onclick="toggleAllInvoices(this.checked)">
+                            </th>
+                            <th onclick="toggleSort('invoice_number')"
+                                style="padding: 12px; border-bottom: 2px solid var(--border); width: 100px; cursor: pointer; user-select: none;">
+                                Nº SERIE <span id="sort-arrow-invoice_number">↑</span>
+                            </th>
+                            <th onclick="toggleSort('date')"
+                                style="padding: 12px; border-bottom: 2px solid var(--border); width: 120px; cursor: pointer; user-select: none;">
+                                FECHA <span id="sort-arrow-date" style="opacity: 0.3;">↕</span></th>
+                            <th style="padding: 12px; border-bottom: 2px solid var(--border);">CLIENTE</th>
+                            <th style="padding: 12px; border-bottom: 2px solid var(--border);">REFERENCIA</th>
+                            <th
+                                style="padding: 12px; border-bottom: 2px solid var(--border); text-align: right; width: 120px;">
+                                TOTAL</th>
+                            <th
+                                style="padding: 12px; border-bottom: 2px solid var(--border); width: 150px; text-align: center;">
+                                ESTADO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoice-table-body">
+                    </tbody>
+                </table>
+            </div>
+            <div
+                style="background: var(--surface-hi); padding: 10px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 30px;">
+                <div style="font-size: 0.75rem; color: var(--text-dim);">PAGADO: <span id="total-paid"
+                        style="color: #10b981; font-weight: bold;">0.00€</span></div>
+                <div style="font-size: 0.75rem; color: var(--text-dim);">PENDIENTE: <span id="total-unpaid"
+                        style="color: #ef4444; font-weight: bold;">0.00€</span></div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); font-weight: bold;">TOTAL: <span
+                        id="total-general">0.00€</span></div>
+            </div>
+        </div>
+    </div>
+    <div id="view-invoice-detail" style="display: none; padding: 20px clamp(16px, 4vw, 32px);">
+        <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 25px; gap: 10px;">
+            <button onclick="window.print()" class="btn-mini"
+                style="background: rgba(255,255,255,0.05); padding: 8px 16px;">Imprimir / PDF</button>
+            <button
+                onclick="document.getElementById('view-invoice-detail').style.display='none'; document.getElementById('view-invoices').style.display='flex';"
+                class="btn-mini"
+                style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; font-weight: 900; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%;">✕</button>
+        </div>
+        <div id="invoice-full-content" style="padding: 0; background: transparent; border: none;">
+        </div>
+    </div>
+    <div id="delete-confirm-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 11000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+        <div
+            style="background: var(--surface-hi); width: 400px; padding: 30px; border-radius: 20px; border: 1px solid rgba(239, 68, 68, 0.3); text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
+            <h3 style="margin-bottom: 10px; color: #fca5a5;">¿ELIMINAR FACTURAS?</h3>
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px;">Esta acción es
+                irreversible. Se eliminarán <b id="delete-modal-count">0</b> facturas.<br><br>Escribe
+                <b>CONFIRMAR</b> para proceder:
+            </p>
+            <input type="text" id="delete-confirm-input" placeholder="Escribe CONFIRMAR..."
+                oninput="validateDeleteConfirm(this.value)"
+                style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); padding: 12px; border-radius: 8px; color: #fff; text-align: center; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; outline: none;">
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeDeleteModal()" class="btn-mini" style="flex: 1; padding: 12px;">Cancelar</button>
+                <button id="btn-final-delete" onclick="executeDelete()" disabled class="btn-primary"
+                    style="flex: 1; background: #ef4444; border: none; opacity: 0.3; cursor: not-allowed;">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .btn-mini {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 6px 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-mini:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--indigo);
+        }
+
+        .select-mini {
+            background: var(--surface-hi);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 5px;
+            font-size: 0.7rem;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #invoice-table th {
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #invoice-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            transition: background 0.2s;
+        }
+
+        .row-pagada {
+            background: var(--inv-paid-bg) !important;
+            color: var(--inv-paid-text) !important;
+        }
+
+        .row-no_pagada {
+            background: var(--inv-unpaid-bg) !important;
+            color: var(--inv-unpaid-text) !important;
+        }
+
+        .row-a_cuenta {
+            background: var(--inv-pending-bg) !important;
+            color: var(--inv-pending-text) !important;
+        }
+
+        :root,
+        [data-theme="dark"] {
+            --inv-paid-bg: rgba(16, 185, 129, 0.15);
+            --inv-paid-text: #10b981;
+            --inv-unpaid-bg: rgba(239, 68, 68, 0.15);
+            --inv-unpaid-text: #fca5a5;
+            --inv-pending-bg: rgba(245, 158, 11, 0.15);
+            --inv-pending-text: #fbbf24;
+        }
+
+        [data-theme="light"] {
+            --inv-paid-bg: #dcfce7;
+            --inv-paid-text: #166534;
+            --inv-unpaid-bg: #fee2e2;
+            --inv-unpaid-text: #991b1b;
+            --inv-pending-bg: #fef3c7;
+            --inv-pending-text: #92400e;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+    </style>
+
+    <!-- NV Dialog overlay -->
+    <div id="nv-dialog-overlay"
+        style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px); align-items:center; justify-content:center;">
+        <div id="nv-dialog-box"
+            style="background:var(--bg-card, #202124); border-radius:8px; width:90%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,0.45); overflow:hidden; animation: nvDialogIn 0.15s ease-out;">
+            <div style="padding:24px 24px 0 24px;">
+                <div id="nv-dialog-title"
+                    style="font-size:1.1rem; font-weight:500; color:var(--text-main, #e8eaed); margin-bottom:16px;">
+                    Null-Void</div>
+                <p id="nv-dialog-text"
+                    style="font-size:0.875rem; color:var(--text-dim, #9aa0a6); line-height:1.5; margin-bottom:16px;">
+                </p>
+                <input type="text" id="nv-dialog-input"
+                    style="display:none; width:100%; box-sizing:border-box; background:var(--surface, #303134); border:2px solid var(--indigo, #8ab4f8); border-radius:4px; padding:10px 12px; color:var(--text-main, #e8eaed); font-size:0.95rem; outline:none;" />
+            </div>
+            <div style="padding:16px 24px; display:flex; justify-content:flex-end; gap:8px;">
+                <button id="nv-dialog-cancel"
+                    style="background:transparent; border:none; color:var(--indigo, #8ab4f8); font-size:0.875rem; font-weight:600; padding:8px 16px; border-radius:4px; cursor:pointer;">Cancelar</button>
+                <button id="nv-dialog-confirm"
+                    style="background:transparent; border:none; color:var(--indigo, #8ab4f8); font-size:0.875rem; font-weight:600; padding:8px 16px; border-radius:4px; cursor:pointer;">Aceptar</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes nvDialogIn {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+    </style>
+
+    <script>
+        window.TOKEN = "{{ token }}";
+        window.HEADERS = { 'X-Token': window.TOKEN, 'Content-Type': 'application/json' };
+        window.CURRENT_USER = "{{ user }}";
+
+        // Helper para alternar entre lista y detalle
+        window.showView = function (name) {
+            if (name === 'invoices') {
+                document.getElementById('view-invoice-detail').style.display = 'none';
+                document.getElementById('view-invoices').style.display = 'flex';
+            } else if (name === 'invoice-detail') {
+                document.getElementById('view-invoices').style.display = 'none';
+                document.getElementById('view-invoice-detail').style.display = 'block';
+            }
+        };
+
+        (function () {
+            const revokeKey = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+            window.addEventListener('pagehide', () => {
+                if (sessionStorage.getItem('nv_navigate')) {
+                    sessionStorage.removeItem('nv_navigate');
+                } else {
+                    sessionStorage.setItem('nv_revoke', revokeKey);
+                    navigator.sendBeacon('/api/logout?revoke_key=' + encodeURIComponent(revokeKey));
+                }
+            });
+            window.addEventListener('pageshow', () => {
+                const rk = sessionStorage.getItem('nv_revoke');
+                if (rk) {
+                    sessionStorage.removeItem('nv_revoke');
+                    fetch('/api/logout/revoke', {
+                        method: 'POST',
+                        headers: HEADERS,
+                        body: JSON.stringify({ revoke_key: rk })
+                    }).catch(() => { });
+                }
+            });
+        })();
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/invoices/main.js') }}"></script>
+
+            </body>
+</html>

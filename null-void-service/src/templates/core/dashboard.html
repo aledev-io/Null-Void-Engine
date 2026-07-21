@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="darkreader-lock" />
+    <title>Null-Void Engine</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script>
+        (function () {
+            let theme = localStorage.getItem('theme');
+            if (!theme) {
+                theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <script src="{{ url_for('static', filename='js/mobile-drag-drop.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/mobile-drag-drop.css') }}">
+    <script>
+        // Do not apply drag polyfill on mobile devices (where it blocks scroll)
+        if (window.innerWidth > 900) {
+            MobileDragDrop.polyfill({ holdToDrag: 250 });
+        }
+        window.addEventListener('touchmove', function () { }, { passive: true });
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}?v=1.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/dashboard.css') }}?v=1.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/responsive.css') }}" />
+    <style>
+        :root {
+            /* ── Backgrounds (dark-to-light: bg-primary → surface-hi) ── */
+            --bg-primary: #151f35;
+            /* main content area — lighter */
+            --bg-secondary: #111827;
+            /* topbar background */
+            --bg-card: #161d2f;
+            /* sidebar + cards — mid tone */
+            --surface: #161d2f;
+            --surface-hi: #1e2842;
+            /* card hover, raised elements */
+            --bg-tertiary: #1e2842;
+
+            /* ── Accent — indigo/violet ── */
+            --accent: #6366f1;
+            --accent-2: #8b5cf6;
+            --indigo: #6366f1;
+
+            /* ── Semantic ── */
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #6366f1;
+
+            /* ── Text hierarchy ── */
+            --text-main: #e8edf8;
+            --text-secondary: #8b95b0;
+            --text-muted: #4e5870;
+
+            /* ── Borders ── */
+            --border: rgba(255, 255, 255, 0.07);
+            --border-hover: rgba(99, 102, 241, 0.4);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+
+            --radius: 12px;
+            --radius-lg: 16px;
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="light"] {
+            /* ── Backgrounds ── */
+            --bg-primary: #f9fafb;
+            /* main content area */
+            --bg-secondary: #ffffff;
+            /* topbar */
+            --bg-card: #f3f4f6;
+            /* cards */
+            --surface: #f3f4f6;
+            --surface-hi: #e5e7eb;
+            /* card hover */
+            --bg-tertiary: #e5e7eb;
+
+            /* ── Accents ── */
+            --accent: #6366f1;
+            --accent-2: #8b5cf6;
+            --indigo: #6366f1;
+
+            /* ── Semantic ── */
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #6366f1;
+
+            /* ── Text ── */
+            --text-main: #1f2937;
+            --text-secondary: #4b5563;
+            --text-muted: #9ca3af;
+
+            /* ── Borders & shadows ── */
+            --border: rgba(0, 0, 0, 0.08);
+            --border-hover: rgba(0, 0, 0, 0.15);
+            --shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 8px 32px rgba(0, 0, 0, 0.04);
+        }
+
+        /* ── Light mode: sidebar white, content area neutral ── */
+        [data-theme="light"] .sidebar {
+            background: #f3f4f6 !important;
+            border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+        }
+
+        [data-theme="light"] #main {
+            background: #f9fafb !important;
+        }
+
+        [data-theme="light"] .sidebar .cloud-nav-item:hover,
+        [data-theme="light"] .sidebar .nav-btn:hover,
+        [data-theme="light"] .sidebar .nav-item:hover {
+            color: var(--accent) !important;
+        }
+
+        .sidebar-nav .nav-btn,
+        .sidebar-nav .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            position: relative;
+            font-size: 12px;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .nav-category {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 15px 0 5px 12px;
+        }
+
+        .sidebar-nav .nav-btn:hover,
+        .sidebar-nav .nav-item:hover {
+            background: rgba(110, 166, 254, 0.1) !important;
+            color: var(--accent) !important;
+            transform: translateX(2px);
+        }
+
+        .sidebar-nav .nav-btn.active,
+        .sidebar-nav .nav-item.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1)) !important;
+            color: var(--accent) !important;
+            border-left: 3px solid var(--accent) !important;
+            padding-left: 9px !important;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            font-size: 16px;
+        }
+
+        @media (hover: hover) {
+            .btn-icon:hover {
+                background: rgba(110, 166, 254, 0.1);
+                border-color: var(--accent);
+                color: var(--accent);
+                transform: translateY(-2px);
+            }
+        }
+
+        /* Evita que la sidebar scrollee junto con el resto de la página */
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            touch-action: pan-y;
+        }
+
+        .nv-modules {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 14px;
+        }
+
+        .nv-modules .nv-card {
+            grid-column: span 4;
+            background: rgba(18, 31, 59, .75);
+            border: 1px solid var(--border, rgba(255, 255, 255, .08));
+            border-radius: var(--radius, 14px);
+            padding: 16px;
+            box-shadow: var(--shadow, 0 10px 30px rgba(0, 0, 0, .35));
+            min-height: 130px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .nv-modules .nv-card .head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .nv-modules .nv-badge {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(255, 255, 255, .10);
+            background: rgba(255, 255, 255, .04);
+            flex: 0 0 auto;
+        }
+
+        .nv-modules .nv-badge svg {
+            opacity: .95;
+        }
+
+        .nv-modules .nv-card h3 {
+            margin: 0;
+            font-size: 15px;
+            letter-spacing: .2px;
+            color: var(--text-main, #e7eefc);
+        }
+
+        .nv-modules .nv-card p {
+            margin: 0;
+            color: var(--text-dim, #a9b7da);
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .nv-modules .nv-meta {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .nv-modules .nv-chip {
+            padding: 7px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border, rgba(255, 255, 255, .08));
+            color: var(--text-dim, #a9b7da);
+            font-size: 12px;
+            background: rgba(255, 255, 255, .02);
+        }
+
+        .nv-modules .nv-btn {
+            cursor: pointer;
+            border: none;
+            border-radius: 12px;
+            padding: 10px 12px;
+            background: linear-gradient(135deg, rgba(110, 168, 254, .95), rgba(139, 92, 246, .95));
+            color: #081022;
+            font-weight: 700;
+            letter-spacing: .2px;
+        }
+
+        .nv-modules .nv-btn:active {
+            transform: translateY(1px);
+        }
+
+        @media (max-width: 900px) {
+            .nv-modules .nv-card {
+                grid-column: span 6;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .nv-modules {
+                grid-template-columns: 1fr;
+            }
+
+            .nv-modules .nv-card {
+                grid-column: span 1;
+                min-height: 120px;
+            }
+        }
+    </style>
+    <script src="{{ url_for('static', filename='js/lib/chart.umd.min.js') }}"></script>
+</head>
+
+<body>
+
+    <!-- Google Drive Style Dialog -->
+    <div id="nv-dialog-overlay"
+        style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px); align-items:center; justify-content:center;">
+        <div id="nv-dialog-box"
+            style="background:var(--bg-card, #202124); border-radius:8px; width:90%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,0.45); overflow:hidden; animation: nvDialogIn 0.15s ease-out;">
+            <div style="padding:24px 24px 0 24px;">
+                <div id="nv-dialog-title"
+                    style="font-size:1.1rem; font-weight:500; color:var(--text-main, #e8eaed); margin-bottom:16px;">
+                    Cambiar nombre</div>
+                <p id="nv-dialog-text"
+                    style="font-size:0.875rem; color:var(--text-dim, #9aa0a6); line-height:1.5; margin-bottom:16px;">
+                </p>
+                <input type="text" id="nv-dialog-input"
+                    style="display:none; width:100%; box-sizing:border-box; background:var(--surface, #303134); border:2px solid var(--indigo, #8ab4f8); border-radius:4px; padding:10px 12px; color:var(--text-main, #e8eaed); font-size:0.95rem; outline:none; transition:border-color 0.2s;" />
+            </div>
+            <div style="padding:16px 24px; display:flex; justify-content:flex-end; gap:8px;">
+                <button id="nv-dialog-cancel"
+                    style="background:transparent; border:none; color:var(--indigo, #8ab4f8); font-size:0.875rem; font-weight:600; padding:8px 16px; border-radius:4px; cursor:pointer; letter-spacing:0.01em; transition:background 0.15s;">Cancelar</button>
+                <button id="nv-dialog-confirm"
+                    style="background:transparent; border:none; color:var(--indigo, #8ab4f8); font-size:0.875rem; font-weight:600; padding:8px 16px; border-radius:4px; cursor:pointer; letter-spacing:0.01em; transition:background 0.15s;">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="layout-wrapper">
+        <!-- Barra lateral -->
+        <aside id="main-sidebar" class="sidebar">
+            <div class="sidebar-header"
+                onclick="showView('menu')"
+                style="display: flex; align-items: center; gap: 12px; padding: 12px 8px; margin-bottom: 12px; cursor: pointer; transition: opacity 0.2s;"
+                onmouseover="this.style.opacity='0.8'"
+                onmouseout="this.style.opacity='1'">
+                <!-- Logo Badge -->
+                <div
+                    style="display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px;">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                        <defs>
+                            <linearGradient id="nv-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="var(--accent, #6366f1)" />
+                                <stop offset="100%" stop-color="var(--accent-2, #8b5cf6)" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="url(#nv-grad)"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <span style="font-weight: 700; font-size: 14px; color: var(--text-main);">Null-Void</span>
+            </div>
+
+
+            <div class="sidebar-scrollable">
+                <nav id="sidebar-nav-menu" class="sidebar-nav">
+                    <!-- Apps go here via JS -->
+                </nav>
+
+                <!-- Footer Profile Moved into Scrollable -->
+                <div class="sidebar-footer-inline"
+                    style="padding: 8px 24px; border-top: 1px solid var(--border); margin-top: auto;">
+                    <div class="tb-user" id="profile-trigger">
+                        <div class="tb-avatar" id="nav-avatar">
+                            <img src="/api/system/user/avatar/{{ user_id }}" alt=""
+                                style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;"
+                                onerror="this.outerHTML='<span>{{ user[0]|upper }}</span>'">
+                        </div>
+                        <span id="nav-username">{{ user }}</span>
+                        <div class="profile-dropdown" id="profile-dropdown"
+                            style="padding: 4px; border-radius: 12px; width: 228px; min-width: auto; background: var(--bg-tertiary, #1a2847); border: 1px solid var(--border); left: -12px;">
+                            <div class="cloud-nav-item" onclick="showView('config')"
+                                style="padding:5px 12px;display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:10px;font-size:0.80rem;cursor:pointer;color:var(--text-main); border-radius:8px; transition: background 0.2s; width: 100%; box-sizing: border-box;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.05)'"
+                                onmouseout="this.style.background='transparent'">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                <span data-i18n="manage_profile">Administrar Perfil</span>
+                            </div>
+                            <div class="cloud-nav-item" id="btn-logout-dropdown"
+                                style="padding:5px 12px;display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:10px;font-size:0.80rem;cursor:pointer;color:#ef4444; border-radius:8px; transition: background 0.2s; margin-top: 2px; width: 100%; box-sizing: border-box;"
+                                onmouseover="this.style.background='rgba(239,68,68,0.1)'"
+                                onmouseout="this.style.background='transparent'">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                                <span data-i18n="logout">Cerrar sesión</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Contenido Principal -->
+        <div class="main-content-wrapper">
+            <div id="topbar"
+                style="justify-content: space-between; align-items: center; padding: 0 24px; gap: 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); height: auto; min-height: 60px;">
+                <div class="tb-left" style="display: flex; align-items: center; gap: 12px;">
+                    <button id="mobile-menu-btn" class="btn-theme"
+                        style="display: none; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.04); color: var(--text-secondary); cursor: pointer;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <div
+                        style="font-size: 12px; font-weight: 500; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        {{ user }}
+                    </div>
+                </div>
+                <div class="tb-right" style="gap: 12px; display: flex; align-items: center;">
+
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn-icon" id="btn-toggle-lang" onclick="toggleLanguage()" title="Cambiar idioma"
+                            data-i18n-title="lang_title" style="width: 32px; height: 32px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path
+                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                                </path>
+                            </svg>
+                        </button>
+                        <button class="btn-icon" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema"
+                            data-i18n-title="theme_title" style="width: 32px; height: 32px;">
+                            <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            </svg>
+                        </button>
+                        <button class="btn-icon" id="btn-notifications-history" title="Historial de notificaciones"
+                            data-i18n-title="notif_title" style="width: 32px; height: 32px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="main">
+                <div id="view-menu" class="view active">
+
+
+
+
+                    <div class="wp-dashboard-container"
+                        style="display: flex; flex-direction: column; padding: 20px 24px; gap: 20px;">
+
+                        <!-- WELCOME BANNER -->
+                        <div id="welcome-banner" class="welcome-banner"
+                            style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-lg); padding: 20px 24px; position: relative; overflow: hidden; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 20px;">
+                            <button onclick="document.getElementById('welcome-banner').style.display='none'"
+                                style="position: absolute; top: 16px; right: 16px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: 8px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;"
+                                onmouseover="this.style.background='var(--border)'; this.style.color='var(--text-main)'"
+                                onmouseout="this.style.background='transparent'; this.style.color='var(--text-muted)'">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                            <div
+                                style="position: absolute; right: -30px; top: -30px; width: 150px; height: 150px; background: linear-gradient(135deg, var(--accent), transparent); opacity: 0.05; border-radius: 50%; pointer-events: none;">
+                            </div>
+
+                            <div class="welcome-text-content" style="position: relative; z-index: 1;">
+                                <h1 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text-main);"
+                                    data-i18n="dash_welcome">
+                                    ¡Hola de nuevo! 👋</h1>
+                                <p style="color: var(--text-secondary); line-height: 1.5; font-size: 12px; margin-bottom: 12px; max-width: 400px;"
+                                    data-i18n="dash_welcome_sub">
+                                    Tu panel de control está completamente configurado. Accede rápidamente a tus módulos
+                                    favoritos desde aquí.</p>
+                                <div class="welcome-buttons" style="display: flex; gap: 10px;">
+                                    <button onclick="showView('onboarding'); if(window.PushNotifications) window.PushNotifications.init();"
+                                        style="padding: 8px 16px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: none; border-radius: 8px; color: #fff; font-weight: 600; font-size: 12px; cursor: pointer; transition: var(--transition);"
+                                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(110, 166, 254, 0.3)'"
+                                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                                        <span data-i18n="dash_start">Comenzar</span>
+                                    </button>
+
+                                </div>
+                            </div>
+
+                            <div class="welcome-icon-box"
+                                style="width: 120px; height: 120px; background: linear-gradient(135deg, rgba(110, 166, 254, 0.15), rgba(139, 92, 246, 0.15)); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; color: var(--accent);">
+                                <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z">
+                                    </path>
+                                    <path
+                                        d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z">
+                                    </path>
+                                    <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path>
+                                    <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- FILA 1: Tareas pendientes + Calendario -->
+                        <div class="dashboard-grid">
+                            <div class="dash-card">
+                                <div class="dash-card-header"
+                                    style="flex-direction: column; align-items: flex-start; gap: 12px;">
+                                    <div>
+                                        <h3 data-i18n="dash_events_tasks">Eventos y Tareas</h3>
+                                        <p data-i18n="dash_activity_summary">Tu resumen de actividad al día</p>
+                                    </div>
+                                    <div id="tasks-filter-pills" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                        <div class="filter-pill" data-filter="upcoming"
+                                            style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: var(--accent); color: white; border: 1px solid var(--accent); transition: all 0.2s;"
+                                            data-i18n="dash_filter_upcoming">Próximos</div>
+                                        <div class="filter-pill" data-filter="events"
+                                            style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s;"
+                                            data-i18n="dash_filter_events">Eventos</div>
+                                        <div class="filter-pill" data-filter="tasks"
+                                            style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s;"
+                                            data-i18n="dash_filter_tasks">Tareas</div>
+                                        <div class="filter-pill" data-filter="all"
+                                            style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s;"
+                                            data-i18n="dash_filter_all">Todos</div>
+                                        <div class="filter-pill" data-filter="past"
+                                            style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s;"
+                                            data-i18n="dash_filter_past">Pasados</div>
+                                    </div>
+                                </div>
+                                <div class="dash-list" id="pending-tasks-list">
+                                    <!-- Se llena vía JS con eventos del calendario -->
+                                </div>
+                            </div>
+
+                            <div class="dash-card">
+                                <div class="dash-card-header">
+                                    <div>
+                                        <h3 data-i18n="app_name_calendar">Calendario</h3>
+                                    </div>
+                                </div>
+                                <div class="mock-calendar">
+                                    <div class="cal-nav">
+                                        <span>‹</span><span data-i18n="cal_july">Julio</span><span>›</span>
+                                    </div>
+                                    <div class="cal-grid">
+                                        <div class="cal-day head" data-i18n="cal_mon">L</div>
+                                        <div class="cal-day head" data-i18n="cal_tue">M</div>
+                                        <div class="cal-day head" data-i18n="cal_wed">M</div>
+                                        <div class="cal-day head" data-i18n="cal_thu">J</div>
+                                        <div class="cal-day head" data-i18n="cal_fri">V</div>
+                                        <div class="cal-day head" data-i18n="cal_sat">S</div>
+                                        <div class="cal-day head" data-i18n="cal_sun">D</div>
+                                        <!-- días reales via JS -->
+                                        <div class="cal-day">7</div>
+                                        <div class="cal-day">8</div>
+                                        <div class="cal-day today">9</div>
+                                        <div class="cal-day">10</div>
+                                        <div class="cal-day">11</div>
+                                        <div class="cal-day">12</div>
+                                        <div class="cal-day">13</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+
+                    </div>
+
+
+                </div>
+                {% include 'core/views/server_admin.html' %}
+                {% include 'core/views/config.html' %}
+                {% include 'core/views/onboarding.html' %}
+                {% include 'core/views/telemetry.html' %}
+                {% include 'core/views/reminders.html' %}
+                {% include 'core/components/modals.html' %}
+            </div>
+        </div> <!-- Cerrar layout-wrapper -->
+        <script>
+            window.TOKEN = "{{ token }}";
+            window.HEADERS = { 'X-Token': window.TOKEN, 'Content-Type': 'application/json' };
+            window.CURRENT_USER = "{{ user }}";
+            window.CURRENT_USER_ID = "{{ user_id }}";
+            window.currentLang = localStorage.getItem('lang') || (navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en');
+        </script>
+
+        <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
+        <!-- Scripts del Dashboard -->
+        <script type="module" src="{{ url_for('static', filename='js/core/push_notifications.js') }}"></script>
+        <script type="module" src="{{ url_for('static', filename='js/dashboard/system.js') }}"></script>
+        <script type="module" src="{{ url_for('static', filename='js/dashboard/ui.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/lib/chart.js') }}"></script>
+        <script type="module" src="{{ url_for('static', filename='js/telemetry/main.js') }}"></script>
+        <script type="module" src="{{ url_for('static', filename='js/dashboard/main.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dashboard/legacy_inline.js') }}"></script>
+</body>
+
+</html>

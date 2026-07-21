@@ -1,0 +1,172 @@
+/* ─── TOKENS & DESIGN SYSTEM ─────────────────────────────────────────────── */
+:root {
+    /* Global Backgrounds */
+    --bg: #0f172a;
+    --surface: rgba(30, 41, 59, 0.7);
+    --surface-hi: rgba(51, 65, 85, 0.9);
+    --bg-card: #1e293b;
+    --panel-right-bg: #0c0f1a;
+
+    /* Borders */
+    --border: rgba(148, 163, 184, 0.2);
+    --border-hi: rgba(148, 163, 184, 0.4);
+
+    /* Typography */
+    --text-main: #ffffff;
+    --text-heading: #f1f5f9;
+    --text-dim: #f8fafc;
+    --text-sub: #4a6080;
+    --text-muted: #cbd5e1;
+    --text-label: #3d5575;
+
+    /* Accents (Indigo) */
+    --indigo: #818cf8;
+    --indigo-dim: rgba(129, 140, 248, 0.2);
+    --badge-bg: rgba(99, 102, 241, 0.13);
+    --badge-border: rgba(99, 102, 241, 0.35);
+    --badge-color: #818cf8;
+    --badge-dot: #6366f1;
+
+    /* Metrics Colors */
+    --cpu: #f87171;
+    --ram: #c084fc;
+    --temp: #fb923c;
+
+    /* Inputs */
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --input-border: rgba(99, 102, 241, 0.22);
+    --input-text: #e2e8f0;
+    --input-placeholder: rgba(148, 163, 184, 0.38);
+
+    /* Auth Specific Overlays */
+    --branding-title: #ffffff;
+    --branding-desc: rgba(226, 232, 240, 0.72);
+    --title-shadow: none;
+    --desc-shadow: none;
+    --overlay: rgba(7, 9, 15, 0.65);
+    --panel-sep: rgba(99, 102, 241, 0.14);
+    --panel-sep-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
+
+    /* Cloud Components */
+    --cloud-nav-text: #f1f5f9;
+    --cloud-nav-bg-active: rgba(129, 140, 248, 0.25);
+    --cloud-nav-text-active: #ffffff;
+    --cloud-row-border: rgba(255, 255, 255, 0.1);
+    --cloud-row-hover: rgba(255, 255, 255, 0.05);
+
+    /* Toggles */
+    --toggle-bg: rgba(255, 255, 255, 0.07);
+    --toggle-border: rgba(255, 255, 255, 0.12);
+    --toggle-color: #94a3b8;
+
+    /* Nav Items */
+    --nav-hover: rgba(255, 255, 255, 0.05);
+    --nav-active: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+[data-theme="light"] {
+    /* Global Backgrounds */
+    --bg: #f9fafb;
+    --surface: #ffffff;
+    --surface-hi: #f3f4f6;
+    --bg-card: #ffffff;
+    --panel-right-bg: #f3f4f6;
+
+    /* Borders */
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hi: rgba(0, 0, 0, 0.15);
+
+    /* Typography */
+    --text-main: #000000;
+    --text-heading: #0f172a;
+    --text-dim: #3730a3;
+    --text-sub: #4b5d78;
+    --text-muted: #334155;
+    --text-label: #4f46e5;
+
+    /* Accents (Indigo) */
+    --indigo: #4338ca;
+    --indigo-dim: rgba(79, 70, 229, 0.15);
+    --badge-bg: rgba(221, 222, 234, 0.836);
+    --badge-border: rgba(207, 208, 210, 0.417);
+    --badge-color: #4f46e5;
+    --badge-dot: #6366f1;
+
+    /* Metrics Colors */
+    --cpu: #b91c1c;
+    --ram: #7e22ce;
+    --temp: #c2410c;
+
+    /* Inputs */
+    --input-bg: rgba(255, 255, 255, 0.75);
+    --input-border: rgba(99, 102, 241, 0.22);
+    --input-text: #1e293b;
+    --input-placeholder: rgba(71, 85, 105, 0.40);
+
+    /* Auth Specific Overlays */
+    --branding-title: #0f172a;
+    --branding-desc: #2a3233;
+    --title-shadow: none;
+    --desc-shadow: none;
+    --overlay: rgba(255, 255, 255, 0.65);
+    --panel-sep: rgba(99, 102, 241, 0.14);
+    --panel-sep-shadow: -10px 0 40px rgba(0, 0, 0, 0.1);
+
+    /* Cloud Components */
+    --cloud-nav-text: #1a1c1e;
+    --cloud-nav-bg-active: #e8f0fe;
+    --cloud-nav-text-active: #174ea6;
+    --cloud-row-border: rgba(0, 0, 0, 0.1);
+    --cloud-row-hover: rgba(0, 0, 0, 0.04);
+
+    /* Toggles */
+    --toggle-bg: rgba(0, 0, 0, 0.05);
+    --toggle-border: rgba(0, 0, 0, 0.10);
+    --toggle-color: #64748b;
+
+    /* Nav Items */
+    --nav-hover: rgba(0, 0, 0, 0.03);
+    --nav-active: rgba(0, 0, 0, 0.06);
+
+    color-scheme: light;
+}
+
+/* Prevenir el Flash de Traducción (FOUC) */
+body {
+    opacity: 0;
+}
+
+body.lang-loaded {
+    opacity: 1;
+    transition: opacity 0.15s ease-out;
+}
+
+
+/* Global Back Button */
+.btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-back:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-hi);
+    transform: translateX(-2px);
+}

@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Null-Void Excel</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script>
+        (function () {
+            let __theme = localStorage.getItem('theme');
+            if (!__theme) { __theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+            document.documentElement.setAttribute('data-theme', __theme);
+        })();
+    </script>
+    <style>
+        :root,
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --surface-hi: rgba(51, 65, 85, 0.9);
+            --border: rgba(148, 163, 184, 0.2);
+            --border-hi: rgba(148, 163, 184, 0.4);
+            --indigo: #818cf8;
+            --indigo-light: rgba(129, 140, 248, 0.15);
+            --indigo-lighter: rgba(129, 140, 248, 0.05);
+            --text-main: #ffffff;
+            --text-dim: #f8fafc;
+            --text-muted: #cbd5e1;
+            --text-sub: #94a3b8;
+            --bg-card: #1e293b;
+            --success: #10b981;
+            --success-light: rgba(16, 185, 129, 0.1);
+            --danger: #ef4444;
+            --danger-light: rgba(239, 68, 68, 0.1);
+            --warning: #f59e0b;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            /* Typography scale */
+            --font-xs: 12px;
+            --font-sm: 13px;
+            --font-base: 14px;
+            --font-md: 15px;
+            --font-lg: 16px;
+            --font-xl: 18px;
+            --font-2xl: 20px;
+            /* Spacing scale */
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 24px;
+            /* Border radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            color-scheme: dark;
+        }
+
+        [data-theme="light"] {
+            --bg: #f1f5f9;
+            --surface: #ffffff;
+            --surface-hi: #f8fafc;
+            --border: rgba(99, 102, 241, 0.12);
+            --border-hi: rgba(99, 102, 241, 0.3);
+            --text-main: #000000;
+            --text-dim: #3730a3;
+            --text-muted: #334155;
+            --text-sub: #94a3b8;
+            --indigo: #4338ca;
+            --indigo-light: rgba(79, 70, 229, 0.15);
+            --indigo-lighter: rgba(79, 70, 229, 0.05);
+            --bg-card: #ffffff;
+            --success: #059669;
+            --success-light: rgba(5, 150, 105, 0.1);
+            --danger: #dc2626;
+            --danger-light: rgba(220, 38, 38, 0.1);
+            --warning: #d97706;
+            --warning-light: rgba(217, 119, 6, 0.1);
+            color-scheme: light;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: var(--text-main);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.25);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.4);
+        }
+
+        /* ═══════════════════════════════════════════════════════════ */
+        /* LAYOUT PRINCIPAL */
+        /* ═══════════════════════════════════════════════════════════ */
+
+        #view-budgets {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: var(--space-4);
+            gap: var(--space-4);
+        }
+
+        /* Header */
+        .nv-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--space-4);
+            padding-bottom: var(--space-3);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nv-header-left {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .btn-back {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            background: var(--indigo-light);
+            border: 1px solid var(--border-hi);
+            color: var(--text-main);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-size: var(--font-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background: var(--indigo-lighter);
+        }
+
+        .btn-back svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .monitor-title {
+            font-size: var(--font-2xl);
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--indigo), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nv-header-right {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-xs);
+            font-weight: 700;
+            border: 1px solid var(--success);
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        /* Toolbar */
+        .nv-toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            background: var(--surface-hi);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-2) var(--space-3);
+        }
+
+        .formula-bar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            flex: 1;
+        }
+
+        .formula-bar-label {
+            width: 40px;
+            text-align: center;
+            font-size: var(--font-xs);
+            font-weight: 700;
+            color: var(--text-dim);
+        }
+
+        .formula-bar-fx {
+            font-family: serif;
+            font-weight: bold;
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: var(--font-base);
+            user-select: none;
+        }
+
+        .formula-bar input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-size: var(--font-base);
+        }
+
+        .formula-bar input::placeholder {
+            color: var(--text-sub);
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+        }
+
+        .toolbar-buttons {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        /* Content Area */
+        .nv-content {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-4);
+            flex: 1;
+            min-height: 0;
+            align-items: flex-start;
+        }
+
+        /* Sidebar */
+        .nv-sidebar {
+            width: 220px;
+            background: var(--surface-hi);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .nv-sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nv-sidebar-tab-btn {
+            flex: 1;
+            padding: var(--space-3) var(--space-2);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-main);
+            font-size: var(--font-xs);
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--space-2);
+            transition: all 0.2s;
+        }
+
+        .nv-sidebar-tab-btn.active {
+            border-bottom-color: var(--indigo);
+            background: transparent;
+            color: var(--text-main);
+        }
+
+        .nv-sidebar-tab-btn:not(.active) {
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-sub);
+        }
+
+        .nv-sidebar-tab-btn:hover:not(.active) {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .nv-sidebar-content {
+            flex: 1;
+            padding: var(--space-4);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+        }
+
+        .nv-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        .nv-form-label {
+            font-size: var(--font-xs);
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .nv-form-input {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-size: var(--font-base);
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .nv-form-input:focus {
+            border-color: var(--indigo);
+            background: rgba(129, 140, 248, 0.05);
+        }
+
+        .nv-form-hint {
+            font-size: var(--font-xs);
+            color: var(--text-muted);
+        }
+
+        .nv-sidebar-spacer {
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--indigo), #4f46e5);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            font-size: var(--font-base);
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--space-2);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-danger {
+            background: transparent;
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            font-size: var(--font-base);
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-light);
+        }
+
+        /* Grid */
+        .nv-grid-container {
+            flex: 0 0 auto;
+            max-width: fit-content;
+            overflow: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            position: relative;
+        }
+
+        #excel-grid {
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        #excel-grid th {
+            background: var(--surface-hi);
+            color: var(--text-main);
+            font-size: var(--font-xs);
+            font-weight: 700;
+            padding: var(--space-2);
+            border: 1px solid var(--border);
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            width: 100px;
+        }
+
+        #excel-grid .row-num {
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-size: var(--font-xs);
+            font-weight: 700;
+            padding: var(--space-2);
+            border: 1px solid var(--border);
+            text-align: center;
+            width: 65px;
+            min-width: 65px;
+            position: sticky;
+            left: 0;
+            z-index: 1;
+        }
+
+        #excel-grid td {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.2);
+            transition: background 0.2s;
+        }
+
+        #excel-grid td:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        #excel-grid input {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            padding: 0 var(--space-2);
+            font-size: var(--font-base);
+            outline: none;
+        }
+
+        #excel-grid input:focus {
+            background: rgba(99, 102, 241, 0.15);
+            box-shadow: inset 0 0 0 2px var(--indigo);
+        }
+
+        /* Debug Panel */
+        .nv-debug-panel {
+            width: 220px;
+            background: var(--danger-light);
+            border: 1px dashed var(--border-hi);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+            overflow: hidden;
+            max-height: 500px;
+        }
+
+        .nv-debug-header {
+            color: var(--danger);
+            font-size: var(--font-sm);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .nv-debug-logs {
+            font-family: 'Courier New', monospace;
+            font-size: var(--font-xs);
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+            color: var(--danger);
+        }
+
+        /* Footer */
+        .nv-footer {
+            background: var(--surface-hi);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .nv-footer-header {
+            padding: var(--space-4);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .nv-footer-header:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .nv-footer-title {
+            font-size: var(--font-base);
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .nv-footer-toggle {
+            font-size: var(--font-xs);
+            color: var(--text-sub);
+            transition: transform 0.2s;
+        }
+
+        .nv-footer-toggle.expanded {
+            transform: rotate(180deg);
+        }
+
+        .nv-footer-content {
+            padding: var(--space-4);
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-5);
+            font-size: var(--font-sm);
+            color: var(--text-sub);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .nv-footer-content.hidden {
+            display: none;
+        }
+
+        .nv-footer-item {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-1);
+        }
+
+        .nv-footer-item-label {
+            font-weight: 600;
+            color: var(--text-main);
+            font-size: var(--font-xs);
+        }
+
+        /* Sidebar Footer & User Menu */
+        .sidebar-footer {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: transparent;
+            cursor: pointer;
+            transition: background 0.2s;
+            flex-shrink: 0;
+            margin-top: auto;
+        }
+
+        .sidebar-footer:hover {
+            background: var(--surface-hi);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .user-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            opacity: 1;
+            transition: opacity 0.2s;
+            color: var(--text-main);
+        }
+
+        .user-menu-panel {
+            position: absolute;
+            bottom: 70px;
+            left: 10px;
+            width: 240px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            display: none;
+            flex-direction: column;
+            padding: 8px;
+            z-index: 100;
+            animation: slideUp 0.2s ease-out;
+        }
+
+        .user-menu-panel.show {
+            display: flex;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .menu-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: var(--text-main);
+        }
+
+        .menu-item:hover {
+            background: var(--surface-hi);
+        }
+
+        .menu-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 8px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 1280px) {
+            .nv-debug-panel {
+                width: 240px;
+            }
+
+            .nv-sidebar {
+                width: 260px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .nv-content {
+                gap: var(--space-3);
+            }
+        }
+
+        @media (max-width: 768px) {
+            #view-budgets {
+                padding: var(--space-3);
+                gap: var(--space-3);
+            }
+
+            .nv-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: var(--space-2);
+                padding-bottom: var(--space-2);
+            }
+
+            .nv-header-right {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .nv-content {
+                flex-direction: column;
+                gap: var(--space-3);
+            }
+
+            .nv-sidebar {
+                width: 100%;
+                max-height: 50vh;
+            }
+
+            .nv-grid-container {
+                min-height: 400px;
+            }
+        }
+
+        .excel-mobile-header {
+            display: none;
+        }
+
+
+        /* ═══════════════════════════════════════════════════════════ */
+        /* MOBILE RESPONSIVE - 356px width */
+        /* ═══════════════════════════════════════════════════════════ */
+
+        @media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
+            /* Sidebar - Collapsible */
+            .global-sidebar {
+                position: absolute;
+                left: -260px;
+                top: 0;
+                bottom: 0;
+                width: 260px;
+                height: 100vh;
+                background: var(--bg-card) !important;
+                border-right: 1px solid var(--border);
+                border-bottom: none;
+                z-index: 1000 !important;
+                box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
+                transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            .global-sidebar.expanded {
+                left: 0;
+            }
+
+            .excel-mobile-header {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                padding: 10px 16px;
+                min-height: 60px;
+                border-bottom: 1px solid var(--border);
+                background: var(--bg-card);
+                z-index: 990;
+            }
+
+            .excel-mobile-actions {
+                display: flex !important;
+            }
+
+            .excel-mobile-header .title {
+                font-weight: bold;
+                font-size: 1.1rem;
+                color: var(--text-main);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            /* Sidebar Toggle Button */
+            .sidebar-toggle-btn {
+                width: 40px;
+                height: 40px;
+                background: transparent;
+                border: none;
+                color: var(--text-main);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-size: 1.5rem;
+                padding: 4px;
+                margin-left: -5px;
+            }
+
+            .sidebar-toggle-btn:active {
+                transform: scale(0.95);
+            }
+
+            /* Sidebar Overlay */
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(2px);
+                z-index: 999;
+                animation: fadeIn 0.2s ease-out;
+            }
+
+            .sidebar-overlay.show {
+                display: block;
+            }
+
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                }
+
+                to {
+                    opacity: 1;
+                }
+            }
+
+            /* Main Content Area */
+            main {
+                flex: 1;
+                overflow: hidden;
+            }
+
+            #view-budgets {
+                padding: var(--space-2) !important;
+                gap: var(--space-2) !important;
+                height: 100%;
+            }
+
+            /* Header */
+            .nv-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: var(--space-2);
+                padding-bottom: var(--space-2);
+                padding-top: 0;
+            }
+
+            .nv-header-left {
+                width: 100%;
+            }
+
+            .nv-header-right {
+                display: none; /* Hide top-right actions on mobile, they move to sidebar */
+            }
+
+            .nv-header-right button {
+                flex: 1;
+                min-width: 70px;
+                font-size: var(--font-xs) !important;
+                padding: var(--space-2) !important;
+            }
+
+            .badge {
+                font-size: 10px;
+                padding: 4px 8px !important;
+            }
+
+            .monitor-title {
+                font-size: var(--font-lg);
+            }
+
+            /* Toolbar */
+            .nv-toolbar {
+                flex-direction: column;
+                padding: var(--space-2) !important;
+                gap: var(--space-2);
+            }
+
+            .formula-bar {
+                flex-direction: column;
+                gap: var(--space-1);
+            }
+
+            .formula-bar-label {
+                width: 100%;
+                text-align: left;
+                font-size: 11px;
+            }
+
+            /* Content Area */
+            .nv-content {
+                flex-direction: column;
+                gap: var(--space-2) !important;
+                align-items: stretch;
+                justify-content: flex-start;
+            }
+
+            /* Sidebar Content */
+            .nv-sidebar {
+                width: 100% !important;
+                border-radius: var(--radius-md);
+            }
+
+            .nv-sidebar-tab-btn {
+                font-size: 11px;
+                padding: var(--space-2) !important;
+            }
+
+            .nv-sidebar-content {
+                padding: var(--space-3) !important;
+                gap: var(--space-2) !important;
+            }
+
+            .nv-form-label {
+                font-size: 11px;
+            }
+
+            .nv-form-input {
+                padding: var(--space-1) var(--space-2) !important;
+                font-size: var(--font-base);
+            }
+
+            .btn-primary,
+            .btn-danger {
+                padding: var(--space-2) !important;
+                font-size: var(--font-xs) !important;
+                font-weight: 600;
+            }
+
+            /* Grid Container */
+            .nv-grid-container {
+                width: 100%;
+                max-height: 350px;
+                border-radius: var(--radius-md);
+                overflow-x: auto;
+                overflow-y: auto;
+            }
+
+            #excel-grid {
+                min-width: 100%;
+            }
+
+            #excel-grid th {
+                width: 75px;
+                padding: var(--space-1) !important;
+                font-size: 10px;
+            }
+
+            #excel-grid .row-num {
+                width: 45px;
+                min-width: 45px;
+                padding: var(--space-1) !important;
+                font-size: 10px;
+            }
+
+            #excel-grid td {
+                height: 30px;
+            }
+
+            #excel-grid input {
+                font-size: var(--font-sm);
+                padding: 0 var(--space-1) !important;
+            }
+
+            /* Debug Panel */
+            .nv-debug-panel {
+                width: 100% !important;
+                max-height: 120px;
+                padding: var(--space-2) !important;
+                border-radius: var(--radius-md);
+            }
+
+            .nv-debug-logs {
+                font-size: 10px;
+                gap: var(--space-1) !important;
+            }
+
+            /* Footer */
+            .nv-footer {
+                border-radius: var(--radius-md);
+            }
+
+            .nv-footer-header {
+                padding: var(--space-2) !important;
+                font-size: var(--font-sm);
+            }
+
+            .nv-footer-content {
+                gap: var(--space-3) !important;
+                font-size: var(--font-xs);
+                max-height: 120px;
+            }
+
+            /* Python Tab */
+            #python-code {
+                min-height: 120px;
+                font-size: 12px;
+                padding: var(--space-2) !important;
+            }
+
+            /* Chatbot */
+            #chatbot-widget {
+                bottom: 16px !important;
+                right: 16px !important;
+            }
+
+            #chatbot-toggle-btn {
+                width: 50px !important;
+                height: 50px !important;
+            }
+
+            #chatbot-window {
+                width: 100% !important;
+                max-width: calc(100vw - 32px) !important;
+                height: 60vh !important;
+                border-radius: 12px;
+            }
+
+            /* Dialog */
+            #nv-dialog-box {
+                width: 90% !important;
+                max-width: 300px !important;
+            }
+
+            #nv-dialog-title {
+                font-size: var(--font-md);
+            }
+
+            /* Removed hidden footer rules */
+        }
+
+        #tab-python {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        #python-code {
+            flex: 1;
+            min-height: 300px;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: #a5b4fc;
+            font-family: 'Courier New', monospace;
+            font-size: var(--font-sm);
+            padding: var(--space-3);
+            outline: none;
+            resize: vertical;
+            line-height: 1.5;
+        }
+
+        #python-code::placeholder {
+            color: rgba(165, 180, 252, 0.5);
+        }
+
+        #python-status {
+            font-size: var(--font-xs);
+            color: var(--text-dim);
+            min-height: 20px;
+        }
+
+        #btn-run-python {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: var(--space-2) var(--space-3);
+            font-size: var(--font-xs);
+            font-weight: 900;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+
+        #btn-run-python:hover {
+            background: #ffed4e;
+        }
+
+        #btn-run-python:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <div class="app-layout" style="display: flex; height: 100vh; width: 100vw;">
+        <!-- GLOBAL SIDEBAR -->
+        <aside class="global-sidebar" id="global-sidebar"
+            style="width: 260px; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 20;">
+            <div
+                style="padding: 24px; display: flex; align-items: center; gap: 12px; font-weight: bold; font-size: 1.1rem; border-bottom: 1px solid var(--border);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                Excel Engine
+            </div>
+            <div style="flex: 1; padding: 16px 12px; display: flex; flex-direction: column; overflow-y: auto;">
+                <div class="nv-sidebar" style="width: 100%; border: none; background: transparent;">
+                    <!-- Mobile Actions (Export, Import, Save) -->
+                    <div class="excel-mobile-actions" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+                        <button class="btn-primary" onclick="exportExcel()">Exportar</button>
+                        <button class="btn-secondary" onclick="document.getElementById('import-file').click()" style="background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); padding: 8px; border-radius: 8px;">Importar</button>
+                        <button class="btn-primary" onclick="saveToCloud()" style="background: var(--success); border-color: var(--success);">
+                            Guardar Cambios
+                        </button>
+                    </div>
+
+                    <div class="nv-sidebar-tabs">
+                        <button class="nv-sidebar-tab-btn active" onclick="switchSidebarTab('billing')">
+                            💰 Facturación
+                        </button>
+                        <button class="nv-sidebar-tab-btn" onclick="switchSidebarTab('python')">
+                            🐍 Python
+                        </button>
+                    </div>
+
+                    <div id="tab-billing" class="nv-sidebar-content">
+                        <p style="font-size: var(--font-sm); color: var(--text-sub); line-height: 1.5; margin: 0;">
+                            Configura los parámetros para la tabla de precios.
+                        </p>
+
+                        <div class="nv-form-group">
+                            <label class="nv-form-label">Nombre del Producto</label>
+                            <input type="text" id="billing-ui-name" placeholder="Introduce un producto..."
+                                class="nv-form-input" pattern="^[a-zA-Z0-9\s\-_.\u00C0-\u017F]+$"
+                                title="Solo letras, números, espacios, guiones y puntos" maxlength="40">
+                        </div>
+
+                        <div class="nv-form-group">
+                            <label class="nv-form-label">🛒 Coste del Producto (€)</label>
+                            <input type="number" id="billing-ui-cost" placeholder="Introduce el coste..."
+                                class="nv-form-input" min="0" step="0.01">
+                        </div>
+
+                        <div class="nv-form-group">
+                            <label class="nv-form-label">📈 Rentabilidad (Equilibrio) (%)</label>
+                            <input type="number" id="billing-ui-margin" placeholder="Ej: 50" class="nv-form-input"
+                                min="0" step="0.1">
+                        </div>
+
+                        <div class="nv-form-group">
+                            <label class="nv-form-label">Distintos Descuentos Aplicables (%)</label>
+                            <input type="text" id="billing-ui-discounts" placeholder="Ej: 0, 5, 10, 15, 20"
+                                class="nv-form-input">
+                            <p class="nv-form-hint">Separa cada descuento por comas.</p>
+                        </div>
+
+
+                        <button class="btn-primary" onclick="applyBillingCalculatorUI()" style="margin-top: 4px;">
+                            📋 Generar Hoja
+                        </button>
+                        <button class="btn-danger" onclick="clearSpreadsheet()" style="margin-bottom: 30px;">
+                            Limpiar Tabla
+                        </button>
+                    </div>
+
+                    <div id="tab-python" class="nv-sidebar-content" style="display: none;">
+                        <textarea id="python-code" spellcheck="false"
+                            placeholder="# Escribe tu código aquí...&#10;# ej: set_cell('A1', 10)"></textarea>
+                        <div id="python-status">Listo.</div>
+                        <button id="btn-run-python" onclick="runPythonScript()">EJECUTAR</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer" id="sidebar-footer-btn" onclick="toggleUserMenu(event)">
+                <div class="user-info">
+                    <div class="avatar"
+                        style="width:36px;height:36px;font-size:0.95rem;background:var(--indigo);flex-shrink:0;position:relative;overflow:hidden;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 4px 10px rgba(0,0,0,0.2);">
+                        <img src="/api/system/user/avatar/{{ user }}" alt=""
+                            style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;z-index:2;"
+                            onerror="this.style.display='none'">
+                        <span style="position:relative; z-index:1;">{{ user[0]|upper if user else 'R' }}</span>
+                    </div>
+                    <div class="user-name" style="font-size: 0.95rem;">{{ user or 'RoamingX' }}</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="opacity:0.5;flex-shrink:0;color:var(--text-main);">
+                    <path d="M18 15l-6-6-6 6"></path>
+                </svg>
+            </div>
+
+            <div class="user-menu-panel" id="user-menu">
+                <div class="menu-item" onclick="window.location.href='/app'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Volver al Menú
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main style="flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+            <!-- Mobile Header -->
+            <div class="excel-mobile-header">
+                <button class="sidebar-toggle-btn" id="sidebar-toggle-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <div class="title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="3" y1="9" x2="21" y2="9"></line>
+                        <line x1="9" y1="21" x2="9" y2="9"></line>
+                    </svg>
+                    Excel Engine
+                </div>
+            </div>
+
+            <div id="view-budgets"
+                style="flex: 1; display: flex; flex-direction: column; padding: var(--space-4); gap: var(--space-4); overflow-y: auto;">
+                <!-- HEADER -->
+                <div class="nv-header">
+                    <div class="nv-header-left">
+                        <h1 class="monitor-title">Hoja de Cálculo</h1>
+                    </div>
+                    <div class="nv-header-right">
+                        <button onclick="exportSpreadsheet()"
+                            style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-main); padding: var(--space-2) var(--space-3); font-size: var(--font-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: var(--space-2); transition: all 0.2s;"
+                            title="Exportar a .nvx">
+                            📤 Exportar
+                        </button>
+                        <button onclick="document.getElementById('import-input').click()"
+                            style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-main); padding: var(--space-2) var(--space-3); font-size: var(--font-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: var(--space-2); transition: all 0.2s;"
+                            title="Importar .json o .nvx">
+                            📥 Importar
+                        </button>
+                        <input type="file" id="import-input" style="display: none;" accept=".nvx,.json"
+                            onchange="importSpreadsheet(event)">
+                        <button onclick="saveSpreadsheet()"
+                            style="background: var(--indigo); border: none; border-radius: var(--radius-md); color: #fff; padding: var(--space-2) var(--space-3); font-size: var(--font-sm); font-weight: 700; cursor: pointer; transition: all 0.2s;"
+                            onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
+                            Guardar Cambios
+                        </button>
+                        <div class="badge">REAL-TIME GRID</div>
+                    </div>
+                </div>
+
+                <!-- TOOLBAR -->
+                <div class="nv-toolbar">
+                    <div class="formula-bar">
+                        <div class="formula-bar-label" id="formula-bar-label"></div>
+                        <div style="width: 1px; height: 20px; background: var(--border);"></div>
+                        <div class="formula-bar-fx">fx</div>
+                        <input type="text" id="formula-bar-input" autocomplete="off"
+                            placeholder="Selecciona una celda para editar..." oninput="handleFormulaBarInput(event)"
+                            onkeydown="handleFormulaBarKey(event)" onblur="handleFormulaBarBlur()">
+                    </div>
+                </div>
+
+                <!-- CONTENT -->
+                <div class="nv-content">
+                    <div class="nv-content" style="justify-content: flex-start;">
+                        <!-- GRID -->
+                        <div class="nv-grid-container">
+                            <table id="excel-grid"></table>
+                        </div>
+
+                        <!-- DEBUG PANEL -->
+                        <div class="nv-debug-panel" id="debug-panel">
+                            <div class="nv-debug-header">
+                                <span>DEBUGGER</span>
+                            </div>
+                            <div class="nv-debug-logs" id="excel-debug-logs"></div>
+                        </div>
+                    </div>
+                </div>
+        </main>
+    </div>
+
+    <!-- FLOATING CHATBOT WIDGET -->
+    <div id="chatbot-widget"
+        style="position: fixed; bottom: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; pointer-events: none;">
+        <!-- Chat Window -->
+        <div id="chatbot-window"
+            style="width: 360px; height: 500px; max-height: 70vh; background: var(--bg-card); border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); border: 1px solid var(--border); display: none; flex-direction: column; overflow: hidden; pointer-events: auto; animation: nvDialogIn 0.2s ease-out; transform-origin: bottom right;">
+            <!-- Header -->
+            <div
+                style="background: linear-gradient(135deg, var(--indigo), #4f46e5); padding: 16px; display: flex; justify-content: space-between; align-items: center; color: white;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div
+                        style="background: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--indigo);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M12 2a2 2 0 0 1 2 2c0 1.1.9 2 2 2h1a3 3 0 0 1 3 3v2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2v2a3 3 0 0 1-3 3h-1a2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1-2 2 2 2 0 0 1-2-2h-1a3 3 0 0 1-3-3v-2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2V9a3 3 0 0 1 3-3h1c1.1 0 2-.9 2-2a2 2 0 0 1 2-2z">
+                            </path>
+                            <path d="M9 14h6"></path>
+                            <path d="M15 10v.01"></path>
+                            <path d="M9 10v.01"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 15px;">Asistente Automatizado</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Siempre activo para ayudarte</div>
+                    </div>
+                </div>
+                <button onclick="toggleChatbot()"
+                    style="background: transparent; border: none; color: white; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Chat History -->
+            <div id="assistant-chat-history"
+                style="flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; background: rgba(0,0,0,0.1); font-size: 14px;">
+                <!-- Messages will be injected here -->
+            </div>
+
+            <!-- Options Area -->
+            <div id="assistant-options"
+                style="padding: 16px; background: var(--surface-hi); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
+                <!-- Action buttons will be injected here -->
+            </div>
+
+            <!-- Text Input Area -->
+            <div id="assistant-text-area"
+                style="padding: 12px 16px; background: var(--surface-hi); border-top: 1px solid rgba(255,255,255,0.05); display: none; gap: 8px; align-items: center;">
+                <input type="text" id="assistant-text-input" placeholder="Escribe tu respuesta aquí..."
+                    style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-main); padding: 8px 12px; border-radius: 20px; font-size: 13px; outline: none;">
+                <button id="assistant-send-btn"
+                    style="background: linear-gradient(135deg, var(--indigo), #4f46e5); color: white; border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Toggle Button -->
+        <button id="chatbot-toggle-btn" onclick="toggleChatbot()"
+            style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, var(--indigo), #4f46e5); color: white; border: none; box-shadow: 0 8px 24px rgba(99,102,241,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s, box-shadow 0.2s; pointer-events: auto;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path
+                    d="M12 2a2 2 0 0 1 2 2c0 1.1.9 2 2 2h1a3 3 0 0 1 3 3v2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2v2a3 3 0 0 1-3 3h-1a2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1-2 2 2 2 0 0 1-2-2h-1a3 3 0 0 1-3-3v-2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2V9a3 3 0 0 1 3-3h1c1.1 0 2-.9 2-2a2 2 0 0 1 2-2z">
+                </path>
+                <path d="M9 14h6"></path>
+                <path d="M15 10v.01"></path>
+                <path d="M9 10v.01"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Dialog overlay (sin cambios) -->
+    <div id="nv-dialog-overlay"
+        style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px); align-items:center; justify-content:center;">
+        <div id="nv-dialog-box"
+            style="background:var(--bg-card); border-radius:var(--radius-md); width:90%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,0.45); overflow:hidden; animation: nvDialogIn 0.15s ease-out;">
+            <div style="padding:24px 24px 0 24px;">
+                <div id="nv-dialog-title"
+                    style="font-size:var(--font-lg); font-weight:500; color:var(--text-main); margin-bottom:16px;">
+                    Cambiar nombre</div>
+                <p id="nv-dialog-text"
+                    style="font-size:var(--font-base); color:var(--text-dim); line-height:1.5; margin-bottom:16px;">
+                </p>
+                <input type="text" id="nv-dialog-input"
+                    style="display:none; width:100%; box-sizing:border-box; background:var(--surface); border:2px solid var(--indigo); border-radius:var(--radius-md); padding:10px 12px; color:var(--text-main); font-size:var(--font-base); outline:none; transition:border-color 0.2s;" />
+            </div>
+            <div style="padding:16px 24px; display:flex; justify-content:flex-end; gap:8px;">
+                <button id="nv-dialog-cancel"
+                    style="background:transparent; border:none; color:var(--indigo); font-size:var(--font-sm); font-weight:600; padding:8px 16px; border-radius:var(--radius-sm); cursor:pointer;">Cancelar</button>
+                <button id="nv-dialog-confirm"
+                    style="background:transparent; border:none; color:var(--indigo); font-size:var(--font-sm); font-weight:600; padding:8px 16px; border-radius:var(--radius-sm); cursor:pointer;">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes nvDialogIn {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+    </style>
+
+    <script>
+        window.TOKEN = "{{ token }}";
+        window.HEADERS = { 'X-Token': window.TOKEN, 'Content-Type': 'application/json' };
+        window.CURRENT_USER = "{{ user }}";
+
+        function switchSidebarTab(tab) {
+            const billingTab = document.getElementById('tab-billing');
+            const pythonTab = document.getElementById('tab-python');
+
+            const billingBtn = document.querySelector('[onclick="switchSidebarTab(\'billing\')"]');
+            const pythonBtn = document.querySelector('[onclick="switchSidebarTab(\'python\')"]');
+
+            billingTab.style.display = tab === 'billing' ? 'flex' : 'none';
+            pythonTab.style.display = tab === 'python' ? 'flex' : 'none';
+
+            billingBtn.classList.toggle('active', tab === 'billing');
+            pythonBtn.classList.toggle('active', tab === 'python');
+        }
+
+        function toggleChatbot() {
+            const wnd = document.getElementById('chatbot-window');
+            if (wnd.style.display === 'none' || wnd.style.display === '') {
+                wnd.style.display = 'flex';
+            } else {
+                wnd.style.display = 'none';
+            }
+        };
+
+
+        // Revocar sesión en pagehide
+        (function () {
+            const revokeKey = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+
+            window.addEventListener('pagehide', () => {
+                if (sessionStorage.getItem('nv_navigate')) {
+                    sessionStorage.removeItem('nv_navigate');
+                } else {
+                    sessionStorage.setItem('nv_revoke', revokeKey);
+                    navigator.sendBeacon('/api/logout?revoke_key=' + encodeURIComponent(revokeKey));
+                }
+            });
+
+            window.addEventListener('pageshow', () => {
+                const rk = sessionStorage.getItem('nv_revoke');
+                if (rk) {
+                    sessionStorage.removeItem('nv_revoke');
+                    fetch('/api/logout/revoke', {
+                        method: 'POST',
+                        headers: HEADERS,
+                        body: JSON.stringify({ revoke_key: rk })
+                    }).catch(() => { });
+                }
+            });
+        })();
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/excel/main.js') }}"></script>
+    <script src="/static/js/excel/assistant.js"></script>
+    <script>
+        // Sidebar Toggle Functionality for Mobile
+        function initSidebarToggle() {
+            const toggleBtn = document.getElementById('sidebar-toggle-btn');
+            const overlay = document.getElementById('sidebar-overlay');
+            const sidebar = document.querySelector('.global-sidebar');
+            let isExpanded = false;
+
+            if (!toggleBtn || !overlay || !sidebar) return;
+
+            function toggleSidebar() {
+                isExpanded = !isExpanded;
+                sidebar.classList.toggle('expanded', isExpanded);
+                overlay.classList.toggle('show', isExpanded);
+                if (isExpanded) {
+                    toggleBtn.innerHTML = '✕';
+                } else {
+                    toggleBtn.innerHTML = `
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>`;
+                }
+            }
+
+            toggleBtn.addEventListener('click', toggleSidebar);
+            overlay.addEventListener('click', toggleSidebar);
+
+            // Close sidebar when clicking items
+            sidebar.addEventListener('click', (e) => {
+                const isMobile = window.innerWidth <= 850 || (window.innerHeight <= 500 && window.innerWidth > window.innerHeight);
+                if (isMobile && (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest('button') || e.target.closest('a'))) {
+                    if (isExpanded) toggleSidebar();
+                }
+            });
+
+            // Close on window resize
+            window.addEventListener('resize', () => {
+                const isMobile = window.innerWidth <= 850 || (window.innerHeight <= 500 && window.innerWidth > window.innerHeight);
+                if (!isMobile && isExpanded) {
+                    toggleSidebar();
+                }
+            });
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', initSidebarToggle);
+
+        function toggleUserMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('user-menu');
+            menu.classList.toggle('show');
+        }
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('user-menu');
+            if (menu && menu.classList.contains('show') && !e.target.closest('#user-menu') && !e.target.closest('#sidebar-footer-btn')) {
+                menu.classList.remove('show');
+            }
+        });
+    </script>
+
+    <!-- Modal de Confirmación -->
+    <div id="excel-confirm-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(4px);">
+        <div
+            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-6); width: 400px; max-width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: var(--space-4);">
+            <h3 style="margin: 0; color: var(--text-main); font-size: var(--font-lg);">Limpiar Tabla</h3>
+            <p style="margin: 0; color: var(--text-muted); font-size: var(--font-base); line-height: 1.5;">
+                ¿Estás seguro de que quieres limpiar toda la tabla? Se perderán todos los datos.
+            </p>
+            <div style="display: flex; justify-content: flex-end; gap: var(--space-3);">
+                <button onclick="document.getElementById('excel-confirm-modal').style.display='none'"
+                    style="background: transparent; border: 1px solid var(--border); color: var(--text-main); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); cursor: pointer; font-weight: 600; transition: all 0.2s;">
+                    Cancelar
+                </button>
+                <button onclick="window.executeClearSpreadsheet()"
+                    style="background: var(--danger); border: none; color: white; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); cursor: pointer; font-weight: 600; box-shadow: 0 2px 8px rgba(239,68,68,0.3); transition: transform 0.1s;">
+                    Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

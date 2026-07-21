@@ -1,0 +1,332 @@
+<div id="view-monitor" class="view">
+    <style>
+        /* Custom CSS to replicate the Tailwind design reliably without external CDNs */
+        .tw-dashboard {
+            flex: 1;
+            background-color: #f3f4f6;
+            padding: 1.5rem;
+            overflow-y: auto;
+            width: 100%;
+            color: #1f2937;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            box-sizing: border-box;
+        }
+
+        @media (min-width: 768px) {
+            .tw-dashboard {
+                padding: 2rem;
+            }
+        }
+
+        .tw-header {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (min-width: 640px) {
+            .tw-header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+                gap: 0;
+            }
+        }
+
+        .tw-title {
+            font-size: 1.875rem;
+            line-height: 2.25rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin: 0;
+        }
+
+        .tw-subtitle {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        .tw-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .tw-badge {
+            font-size: 0.875rem;
+            background-color: #ffffff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            font-weight: 500;
+        }
+
+        .tw-badge.gray {
+            color: #4b5563;
+        }
+
+        .tw-badge.blue {
+            color: #3b82f6;
+        }
+
+        .tw-grid-4 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 640px) {
+            .tw-grid-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .tw-grid-4 {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        .tw-card {
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .tw-card-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #6b7280;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .tw-card-value {
+            font-size: 1.875rem;
+            line-height: 2.25rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .tw-trend {
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .tw-trend.gray {
+            color: #9ca3af;
+        }
+
+        .tw-trend.red {
+            color: #ef4444;
+        }
+
+        .tw-trend.green {
+            color: #10b981;
+        }
+
+        .tw-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .tw-grid-3 {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        .tw-col-span-2 {
+            grid-column: span 1 / span 1;
+        }
+
+        @media (min-width: 1024px) {
+            .tw-col-span-2 {
+                grid-column: span 2 / span 2;
+            }
+        }
+
+        .tw-chart-title {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+            font-weight: 600;
+            color: #374151;
+            margin: 0 0 1rem 0;
+        }
+
+        .tw-chart-container {
+            flex: 1;
+            min-height: 0;
+            min-width: 0;
+            position: relative;
+            width: 100%;
+        }
+
+        .tw-disk-list {
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #4b5563;
+        }
+
+        .tw-disk-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted, #6b7280);
+            text-align: center;
+        }
+
+        @media (min-width: 640px) {
+            .tw-disk-item {
+                text-align: left;
+            }
+        }
+
+        .tw-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 1024px) {
+            .tw-grid-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        .tw-flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        /* Fix dark mode leaks */
+        [data-theme="dark"] .tw-dashboard {
+            background-color: var(--bg-primary, #111827) !important;
+            color: var(--text-main, #f3f4f6) !important;
+        }
+
+        [data-theme="dark"] .tw-card {
+            background-color: var(--surface, #1f2937) !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+        }
+
+        [data-theme="dark"] .tw-title,
+        [data-theme="dark"] .tw-chart-title,
+        [data-theme="dark"] .tw-card-value {
+            color: var(--text-main, #f9fafb) !important;
+        }
+
+        [data-theme="dark"] .tw-subtitle,
+        [data-theme="dark"] .tw-card-label {
+            color: var(--text-secondary, #9ca3af) !important;
+        }
+
+        [data-theme="dark"] .tw-badge {
+            background-color: var(--surface-hi, #374151) !important;
+            color: var(--text-main, #f9fafb) !important;
+            border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+        }
+    </style>
+
+    <div class="tw-dashboard">
+
+        <!-- Encabezado -->
+        <header class="tw-header">
+            <div>
+                <h1 class="tw-title" data-i18n="tel_dash_title">Panel de Control</h1>
+                <p class="tw-subtitle" id="net-info" data-i18n="tel_dash_sub">Esperando datos de red...</p>
+            </div>
+            <div class="tw-badges">
+                <span class="tw-badge gray" id="update-time">--:--:--</span>
+                <span class="tw-badge blue" id="power-tag" data-i18n="tel_loading">Conectando...</span>
+            </div>
+        </header>
+
+        <!-- TARJETAS DE MÉTRICAS (Métricas Clave) -->
+        <section class="tw-grid-4">
+            <!-- Tarjeta CPU -->
+            <div class="tw-card">
+                <p class="tw-card-label" data-i18n="tel_dash_cpu">Uso de CPU</p>
+                <p class="tw-card-value" id="m-cpu" data-suffix="%">--%</p>
+                <span class="tw-trend gray" id="trend-cpu">—</span>
+            </div>
+            <!-- Tarjeta RAM -->
+            <div class="tw-card">
+                <p class="tw-card-label" data-i18n="tel_dash_ram">Memoria RAM</p>
+                <p class="tw-card-value" id="m-ram" data-suffix="%">--%</p>
+                <span class="tw-trend gray" id="trend-ram">—</span>
+            </div>
+            <!-- Tarjeta Temp -->
+            <div class="tw-card">
+                <p class="tw-card-label" data-i18n="tel_dash_temp">Sensor Térmico</p>
+                <p class="tw-card-value" id="m-temp" data-suffix="°C">--°C</p>
+                <span class="tw-trend gray" id="trend-temp">—</span>
+            </div>
+            <!-- Tarjeta RPS -->
+            <div class="tw-card">
+                <p class="tw-card-label" data-i18n="tel_dash_rps">Peticiones (RPS)</p>
+                <p class="tw-card-value" id="m-rps" data-suffix="/s">--/s</p>
+                <span class="tw-trend gray" id="trend-rps">—</span>
+            </div>
+        </section>
+
+        <!-- SECCIÓN DE GRÁFICAS -->
+        <section class="tw-grid-3">
+            <!-- Gráfica de Líneas (Grande) - CPU & RAM -->
+            <div class="tw-card tw-col-span-2">
+                <h2 class="tw-chart-title" data-i18n="tel_dash_sys">Rendimiento del Sistema (CPU & RAM)</h2>
+                <div class="tw-chart-container">
+                    <canvas id="chart-sys"></canvas>
+                </div>
+            </div>
+            <!-- Gráfica de Rosca (Pequeña) - Discos -->
+            <div class="tw-card" style="flex-direction: column;">
+                <h2 class="tw-chart-title" data-i18n="tel_dash_disk">Almacenamiento (Disco)</h2>
+                <div class="tw-chart-container"
+                    style="flex: 1; display: flex; justify-content: center; min-height: 200px;">
+                    <canvas id="chart-disk"></canvas>
+                </div>
+                <div id="disk-list" class="tw-disk-list"></div>
+            </div>
+        </section>
+
+        <section class="tw-grid-2">
+            <!-- Network -->
+            <div class="tw-card">
+                <div class="tw-flex-between">
+                    <h2 class="tw-chart-title" style="margin: 0;" data-i18n="tel_dash_net">Tráfico de Red</h2>
+                    <span
+                        style="font-size: 0.875rem; font-weight: 700; color: #3b82f6; background-color: rgba(59, 130, 246, 0.1); padding: 0.25rem 0.75rem; border-radius: 9999px;"
+                        id="m-latency" data-suffix="ms">--ms (Latencia)</span>
+                </div>
+                <div class="tw-chart-container">
+                    <canvas id="chart-net"></canvas>
+                </div>
+            </div>
+            <!-- Temperature History -->
+            <div class="tw-card">
+                <h2 class="tw-chart-title" data-i18n="tel_dash_hist">Historial Térmico</h2>
+                <div class="tw-chart-container">
+                    <canvas id="chart-temp-big"></canvas>
+                </div>
+            </div>
+        </section>
+
+    </div>
+</div>

@@ -1,0 +1,56 @@
+/* Global CSS for the User Profile Menu (Sidebar Footer) */
+
+.sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-sidebar, var(--bg-card, #1e293b)) !important;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+    margin-top: auto;
+}
+
+.sidebar-footer:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-main, #ffffff);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-menu-panel {
+    position: absolute;
+    bottom: 70px;
+    left: 10px;
+    width: 240px;
+    background: var(--bg-sidebar, var(--bg-card, #1e293b));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    display: none;
+    flex-direction: column;
+    padding: 8px;
+    z-index: 100;
+    animation: slideUp 0.2s ease-out;
+}
+
+.user-menu-panel.show {
+    display: flex;
+}

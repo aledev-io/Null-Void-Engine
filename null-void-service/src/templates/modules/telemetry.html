@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Null-Void Engine · Telemetría</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script>
+        (function () {
+            let __theme = localStorage.getItem('theme');
+            if (!__theme) { __theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+            document.documentElement.setAttribute('data-theme', __theme);
+        })();
+        window.addEventListener('error', function (event) {
+            fetch('/api/client_log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: 'error', message: event.message + ' at ' + event.filename + ':' + event.lineno + ':' + event.colno }) }).catch(() => { });
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+            fetch('/api/client_log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: 'error', message: 'Unhandled Promise Rejection: ' + (event.reason ? event.reason.message || event.reason : event) }) }).catch(() => { });
+        });
+        const originalConsoleError = console.error;
+        console.error = function () {
+            originalConsoleError.apply(console, arguments);
+            const args = Array.from(arguments).map(arg => { if (arg instanceof Error) return arg.message + '\n' + arg.stack; if (typeof arg === 'object') return JSON.stringify(arg); return String(arg); });
+            fetch('/api/client_log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: 'error', message: 'Console Error: ' + args.join(' ') }) }).catch(() => { });
+        };
+    </script>
+    <style>
+        :root,
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --surface-hi: rgba(51, 65, 85, 0.9);
+            --border: rgba(148, 163, 184, 0.2);
+            --border-hi: rgba(148, 163, 184, 0.4);
+            --indigo: #818cf8;
+            --indigo-dim: rgba(129, 140, 248, 0.2);
+            --text-main: #ffffff;
+            --text-dim: #f8fafc;
+            --text-muted: #cbd5e1;
+            --text-sub: #94a3b8;
+            --cpu: #f87171;
+            --ram: #c084fc;
+            --temp: #fb923c;
+            --disk: #34d399;
+            --latency: #60a5fa;
+            --rps: #f472b6;
+            --bg-card: #1e293b;
+            color-scheme: dark;
+        }
+
+        [data-theme="light"] {
+            --bg: #f1f5f9;
+            --surface: #ffffff;
+            --surface-hi: #f8fafc;
+            --border: rgba(99, 102, 241, 0.12);
+            --border-hi: rgba(99, 102, 241, 0.3);
+            --text-main: #000000;
+            --text-dim: #3730a3;
+            --text-muted: #334155;
+            --indigo: #4338ca;
+            --indigo-dim: rgba(79, 70, 229, 0.15);
+            --cpu: #b91c1c;
+            --ram: #7e22ce;
+            --temp: #c2410c;
+            --disk: #059669;
+            --latency: #2563eb;
+            --rps: #db2777;
+            color-scheme: light;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: var(--text-main);
+            overflow: hidden !important;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 4px; }
+
+        #shell {
+            position: relative;
+            z-index: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #shell::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 20% -10%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 50% at 90% 100%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 50% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #topbar {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 clamp(16px, 4vw, 32px);
+            height: 60px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-hi);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .tb-left { display: flex; align-items: center; gap: 14px; }
+
+        .logo { display: flex; align-items: center; gap: 8px; }
+
+        .logo-box {
+            width: 24px; height: 24px;
+            background: var(--indigo);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 800;
+            border-radius: 4px;
+        }
+
+        .logo-text { font-size: 0.95rem; font-weight: 800; }
+
+        .tb-right { display: flex; align-items: center; gap: 12px; }
+
+        .btn-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover { color: var(--indigo); border-color: var(--indigo); }
+
+        #main {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 20px 32px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .view { display: none; }
+        .view.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            align-self: flex-start;
+            flex-shrink: 0;
+            gap: 6px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+            text-decoration: none;
+        }
+
+        .btn-back:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--border-hi);
+            transform: translateX(-2px);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-muted);
+        }
+
+        .monitor-head {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .monitor-title {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .monitor-sub {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        .scorecards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .m-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(16px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .m-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-hi);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .m-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            z-index: 2;
+        }
+
+        .m-card.cpu::before { background: var(--cpu); box-shadow: 0 0 10px var(--cpu); }
+        .m-card.ram::before { background: var(--ram); box-shadow: 0 0 10px var(--ram); }
+        .m-card.temp::before { background: var(--temp); box-shadow: 0 0 10px var(--temp); }
+        .m-card.disk::before { background: var(--disk); box-shadow: 0 0 10px var(--disk); }
+        .m-card.latency::before { background: var(--latency); box-shadow: 0 0 10px var(--latency); }
+        .m-card.rps::before { background: var(--rps); box-shadow: 0 0 10px var(--rps); }
+
+        .m-top {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            min-width: 0;
+        }
+
+        .m-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .m-value {
+            flex-shrink: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
+            transition: color 0.3s;
+        }
+
+        .m-value-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .m-value-row .m-value { margin-bottom: 0; }
+
+        .m-trend {
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.06);
+            white-space: nowrap;
+            transition: color 0.3s;
+        }
+
+        .m-trend.up { color: #34d399; }
+        .m-trend.down { color: #f87171; }
+        .m-trend.flat { color: var(--text-sub); }
+
+        .m-bar {
+            flex-shrink: 0;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        .m-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .m-card.cpu .m-bar-fill { background: var(--cpu); box-shadow: 0 0 8px var(--cpu); }
+        .m-card.ram .m-bar-fill { background: var(--ram); box-shadow: 0 0 8px var(--ram); }
+        .m-card.temp .m-bar-fill { background: var(--temp); box-shadow: 0 0 8px var(--temp); }
+        .m-card.disk .m-bar-fill { background: var(--disk); box-shadow: 0 0 8px var(--disk); }
+        .m-card.latency .m-bar-fill { background: var(--latency); box-shadow: 0 0 8px var(--latency); }
+        .m-card.rps .m-bar-fill { background: var(--rps); box-shadow: 0 0 8px var(--rps); }
+
+        .m-hist {
+            flex-shrink: 0;
+            height: 40px;
+            position: relative;
+            margin-top: auto;
+        }
+
+        canvas.spark { width: 100%; height: 100%; display: block; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+            flex: 1;
+            min-height: 300px;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(16px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .chart-card:hover {
+            border-color: var(--border-hi);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .chart-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .chart-body { flex: 1; position: relative; min-height: 0; }
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 16px;
+            min-height: 260px;
+        }
+
+        #disk-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+
+        .footer-bar {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 0.7rem;
+            color: var(--text-sub);
+        }
+
+        @media (max-width: 600px) {
+            html, body { overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; }
+            #shell { height: auto !important; min-height: 100vh; overflow: visible !important; }
+            #topbar { height: 50px; padding: 0 14px; position: sticky; top: 0; }
+            .logo-box { width: 22px; height: 22px; font-size: 0.65rem; }
+            .logo-text { font-size: 0.85rem; }
+            .btn-icon { width: 32px; height: 32px; }
+            #main { flex: none !important; height: auto !important; max-height: none !important; overflow: visible !important; padding: 14px 12px 32px 12px; }
+            .btn-back { height: 30px; margin-bottom: 10px; padding: 0 12px; font-size: 0.72rem; }
+            .monitor-head { margin-bottom: 10px; gap: 6px; flex-wrap: nowrap; }
+            .monitor-title { font-size: 0.9rem; }
+            #power-tag { font-size: 0.5rem; padding: 2px 7px; white-space: nowrap; flex-shrink: 0; }
+            .scorecards-grid { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+            .m-card.temp { grid-column: span 2 !important; }
+            .m-card.disk { grid-column: span 2 !important; }
+            .m-card { padding: 12px !important; border-radius: 10px !important; }
+            .m-top .badge { display: none !important; }
+            .m-label { font-size: 0.56rem !important; }
+            .m-value { font-size: 1.3rem !important; }
+            .m-trend { font-size: 0.55rem !important; padding: 1px 6px !important; }
+            .m-bar { height: 2px !important; margin-bottom: 4px !important; }
+            .m-hist { height: 28px !important; }
+            .charts-grid { grid-template-columns: 1fr !important; min-height: 200px !important; }
+            .bottom-grid { grid-template-columns: 1fr !important; min-height: 200px !important; }
+            .footer-bar { flex-direction: column; gap: 4px; align-items: flex-start; }
+        }
+
+        @media (max-width: 900px) and (max-height: 500px) {
+            html, body { overflow: hidden !important; height: 100% !important; }
+            #shell { height: 100% !important; min-height: unset !important; overflow: hidden !important; }
+            #topbar { height: 34px !important; padding: 0 10px !important; flex-shrink: 0; }
+            .logo-text { font-size: 0.75rem; }
+            .btn-icon { width: 28px !important; height: 28px !important; }
+            #main { flex: 1 !important; min-height: 0 !important; height: auto !important; max-height: none !important; padding: 5px 8px !important; display: flex !important; flex-direction: column !important; gap: 4px !important; overflow: hidden !important; }
+            .btn-back { flex-shrink: 0 !important; margin-bottom: 0 !important; padding: 0 8px !important; height: 22px !important; font-size: 0.6rem !important; line-height: 1 !important; }
+            .monitor-head { flex-shrink: 0 !important; height: 22px !important; display: flex !important; align-items: center !important; flex-wrap: nowrap !important; gap: 8px !important; margin-bottom: 0 !important; }
+            .monitor-title { font-size: 0.72rem !important; white-space: nowrap; }
+            #power-tag { margin-left: auto; font-size: 0.5rem !important; padding: 1px 6px !important; white-space: nowrap; }
+            .scorecards-grid { flex: 1 !important; min-height: 0 !important; display: grid !important; grid-template-columns: repeat(3, 1fr) !important; grid-template-rows: repeat(2, 1fr) !important; grid-auto-rows: unset !important; gap: 4px !important; margin-bottom: 4px !important; }
+            .m-card { padding: 5px 8px 4px !important; border-radius: 7px !important; min-height: 0 !important; }
+            .m-card.temp, .m-card.disk { grid-column: span 1 !important; }
+            .m-top { flex-shrink: 0 !important; margin-bottom: 1px !important; }
+            .m-top .badge { display: none !important; }
+            .m-label { font-size: 0.44rem !important; letter-spacing: 0 !important; }
+            .m-value { font-size: 1rem !important; margin-bottom: 2px !important; }
+            .m-trend { display: none !important; }
+            .m-bar { height: 2px !important; margin-bottom: 2px !important; }
+            .m-hist { height: 20px !important; }
+            .charts-grid, .bottom-grid { display: none !important; }
+            .footer-bar { display: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="shell">
+        <div id="topbar">
+            <div class="tb-left">
+                <div class="logo">
+                    <div class="logo-box">NV</div>
+                    <span class="logo-text">Null-Void Engine</span>
+                </div>
+            </div>
+            <div class="tb-right">
+                <button class="btn-icon" id="btn-toggle-lang" onclick="toggleLanguage()" title="Cambiar idioma"
+                    data-i18n-title="lang_title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                </button>
+                <button class="btn-icon" id="btn-toggle-theme" title="Cambiar tema">
+                    <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></svg>
+                </button>
+            </div>
+        </div>
+        <div id="main">
+            <div id="view-monitor" class="view active">
+                <button class="btn-back" onclick="location.href='/app'">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span data-i18n="btn_back">Volver al Dashboard</span>
+                </button>
+                <div class="monitor-head">
+                    <div>
+                        <div class="monitor-title" data-i18n="tel_title">Telemetría · Tiempo Real</div>
+                        <div class="monitor-sub" data-i18n="tel_sub">Monitoreo del sistema en vivo</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span id="update-time" style="font-size:0.75rem; color:var(--text-sub); font-variant-numeric:tabular-nums;">--:--:--</span>
+                        <span class="badge" id="power-tag" data-i18n="tel_loading">⚡ Cargando datos...</span>
+                    </div>
+                </div>
+
+                <div class="scorecards-grid" id="scorecards">
+                    <div class="m-card cpu">
+                        <div class="m-top">
+                            <span class="m-label" data-i18n="tel_cpu">CPU · Procesamiento</span>
+                            <span class="badge" style="color:var(--cpu); border-color:var(--cpu); background:color-mix(in srgb, var(--cpu) 10%, transparent)">LIVE</span>
+                        </div>
+                        <div class="m-value-row">
+                            <div class="m-value" id="m-cpu" data-suffix="%" style="color:var(--cpu);">--%</div>
+                            <span class="m-trend" id="trend-cpu"></span>
+                        </div>
+                        <div class="m-bar"><div class="m-bar-fill" id="bar-cpu" style="width:0%"></div></div>
+                        <div class="m-hist"><canvas id="spark-cpu" class="spark"></canvas></div>
+                    </div>
+
+                    <div class="m-card ram">
+                        <div class="m-top">
+                            <span class="m-label" data-i18n="tel_ram">RAM · Memoria Virtual</span>
+                            <span class="badge" style="color:var(--ram); border-color:var(--ram); background:color-mix(in srgb, var(--ram) 10%, transparent)">LIVE</span>
+                        </div>
+                        <div class="m-value-row">
+                            <div class="m-value" id="m-ram" data-suffix="%" style="color:var(--ram);">--%</div>
+                            <span class="m-trend" id="trend-ram"></span>
+                        </div>
+                        <div class="m-bar"><div class="m-bar-fill" id="bar-ram" style="width:0%"></div></div>
+                        <div class="m-hist"><canvas id="spark-ram" class="spark"></canvas></div>
+                    </div>
+
+                    <div class="m-card temp">
+                        <div class="m-top">
+                            <span class="m-label" data-i18n="tel_temp">Temp · Sensor Térmico</span>
+                            <span class="badge" style="color:var(--temp); border-color:var(--temp); background:color-mix(in srgb, var(--temp) 10%, transparent)">LIVE</span>
+                        </div>
+                        <div class="m-value-row">
+                            <div class="m-value" id="m-temp" data-suffix="°C" style="color:var(--temp);">--°C</div>
+                            <span class="m-trend" id="trend-temp"></span>
+                        </div>
+                        <div class="m-bar"><div class="m-bar-fill" id="bar-temp" style="width:0%"></div></div>
+                        <div class="m-hist"><canvas id="spark-temp" class="spark"></canvas></div>
+                    </div>
+
+                    <div class="m-card latency">
+                        <div class="m-top">
+                            <span class="m-label" data-i18n="tel_net">Red · Latencia</span>
+                            <span class="badge" style="color:var(--latency); border-color:var(--latency); background:color-mix(in srgb, var(--latency) 10%, transparent)">LIVE</span>
+                        </div>
+                        <div class="m-value-row">
+                            <div class="m-value" id="m-latency" data-suffix="ms" style="color:var(--latency);">--ms</div>
+                            <span class="m-trend" id="trend-latency"></span>
+                        </div>
+                        <div class="m-bar"><div class="m-bar-fill" id="bar-latency" style="width:0%"></div></div>
+                        <div class="m-hist"><canvas id="spark-latency" class="spark"></canvas></div>
+                    </div>
+
+                    <div class="m-card rps">
+                        <div class="m-top">
+                            <span class="m-label" data-i18n="tel_req">Servidor · Peticiones</span>
+                            <span class="badge" style="color:var(--rps); border-color:var(--rps); background:color-mix(in srgb, var(--rps) 10%, transparent)">LIVE</span>
+                        </div>
+                        <div class="m-value-row">
+                            <div class="m-value" id="m-rps" data-suffix="/s" style="color:var(--rps);">--/s</div>
+                            <span class="m-trend" id="trend-rps"></span>
+                        </div>
+                        <div class="m-bar"><div class="m-bar-fill" id="bar-rps" style="width:0%"></div></div>
+                        <div class="m-hist"><canvas id="spark-rps" class="spark"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-title">System Resources <span style="font-weight:400; opacity:0.6;">(CPU &amp; RAM)</span></div>
+                        <div class="chart-body"><canvas id="chart-sys"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">Network Performance <span style="font-weight:400; opacity:0.6;">(Latency &amp; RPS)</span></div>
+                        <div class="chart-body"><canvas id="chart-net"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="bottom-grid">
+                    <div class="chart-card">
+                        <div class="chart-title">Thermal Sensor <span style="font-weight:400; opacity:0.6;">(Temperatura)</span></div>
+                        <div class="chart-body"><canvas id="chart-temp-big"></canvas></div>
+                    </div>
+                    <div class="m-card disk" style="padding:20px; display:flex; flex-direction:column;">
+                        <div class="m-top" style="margin-bottom:0;">
+                            <span class="m-label" data-i18n="tel_disk">Disco · Almacenamiento</span>
+                            <span class="badge" style="color:var(--disk); border-color:var(--disk); background:color-mix(in srgb, var(--disk) 10%, transparent)">LIVE</span>
+                        </div>
+                        <div id="disk-list">
+                            <div style="font-size:0.8rem; color:var(--text-muted);" data-i18n="tel_loading_disks">Cargando discos...</div>
+                        </div>
+                        <div style="height:120px; margin-top:8px; position:relative;"><canvas id="chart-disk"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="footer-bar">
+                    <span id="net-info"></span>
+                    <span data-i18n="tel_refresh" style="color:var(--text-sub);">Actualizando cada 1s</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.TOKEN = "{{ token }}";
+        window.HEADERS = { 'X-Token': window.TOKEN, 'Content-Type': 'application/json' };
+
+        const tele_i18n = {
+            es: {
+                lang_title: "Cambiar idioma", btn_back: "Volver al Dashboard",
+                tel_title: "Telemetría · Tiempo Real", tel_sub: "Monitoreo del sistema en vivo",
+                tel_loading: "⚡ Cargando datos...",
+                tel_cpu: "CPU · Procesamiento", tel_ram: "RAM · Memoria Virtual",
+                tel_temp: "Temp · Sensor Térmico", tel_disk: "Disco · Almacenamiento",
+                tel_net: "Red · Latencia", tel_req: "Servidor · Peticiones",
+                tel_loading_disks: "Cargando discos...",
+                tel_refresh: "Actualizando cada 1s"
+            },
+            en: {
+                lang_title: "Change language", btn_back: "Back to Dashboard",
+                tel_title: "Telemetry · Real Time", tel_sub: "Live system monitoring",
+                tel_loading: "⚡ Loading data...",
+                tel_cpu: "CPU · Processing", tel_ram: "RAM · Virtual Memory",
+                tel_temp: "Temp · Thermal Sensor", tel_disk: "Disk · Storage",
+                tel_net: "Network · Latency", tel_req: "Server · Requests",
+                tel_loading_disks: "Loading disks...",
+                tel_refresh: "Updating every 1s"
+            }
+        };
+
+        window.currentLang = localStorage.getItem('lang') || (navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en');
+
+        window.t_dash = function (key) {
+            return tele_i18n[window.currentLang]?.[key] || tele_i18n['es']?.[key] || key;
+        };
+
+        function applyDashTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                const translation = window.t_dash(key);
+                if (translation) el.innerHTML = translation;
+            });
+            document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                const key = el.getAttribute('data-i18n-title');
+                const translation = window.t_dash(key);
+                if (translation) el.setAttribute('title', translation);
+            });
+            document.documentElement.lang = window.currentLang;
+        }
+
+        function toggleLanguage() {
+            window.currentLang = window.currentLang === 'es' ? 'en' : 'es';
+            localStorage.setItem('lang', window.currentLang);
+            applyDashTranslations();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const icon = document.getElementById('theme-icon-svg');
+
+            const setIcon = (theme) => {
+                if (!icon) return;
+                if (theme === 'light') {
+                    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+                } else {
+                    icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+                }
+            };
+
+            setIcon(currentTheme);
+            document.getElementById('btn-toggle-theme').addEventListener('click', () => {
+                const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+                const next = cur === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                setIcon(next);
+            });
+            applyDashTranslations();
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/lib/chart.umd.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/telemetry/main.js') }}"></script>
+</body>
+</html>

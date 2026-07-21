@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Null-Void Engine - Contactos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/main.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/dashboard.css') }}" />
+
+    <style id="fr-styles">
+        #view-friends {
+            background: var(--bg-page);
+        }
+
+        .fr-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .fr-tab-btn {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .fr-tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        [data-theme="light"] .fr-tab-btn:hover {
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .fr-tab-btn.active {
+            background: var(--indigo);
+            color: #ffffff !important;
+        }
+
+        .fr-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--indigo), #8b5cf6);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .fr-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .fr-online-dot {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: #10b981;
+            border: 2px solid var(--surface);
+            z-index: 2;
+        }
+
+        [data-theme="light"] .fr-online-dot {
+            border-color: #ffffff;
+        }
+
+        .fr-offline-dot {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: #64748b;
+            border: 2px solid var(--surface);
+            z-index: 2;
+        }
+
+        [data-theme="light"] .fr-offline-dot {
+            border-color: #ffffff;
+        }
+
+        .fr-btn-chat {
+            background: rgba(99, 102, 241, 0.1);
+            color: #818cf8;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .fr-btn-chat:hover {
+            background: var(--indigo);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .fr-btn-action {
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .fr-btn-action.accept {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .fr-btn-action.accept:hover {
+            background: #10b981;
+            color: white;
+        }
+
+        .fr-btn-action.reject {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .fr-btn-action.reject:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        .fr-dialog-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fr-dialog-overlay.active {
+            display: flex;
+        }
+
+        .fr-dialog {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            animation: chatScaleIn 0.25s ease-out;
+        }
+
+        .fr-dialog-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .fr-dialog-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .fr-dialog-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.3rem;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .fr-dialog-close:hover {
+            color: var(--text-main);
+        }
+
+        .fr-dialog-body {
+            padding: 16px 20px;
+        }
+
+        .fr-dialog-input {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 11px 14px;
+            color: var(--text-main);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .fr-dialog-input:focus {
+            border-color: var(--indigo);
+        }
+
+        .fr-search-results {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .fr-result-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            transition: background 0.1s;
+        }
+
+        .fr-result-item:hover {
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .fr-status-tag {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 6px;
+        }
+
+        .fr-status-friends {
+            background: rgba(52, 211, 153, 0.1);
+            color: #34d399;
+        }
+
+        .fr-status-pending {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="shell">
+        <div id="topbar">
+            <div class="tb-left">
+                <div class="logo">
+                    <div class="logo-box">NV</div>
+                    <span class="logo-text">Null-Void Engine</span>
+                </div>
+            </div>
+            <div class="tb-right">
+                <button class="btn-theme" id="btn-toggle-theme" title="Cambiar tema">
+                    <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="main">
+            <div id="view-friends" class="view active" style="padding:0; margin:0; width:100%; display:flex; flex-direction:column; flex:1;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.HEADERS = {
+            'Content-Type': 'application/json',
+            'X-Token': document.cookie.replace(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1")
+        };
+
+        (function () {
+            const current = document.documentElement.getAttribute('data-theme') || 'dark';
+            const icon = document.getElementById('theme-icon-svg');
+            if (icon) {
+                if (current === 'light') {
+                    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+                } else {
+                    icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+                }
+            }
+
+            document.getElementById('btn-toggle-theme').addEventListener('click', () => {
+                const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+                const next = cur === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                if (icon) {
+                    if (next === 'light') {
+                        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+                    } else {
+                        icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+                    }
+                }
+            });
+        })();
+    </script>
+
+    <script type="module" src="{{ url_for('static', filename='js/friends/main.js') }}"></script>
+
+
+            </body>
+</html>

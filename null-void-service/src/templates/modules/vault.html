@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vault - Administrador de Contraseñas</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script>
+        (function () {
+            let __theme = localStorage.getItem('theme');
+            if (!__theme) { __theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+            document.documentElement.setAttribute('data-theme', __theme);
+        })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/global-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/ai.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/vault.css') }}">
+</head>
+
+<body>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="header-top">
+                    <button class="logo-toggle-btn" onclick="toggleSidebar()" title="Colapsar/Expandir menú">
+                        <div class="logo-box" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                        </div>
+                        <div class="toggle-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="9" y1="3" x2="9" y2="21"></line>
+                            </svg>
+                        </div>
+                    </button>
+                    <span class="logo-text">Null-Void Vault</span>
+                </div>
+
+                <div class="nav-item" onclick="document.getElementById('vault-upload-input').click()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>Añadir archivo cifrado</span>
+                </div>
+                <input type="file" id="vault-upload-input" style="display: none;" accept=".enc" onchange="uploadVaultFile(this)" />
+                <div class="nav-item" onclick="createNewVault()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Crear archivo cifrado</span>
+                </div>
+                <div class="nav-item" onclick="lockVault()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span>Bloquear Vault</span>
+                </div>
+            </div>
+
+            <div class="sidebar-content" id="sidebar-content">
+                <!-- Puede usarse para listar categorías en el futuro -->
+            </div>
+
+            <div class="sidebar-footer" id="sidebar-footer-btn" onclick="toggleUserMenu(event)">
+                <div class="user-info">
+                    <div class="avatar"
+                        style="width:32px;height:32px;font-size:0.8rem;background:#10b981;flex-shrink:0;position:relative;overflow:hidden;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;">
+                        <img src="/api/system/user/avatar/{{ user }}" alt=""
+                            style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;"
+                            onerror="this.style.display='none'">
+                        <span>{{ user[0]|upper if user else 'U' }}</span>
+                    </div>
+                    <div class="user-name" id="user-name-display">{{ user }}</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="opacity:0.5;flex-shrink:0;">
+                    <path d="M18 15l-6-6-6 6"></path>
+                </svg>
+            </div>
+
+            <div class="user-menu-panel" id="user-menu">
+                <div class="menu-item" onclick="window.location.href='/app'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Volver al Menú
+                </div>
+            </div>
+        </aside>
+
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+        <main class="main-chat" style="display: flex; flex-direction: column; overflow-y: auto;">
+            <nav class="top-nav">
+                <div class="top-nav-controls" style="display:flex;align-items:center;gap:15px;">
+                    <!-- Mobile Hamburger Menu -->
+                    <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()" title="Abrir Menú"
+                        style="display:none; padding:4px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="top-nav-brand"
+                    style="font-weight:700;letter-spacing:1px;font-size:0.8rem;opacity:0.6; white-space: nowrap;">
+                    NULL-VOID VAULT
+                </div>
+            </nav>
+
+            <div class="vault-container" style="flex: 1; margin: 0; padding: 20px; max-width: 1000px; align-self: center; width: 100%; display: flex; flex-direction: column;">
+                
+                <!-- File Explorer -->
+                <div class="vault-content" id="vault-explorer" style="flex: 1;">
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
+                        <h2 style="margin: 0; font-size: 1.5rem;">Mis Archivos Cifrados</h2>
+                    </div>
+                    <div id="vault-explorer-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px;">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Auth / Lock Screen -->
+                <div class="vault-content hidden" id="vault-auth-container" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                    <div class="vault-auth-screen" id="vault-auth-screen" data-is-init="false" style="width: 100%; max-width: 400px; padding: 32px; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); position: relative;">
+                        <button onclick="showExplorer()" style="position: absolute; top: 16px; left: 16px; background: none; border: none; color: var(--text-dim); cursor: pointer;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        </button>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px; color:var(--vault-primary);">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            <h2 id="auth-title">Desbloquear Vault</h2>
+                            <p id="auth-desc" style="margin-bottom: 24px; color: var(--vault-text-dim); font-size: 0.9rem;">
+                                Introduce tu contraseña maestra para desencriptar el archivo.
+                            </p>
+                        </div>
+                        <input type="password" id="vault-master-pwd" class="vault-input" placeholder="Contraseña Maestra..." autofocus />
+                        <button class="vault-btn primary" id="auth-btn" style="width: 100%; justify-content: center; padding: 12px; margin-top: 16px;" onclick="unlockVault()">
+                            Desbloquear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dashboard (Hidden until unlocked) -->
+                <div class="vault-content hidden" id="vault-dashboard" style="flex: 1;">
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <button onclick="lockVault()" class="vault-btn" title="Volver al Explorador">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            </button>
+                            <h2 style="margin: 0; font-size: 1.5rem;" id="dashboard-title">Mis Contraseñas</h2>
+                        </div>
+                        <button class="vault-btn primary" onclick="openModal(-1)">+ Añadir Nueva</button>
+                    </div>
+                    
+                    <div class="vault-list" id="vault-list">
+                        <!-- Items rendered here by JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Form -->
+    <div class="vault-modal-overlay" id="vault-modal">
+        <div class="vault-modal" style="background: var(--bg-card);">
+            <div class="vault-modal-header">
+                <div class="vault-modal-title" id="modal-title">Nueva Contraseña</div>
+                <button class="vault-modal-close" onclick="closeModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="vault-form-group" style="display: flex; gap: 8px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label>Categoría / Sitio Web</label>
+                    <select id="entry-category" class="vault-input" style="background: var(--bg-card); cursor: pointer;">
+                        <!-- Se llena dinámicamente -->
+                    </select>
+                </div>
+                <button class="vault-btn" onclick="createNewCategory()" style="height: 42px;" title="Crear nueva categoría">+</button>
+            </div>
+            
+            <div id="fixed-fields-container">
+                <!-- Usuario -->
+                <div class="field-row" style="margin-bottom: 12px; background: var(--bg-lighter); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; text-transform: uppercase; font-weight: bold; color: var(--vault-text-dim);">Usuario</span>
+                    </div>
+                    <input type="text" id="entry-usuario" class="vault-input" placeholder="Tu usuario..." style="background: var(--bg-card); width: 100%;" />
+                </div>
+                <!-- Correo -->
+                <div class="field-row" style="margin-bottom: 12px; background: var(--bg-lighter); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; text-transform: uppercase; font-weight: bold; color: var(--vault-text-dim);">Correo</span>
+                    </div>
+                    <input type="text" id="entry-correo" class="vault-input" placeholder="tu@correo.com" style="background: var(--bg-card); width: 100%;" />
+                </div>
+                <!-- Contraseña -->
+                <div class="field-row" style="margin-bottom: 12px; background: var(--bg-lighter); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; text-transform: uppercase; font-weight: bold; color: var(--vault-text-dim);">Contraseña</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="password" id="entry-pwd" class="vault-input" placeholder="Contraseña secreta..." style="background: var(--bg-card); flex: 1;" />
+                        <button class="vault-btn" type="button" onclick="togglePwdEye()" title="Ocultar/Mostrar" style="padding: 0 10px; height: 42px;" id="eye-btn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vault-modal-footer">
+                <button class="vault-btn" onclick="closeModal()">Cancelar</button>
+                <button class="vault-btn primary" onclick="saveEntry()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Modal Form -->
+    <div class="vault-modal-overlay" id="note-modal">
+        <div class="vault-modal" style="background: var(--bg-card); max-width: 600px;">
+            <div class="vault-modal-header">
+                <div class="vault-modal-title" id="note-modal-title">Editar Nota</div>
+                <button class="vault-modal-close" onclick="closeNoteModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="vault-form-group">
+                <label>Título de la nota</label>
+                <input type="text" id="note-title" class="vault-input" placeholder="Ej: Notas secretas" />
+            </div>
+            <div class="vault-form-group">
+                <label>Contenido</label>
+                <textarea id="note-content" class="vault-input" style="min-height: 200px; resize: vertical; font-family: monospace;" placeholder="Contenido de la nota..."></textarea>
+            </div>
+
+            <div class="vault-modal-footer">
+                <button class="vault-btn" onclick="closeNoteModal()">Cancelar</button>
+                <button class="vault-btn primary" onclick="saveNote()">Guardar</button>
+            </div>
+        </div>
+    <!-- Custom Alert/Prompt Modals -->
+    <div class="vault-modal-overlay" id="nv-alert-modal" style="display: none; z-index: 9999;">
+        <div class="vault-modal" style="background: var(--bg-card); max-width: 400px; text-align: center;">
+            <div id="nv-alert-title" style="font-weight: bold; font-size: 1.1rem; margin-bottom: 12px; color: var(--text);">Aviso</div>
+            <div id="nv-alert-msg" style="margin-bottom: 24px; color: var(--vault-text-dim); font-size: 0.95rem;"></div>
+            <button class="vault-btn primary" onclick="closeNVAlert()" style="width: 100%; justify-content: center;">Aceptar</button>
+        </div>
+    </div>
+
+    <div class="vault-modal-overlay" id="nv-prompt-modal" style="display: none; z-index: 9999;">
+        <div class="vault-modal" style="background: var(--bg-card); max-width: 400px;">
+            <div id="nv-prompt-title" style="font-weight: bold; font-size: 1.1rem; margin-bottom: 12px; color: var(--text);">Entrada requerida</div>
+            <div id="nv-prompt-msg" style="margin-bottom: 12px; color: var(--vault-text-dim); font-size: 0.95rem;"></div>
+            <input type="text" id="nv-prompt-input" class="vault-input" style="margin-bottom: 24px; width: 100%;" />
+            <div class="vault-modal-footer" style="margin-top: 0;">
+                <button class="vault-btn" onclick="closeNVPrompt(null)">Cancelar</button>
+                <button class="vault-btn primary" onclick="submitNVPrompt()">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/vault/main.js') }}"></script>
+</body>
+
+</html>

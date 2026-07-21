@@ -1,0 +1,174 @@
+/* Global styles for Filter Toggle */
+.mobile-filters-btn {
+  display: flex !important;
+  padding: 10px !important;
+  margin: 0 !important;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+#advanced-filters {
+  display: none !important;
+}
+
+#advanced-filters.show-filters {
+  display: flex !important;
+}
+
+/* Mobile Card Layout for Scraper Data Table */
+@media (max-width: 900px) {
+  .db-table thead { display: none; }
+  
+  .db-table, .db-table tr, .db-table td {
+    display: block;
+    width: 100%;
+  }
+  
+  .db-table tbody {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px;
+    padding: 12px 14px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .table-container { 
+    overflow-x: hidden; 
+  }
+  
+  .db-table tr {
+    background: var(--bg-card2);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    transition: background 0.2s;
+  }
+  
+  .db-table tr:hover,
+  .db-table tr:active {
+    background: rgba(99, 102, 241, 0.04);
+  }
+
+  .db-table tr:hover td,
+  .db-table tr:active td {
+    background: transparent !important;
+  }
+  
+  .db-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(99,102,241,0.06);
+    white-space: normal !important;
+    box-sizing: border-box;
+  }
+  
+  .db-table td:last-child { 
+    border-bottom: none; 
+  }
+  
+  .db-table td::before {
+    content: attr(data-label);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    flex-shrink: 0;
+  }
+  
+  /* Casos especiales: imagen y título ocupan toda la fila, sin label a la izquierda */
+  .db-table td[data-label="Imagen"] {
+    justify-content: center;
+  }
+  .db-table td[data-label="Imagen"]::before { display: none; }
+  .db-table td[data-label="Imagen"] .prod-img { width: 64px; height: 64px; }
+  
+  .db-table td[data-label="Producto"] {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .db-table td[data-label="Producto"]::before { display: none; }
+  
+  .db-table td[data-label="Sel."] { justify-content: flex-end; }
+  .db-table td[data-label="Sel."]::before { display: none; }
+
+  #advanced-filters.show-filters {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  /* Todo el contenedor de filtros en columna, ocupando 100% */
+  .db-card-header {
+    padding: 12px 14px !important;
+  }
+
+  .db-card-header-left {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* La fila con buscador local */
+  .db-card-header > div:first-child {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px;
+  }
+
+  .db-card-header > div:first-child > div:last-child {
+    max-width: 100% !important;
+  }
+
+  /* La fila de selects/inputs de filtro: apilar en columna, full width */
+  .db-card-header > div:last-child {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .db-card-header select.search-input,
+  .db-card-header input.search-input,
+  #distance-filter-container,
+  #distance-filter-container input {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  /* El grupo precio min/max en su propia fila, 50/50 */
+  .db-card-header > div:last-child > div[style*="align-items: center"] {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  /* Botones de acción (guardar/cargar/reset/lote) en fila propia, iconos pequeños */
+  #sort-fluctuation-btn,
+  button[onclick="batchScrapeListed()"] {
+    width: 100%;
+  }
+
+  /* Barra superior de scraping también en columna */
+  .header-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .header-panel > div:last-child {
+    flex-direction: column;
+    align-items: stretch !important;
+    width: 100%;
+  }
+
+  .header-panel > div:last-child input,
+  .header-panel > div:last-child button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

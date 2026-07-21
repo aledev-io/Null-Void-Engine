@@ -1,0 +1,3757 @@
+import { NV_Alert, NV_Confirm, NV_Prompt } from '../dashboard/ui.js';
+import { getCookie, formatBytes, getFileIcon, getFolderIcon, getComputerIcon, timeAgo } from '../dashboard/utils.js';
+
+let currentCloudPath = '';
+let currentCloudView = 'home';
+let currentCloudContextItem = null;
+let currentCloudInfoItem = null;
+let CLOUD_FILES = [];
+
+async function fetchCloudFiles(path = '', view = 'home') {
+    if (path === undefined) path = '';
+    currentCloudPath = path;
+    currentCloudView = view;
+    window.currentCloudPath = path;
+    window.currentCloudView = view;
+
+    if (window.cloudFolderRefreshInterval) {
+        clearInterval(window.cloudFolderRefreshInterval);
+        window.cloudFolderRefreshInterval = null;
+    }
+    document.querySelectorAll('#cloud-sidebar-nav .cloud-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    const targetItem = document.querySelector(`#cloud-sidebar-nav .cloud-nav-item[onclick*="'${view}'"]`);
+    if (targetItem) {
+        targetItem.classList.add('active');
+    }
+
+    const header = document.querySelector('.cloud-header');
+    if (header) {
+        if (view === 'home' && (path === '' || path === '/')) {
+            header.classList.remove('hide-mobile-search');
+        } else {
+            header.classList.add('hide-mobile-search');
+        }
+    }
+
+    const list = document.getElementById('cloud-file-list');
+
+    try {
+        let endpoint = `/api/cloud/files?view=${view}&path=${encodeURIComponent(path)}`;
+        if (view === 'home') endpoint = '/api/cloud/recent';
+        if (view === 'recent') endpoint = '/api/cloud/recent';
+        if (view === 'starred') endpoint = '/api/cloud/list_starred';
+        if (view === 'shared') {
+            if (!path) endpoint = '/api/cloud/shared_with_me';
+            else endpoint = `/api/cloud/files?view=shared&path=${encodeURIComponent(path)}`;
+        }
+        if (view === 'shared_by_me') endpoint = '/api/cloud/shared_by_me';
+
+        const res = await fetch(endpoint, {
+            headers: HEADERS,
+            credentials: 'include'
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(`[Cloud] Error ${res.status}:`, errText);
+            if (list) list.innerHTML = `<div style="padding:20px;color:#f87171;">Error ${res.status}: ${errText}</div>`;
+            return;
+        }
+
+        const data = await res.json();
+        CLOUD_FILES = data.files || [];
+
+        renderCloudBreadcrumbs(path, view === 'home' ? window.t_cloud('nav_home', 'Página principal') : (view === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (view === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
+
+        const query = document.getElementById('cloud-search')?.value.toLowerCase() || '';
+        const closeBtn = document.getElementById('btn-close-mobile-search');
+        if (closeBtn) {
+            closeBtn.style.display = query ? 'flex' : 'none';
+        }
+        if (query) {
+            filterCloudFiles();
+        } else {
+            renderCloudFiles(CLOUD_FILES, view === 'home' || view === 'recent');
+        }
+
+        updateCloudQuotaInfo();
+
+        const btnNew = document.querySelector('.btn-new-drive');
+        if (btnNew) {
+            btnNew.style.display = (view === 'drive' || view === 'computers' || view === 'backups' || view === 'business' || view === 'home' || view === 'recent') ? 'flex' : 'none';
+        }
+
+        const layoutToggle = document.getElementById('cloud-layout-toggle-group');
+        if (layoutToggle) {
+            layoutToggle.style.display = (view === 'home' || view === 'recent') ? 'none' : 'flex';
+        }
+
+        if (view === 'computers' && path !== '') {
+            window.cloudFolderRefreshInterval = setInterval(async () => {
+                if (currentCloudView === 'computers' && currentCloudPath === path) {
+                    try {
+                        let refreshEndpoint = `/api/cloud/files?view=computers&path=${encodeURIComponent(path)}`;
+                        const refreshRes = await fetch(refreshEndpoint, { headers: HEADERS, credentials: 'include' });
+                        if (refreshRes.ok) {
+                            const refreshData = await refreshRes.json();
+                            CLOUD_FILES = refreshData.files || [];
+                            const queryVal = document.getElementById('cloud-search')?.value.toLowerCase() || '';
+                            if (!queryVal && currentCloudView === 'computers' && currentCloudPath === path) {
+                                if (SELECTED_CLOUD_ITEMS.length === 0) {
+                                    renderCloudFiles(CLOUD_FILES, false);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[Cloud] Error en autorefresco de archivos:", e);
+                    }
+                } else {
+                    clearInterval(window.cloudFolderRefreshInterval);
+                    window.cloudFolderRefreshInterval = null;
+                }
+            }, 3000);
+        }
+
+    } catch (err) {
+        console.error("[Cloud] Error de carga:", err);
+        if (list) list.innerHTML = `<div style="padding:20px;color:#f87171;">Error: ${err.message}</div>`;
+    }
+}
+
+let searchTimeout = null;
+
+async function filterCloudFiles() {
+    const query = document.getElementById('cloud-search')?.value.trim() || '';
+
+    if (searchTimeout) clearTimeout(searchTimeout);
+
+    const closeBtn = document.getElementById('btn-close-mobile-search');
+    if (closeBtn) {
+        // En móvil se maneja su visibilidad aquí.
+        closeBtn.style.display = query ? 'flex' : 'none';
+    }
+
+    if (!query) {
+        renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
+        renderCloudBreadcrumbs(currentCloudPath, currentCloudView === 'home' ? window.t_cloud('nav_home', 'Página principal') : (currentCloudView === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (currentCloudView === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
+        return;
+    }
+
+    searchTimeout = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/cloud/search?q=${encodeURIComponent(query)}`, { headers: HEADERS });
+            if (!res.ok) return;
+            const data = await res.json();
+            const displayQuery = query.length > 15 ? query.substring(0, 15) + '...' : query;
+            renderCloudBreadcrumbs(null, `Resultados para "${displayQuery}"`);
+            renderCloudFiles(data.files || [], false);
+        } catch (err) {
+            console.error("[Cloud] Error al buscar archivos:", err);
+        }
+    }, 250);
+}
+
+function renderCloudBreadcrumbs(path, customTitle = null) {
+    const container = document.getElementById('cloud-breadcrumbs');
+    if (!container) return;
+
+    if (currentCloudView === 'computers' && currentCloudPath === '') {
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                <span class="breadcrumb-item active" style="color: var(--text-main);">${window.t_cloud('nav_computers', 'Computadoras')}</span>
+                <button onclick="openLinkDeviceModal()" class="btn-primary hide-mobile" style="padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; background: var(--indigo); color: #fff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(99,102,241,0.3); transition: all 0.2s; margin-left: 10px;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(99,102,241,0.4)';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 2px 8px rgba(99,102,241,0.3)';">
+                    <span>💻</span>
+                    <span>${window.t_cloud('link_new_computer', 'Vincular nuevo computador')}</span>
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    if (customTitle) {
+        container.innerHTML = `<span class="breadcrumb-item active" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; width: 100%;">${customTitle}</span>`;
+        return;
+    }
+
+    const parts = path.split('/').filter(p => p);
+
+    let rootName = window.t_cloud('nav_drive', 'Mi unidad');
+    let rootAction = "fetchCloudFiles('', 'drive')";
+
+    if (currentCloudView === 'computers') {
+        rootName = window.t_cloud('nav_computers', 'Computadoras');
+        rootAction = "fetchCloudFiles('', 'computers')";
+    } else if (currentCloudView === 'backups') {
+        rootName = window.t_cloud('nav_backups', 'Backups');
+        rootAction = "fetchCloudFiles('', 'backups')";
+    } else if (currentCloudView === 'business') {
+        rootName = window.t_cloud('nav_billing', 'Facturación');
+        rootAction = "fetchCloudFiles('', 'business')";
+    } else if (currentCloudView === 'trash') {
+        rootName = window.t_cloud('nav_trash', 'Papelera');
+        rootAction = "fetchCloudFiles('', 'trash')";
+    } else if (currentCloudView === 'shared_by_me') {
+        rootName = window.t_cloud('shared_by_me_title', 'Compartidos por mí');
+        rootAction = "fetchCloudFiles('', 'shared_by_me')";
+    } else if (currentCloudView === 'shared') {
+        rootName = window.t_cloud('nav_shared', 'Compartidos conmigo');
+        rootAction = "fetchCloudFiles('', 'shared')";
+    }
+
+    // Botón vaciar papelera cuando estamos en la raíz de trash
+    let trashEmptyBtn = '';
+    if (currentCloudView === 'trash' && !path && CLOUD_FILES && CLOUD_FILES.length > 0) {
+        trashEmptyBtn = `
+            <button onclick="emptyCloudTrash()" style="padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.3); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; margin-left: 12px; flex-shrink: 0;" onmouseover="this.style.background='rgba(239,68,68,0.2)'; this.style.borderColor='#f87171';" onmouseout="this.style.background='rgba(239,68,68,0.1)'; this.style.borderColor='rgba(239,68,68,0.3)';">
+                🗑️ ${window.t_cloud('ctx_empty_trash', 'Vaciar papelera')}
+            </button>`;
+    }
+
+    // Ocultar botón de vincular dispositivo si estamos en la papelera para ahorrar espacio
+    const linkBtn = document.getElementById('btn-link-device-topbar');
+    if (linkBtn) {
+        linkBtn.style.display = currentCloudView === 'trash' ? 'none' : 'flex';
+    }
+
+    let html = `<span class="breadcrumb-item ${!path ? 'active' : ''} ${parts.length > 0 ? 'hide-mobile' : ''}" onclick="${rootAction}">${rootName}</span>${trashEmptyBtn}`;
+
+    let currentAccumulated = '';
+    parts.forEach((p, i) => {
+        currentAccumulated += (i === 0 ? '' : '/') + p;
+        if (i === 0) {
+            html += `<span class="${parts.length > 0 ? 'hide-mobile' : ''}" style="margin: 0 8px; opacity: 0.5;">›</span>`;
+        } else {
+            html += `<span style="margin: 0 8px; opacity: 0.5;">›</span>`;
+        }
+        html += `<span class="breadcrumb-item ${i === parts.length - 1 ? 'active' : ''}" onclick="navigateCloud('${currentAccumulated}')">${p}</span>`;
+    });
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.breadcrumb-item').forEach(item => {
+        if (item.classList.contains('active')) return;
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            item.style.color = 'var(--indigo)';
+            item.style.fontWeight = 'bold';
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.style.color = '';
+            item.style.fontWeight = '';
+        });
+
+        item.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            item.style.color = '';
+            item.style.fontWeight = '';
+
+            const onclickAttr = item.getAttribute('onclick') || '';
+            let targetPath = '';
+
+            if (onclickAttr.includes("navigateCloud('")) {
+                targetPath = onclickAttr.split("navigateCloud('")[1].split("')")[0];
+            } else if (onclickAttr.includes("fetchCloudFiles('',")) {
+                targetPath = '';
+            }
+
+            try {
+                const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                if (data && data.items) {
+                    let movedCount = 0;
+                    for (const itemData of data.items) {
+                        if (itemData.isDir && targetPath.startsWith([itemData.path, itemData.name].filter(Boolean).join('/'))) {
+                            continue;
+                        }
+
+                        const res = await fetch('/api/cloud/move', {
+                            method: 'POST',
+                            headers: HEADERS,
+                            body: JSON.stringify({
+                                name: itemData.name,
+                                old_path: itemData.path,
+                                new_path: targetPath,
+                                view: currentCloudView
+                            })
+                        });
+                        if (res.ok) movedCount++;
+                    }
+                    if (movedCount > 0) {
+                        clearCloudSelection();
+                        fetchCloudFiles(currentCloudPath, currentCloudView);
+                    }
+                }
+            } catch (err) {
+                console.error("Error drop breadcrumb:", err);
+            }
+        });
+    });
+}
+
+function renderCloudFiles(files, isRecent = false) {
+    const list = document.getElementById('cloud-file-list');
+    const header = document.querySelector('.cloud-table-header');
+    if (!list) return;
+
+    const isHomeOrRecent = currentCloudView === 'home' || currentCloudView === 'recent';
+
+    if (currentCloudLayout === 'grid' && !isHomeOrRecent) {
+        list.classList.add('grid-layout');
+    } else {
+        list.classList.remove('grid-layout');
+    }
+
+    if (typeof clearCloudSelection === 'function') {
+        clearCloudSelection();
+    }
+
+    if (header) {
+        if (currentCloudLayout === 'grid' && !isHomeOrRecent) {
+            header.style.display = 'none';
+        } else if (isRecent || (currentCloudView === 'computers' && currentCloudPath === '' && (!files || files.length === 0))) {
+            header.style.display = 'none';
+        } else {
+            header.style.display = 'grid';
+        }
+    }
+
+    if (!files || files.length === 0) {
+        if (currentCloudView === 'computers' && currentCloudPath === '') {
+            list.innerHTML = `
+<div style="display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; min-height: 200px; width: 100%;">
+    <div style="display: flex; flex-direction: column; align-items: center; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: clamp(16px, 4vw, 36px) clamp(16px, 5vw, 40px); box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 100%; max-width: 480px; gap: 0;">
+        <div style="font-size: clamp(2rem, 8vw, 3.5rem); line-height: 1; margin-bottom: clamp(10px, 2vw, 18px);">💻</div>
+        <h3 style="font-size: clamp(0.95rem, 3.5vw, 1.35rem); font-weight: 700; color: var(--text-main); margin: 0 0 clamp(6px, 1.5vw, 10px); line-height: 1.3;">${window.t_cloud('link_modal_title')}</h3>
+        <p style="font-size: clamp(0.75rem, 2.5vw, 0.88rem); color: var(--text-muted); margin: 0 0 clamp(14px, 3vw, 22px); line-height: 1.5;">
+            ${window.t_cloud('link_modal_desc_computers')}
+        </p>
+        <button onclick="openLinkDeviceModal()" class="btn-primary" style="padding: clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px); border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99,102,241,0.4); cursor: pointer; border: none; background: var(--indigo); color: #fff; font-size: clamp(0.78rem, 2.5vw, 0.95rem); white-space: nowrap;">
+            <span>⚡</span> ${window.t_cloud('link_this_device')}
+        </button>
+    </div>
+</div>`;
+        } else {
+            list.innerHTML = `<div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.3; margin-top: 50px;">
+            <div style="font-size: 4rem; margin-bottom: 10px;">📂</div>
+            <p>${isRecent ? window.t_cloud('no_recent_activity') : window.t_cloud('empty_folder')}</p>
+        </div>`;
+        }
+        return;
+    }
+
+    function getFileTemplateData(f) {
+        const fpath = (isRecent || f.path !== undefined) ? f.path : currentCloudPath;
+        const fullPath = [fpath, f.name].filter(Boolean).join('/');
+        const displayPath = fpath || window.t_cloud('nav_drive', 'Mi unidad');
+
+        const ownerDisplayRaw = (f.owner === window.CURRENT_USER || f.owner === 'Yo') ? 'Yo' : f.owner;
+        const ownerDisplay = (ownerDisplayRaw === 'Yo') ? window.t_cloud('me', 'Yo') : ownerDisplayRaw;
+        const isMine = (ownerDisplayRaw === 'Yo') || (currentCloudView === 'shared_by_me');
+
+        const clickAction = f.is_dir
+            ? `navigateCloud(\`${fullPath.replace(/'/g, "\\'")}\`, '${f.view || currentCloudView}')`
+            : `downloadCloudFile(\`${f.name.replace(/'/g, "\\'")}\`, \`${fpath.replace(/'/g, "\\'")}\`, false, '${f.owner_id || ''}', '${f.view || currentCloudView}', '${currentCloudView === 'trash' ? (f.id || '') : ''}', \`${ownerDisplay}\`, ${f.shared ? 'true' : 'false'})`;
+
+        let icon = f.is_dir ? getFolderIcon() : getFileIcon(f.ext);
+        let statusBadge = '';
+        if (currentCloudView === 'computers' && currentCloudPath === '') {
+            icon = getComputerIcon();
+            if (f.active) {
+                statusBadge = `<span style="display:inline-block; width:8px; height:8px; background:#10b981; border-radius:50%; margin-left:4px;" title="Online"></span>`;
+            } else {
+                statusBadge = `<span style="display:inline-block; width:8px; height:8px; background:#ef4444; border-radius:50%; margin-left:4px;" title="Offline"></span>`;
+            }
+        } else if (f.shared) {
+            statusBadge = `<span style="color: #818cf8; font-size: 0.9rem; margin-left: 6px;" title="Compartido">👥</span>`;
+        }
+
+        const safeClickAction = clickAction.replace(/`/g, "\\`").replace(/'/g, "\\'");
+        const safeName = f.name.replace(/'/g, "\\'");
+        const safePath = fpath.replace(/'/g, "\\'");
+
+        const checkboxHtml = (currentCloudView !== 'home')
+            ? `<input type="checkbox" class="cloud-file-checkbox" onclick="event.stopPropagation(); toggleCloudFileSelection(this, \`${safeName}\`, \`${safePath}\`, ${f.is_dir}, '${f.owner_id || ''}')">`
+            : '';
+
+        const isImg = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(f.ext);
+        const isVid = ['.mp4', '.webm', '.mov'].includes(f.ext);
+        const isPdf = f.ext === '.pdf';
+
+        let previewContent = `<span style="font-size: 3rem; opacity: 0.25;">${getFileIcon(f.ext)}</span>`;
+
+        const previewView = f.id ? 'trash' : (f.view || currentCloudView);
+
+        if (isImg) {
+            previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}">`;
+        } else if (isVid) {
+            previewContent = `
+                <div style="width:100%; height:100%; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                    <img src="/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}" style="width:100%; height:100%; object-fit:cover;">
+                    <div class="video-overlay" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--indigo); color: #fff; font-size: 0.8rem; position:absolute; z-index:2;">▶</div>
+                </div>`;
+        } else if (isPdf) {
+            previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}">`;
+        }
+
+        return {
+            fpath,
+            fullPath,
+            displayPath,
+            ownerDisplay,
+            isMine,
+            icon,
+            statusBadge,
+            safeClickAction,
+            safeName,
+            safePath,
+            checkboxHtml,
+            previewContent
+        };
+    }
+
+    let html = '';
+
+    if (isRecent) {
+        const suggested = files.slice(0, 4);
+        html += `
+    <div style="padding: 20px 24px 10px 24px;">
+        <h3 style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('suggested', 'Sugeridos')}</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; margin-bottom: 40px;">
+            ${suggested.map(f => {
+            const isImg = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(f.ext);
+            const isVid = ['.mp4', '.webm', '.mov'].includes(f.ext);
+            const isPdf = f.ext === '.pdf';
+
+            let previewContent = `<span style="font-size: 2.5rem;">${getFileIcon(f.ext)}</span>`;
+
+            if (isImg) {
+                previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}" class="card-preview-img">`;
+            } else if (isVid) {
+                previewContent = `
+                        <div style="width:100%; height:100%; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                            <img src="/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}" class="card-preview-img" style="width:100%; height:100%; object-fit:cover;">
+                            <div class="video-overlay" style="display:flex; align-items:center; justify-content:center; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.5); color:#fff; font-size:0.9rem; z-index:2;">▶</div>
+                        </div>`;
+            } else if (isPdf) {
+                previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}" class="card-preview-img">`;
+            }
+
+            return `
+                    <div class="cloud-suggested-card" 
+                         data-name="${f.name}" data-path="${f.path}" data-is-dir="false" data-starred="${f.starred}" data-view="${f.view || ''}"
+                         onclick="downloadCloudFile(\`${f.name.replace(/'/g, "\\'")}\`, \`${f.path.replace(/'/g, "\\'")}\`, false, '${f.owner_id || ''}')">
+                        <div class="card-preview">
+                            ${previewContent}
+                        </div>
+                        <div class="card-info">
+                            <span class="card-name">${f.name}</span>
+                            <span class="card-meta">${window.t_cloud(f.action_type || 'act_abrio', f.action_type || 'Visto')} · ${timeAgo(f.action_time || f.mtime)}</span>
+                        </div>
+                    </div>
+                `;
+        }).join('')}
+        </div>
+        <h3 style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('recent_activity', 'Actividad reciente')}</h3>
+        <div class="cloud-table-header" style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); background: transparent; position: static;">
+            <span>${window.t_cloud('col_name', 'Nombre')}</span>
+            <span>${window.t_cloud('col_owner', 'Propietario')}</span>
+            <span>${window.t_cloud('col_date', 'Fecha de modificación')}</span>
+            <span>${window.t_cloud('col_size', 'Tamaño del archivo')}</span>
+            <span></span>
+        </div>
+    </div>`;
+    }
+
+    if (currentCloudLayout === 'grid' && !isHomeOrRecent) {
+        const folders = files.filter(f => f.is_dir);
+        const items = files.filter(f => !f.is_dir);
+
+        let gridHtml = '';
+
+        if (folders.length > 0) {
+            gridHtml += `<div class="cloud-folders-grid">`;
+            gridHtml += folders.map(f => {
+                const d = getFileTemplateData(f);
+                return `
+                <div class="cloud-folder-row"
+                     data-name="${f.name}" data-path="${d.fpath}" data-is-dir="true" data-starred="${f.starred}" data-protected="${f.protected === true}"
+                     data-trash-id="${f.id || ''}" data-owner-id="${f.owner_id || ''}" data-view="${f.view || ''}" data-is-mine="${d.isMine}"
+                     onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, true, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+                    ${d.checkboxHtml}
+                    <span class="cloud-folder-row-icon">${d.icon}</span>
+                    <span class="cloud-folder-row-name">${f.name}</span>
+                    ${f.starred ? '<span style="color:#fbbf24;font-size:0.75rem;flex-shrink:0;">★</span>' : ''}
+                    <button class="cloud-folder-row-menu" onclick="handleCloudAction(event, '${f.name}', true, '${d.fpath}')">⋮</button>
+                </div>`;
+            }).join('');
+            gridHtml += `</div>`;
+        }
+
+        if (items.length > 0) {
+            gridHtml += `<div class="cloud-files-grid">`;
+            gridHtml += items.map(f => {
+                const d = getFileTemplateData(f);
+                return `
+                <div class="cloud-file-card"
+                     data-name="${f.name}" data-path="${d.fpath}" data-is-dir="false" data-starred="${f.starred}" data-protected="${f.protected === true}"
+                     data-trash-id="${f.id || ''}" data-owner-id="${f.owner_id || ''}" data-view="${f.view || ''}" data-is-mine="${d.isMine}"
+                     onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, false, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+                    <div class="cloud-file-card-header">
+                        ${d.checkboxHtml}
+                        <span class="cloud-file-card-icon">${d.icon}</span>
+                        <span class="cloud-file-card-name">${f.name}</span>
+                        ${f.starred ? '<span style="color:#fbbf24;font-size:0.75rem;flex-shrink:0;">★</span>' : ''}
+                        <button class="cloud-file-card-menu" onclick="handleCloudAction(event, '${f.name}', false, '${d.fpath}')">⋮</button>
+                    </div>
+                    <div class="cloud-file-card-preview">
+                        ${d.previewContent}
+                    </div>
+                </div>`;
+            }).join('');
+            gridHtml += `</div>`;
+        }
+
+        html += gridHtml;
+    } else {
+        // Si estamos en la papelera, agrupar por origen (view)
+        if (currentCloudView === 'trash' && files.length > 0) {
+            const viewLabels = { 'drive': '📁 ' + window.t_cloud('nav_drive', 'Mi unidad'), 'backups': '💾 Backups', 'business': '📑 ' + window.t_cloud('nav_business', 'Facturación'), 'computers': '💻 ' + window.t_cloud('nav_computers', 'Computadoras') };
+            const groups = {};
+            files.forEach(f => {
+                const src = f.view || 'drive';
+                if (!groups[src]) groups[src] = [];
+                groups[src].push(f);
+            });
+            const sortedKeys = Object.keys(groups).sort((a, b) => (viewLabels[a] || a).localeCompare(viewLabels[b] || b));
+            sortedKeys.forEach(key => {
+                html += `<div style="padding: 12px 24px 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); opacity: 0.7; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 2px;">${viewLabels[key] || key}</div>`;
+                html += groups[key].map(f => renderListRow(f, isRecent, getFileTemplateData)).join('');
+            });
+        } else {
+            html += files.map(f => renderListRow(f, isRecent, getFileTemplateData)).join('');
+        }
+    }
+
+    list.innerHTML = html;
+    if (currentCloudView !== 'home' && currentCloudView !== 'shared') {
+        list.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card').forEach(row => {
+            const name = row.getAttribute('data-name');
+            const isDir = row.getAttribute('data-is-dir') === 'true';
+            const path = row.getAttribute('data-path');
+
+            row.setAttribute('draggable', 'true');
+
+            row.addEventListener('dragstart', (e) => {
+                row.classList.add('dragging');
+                const isSelected = SELECTED_CLOUD_ITEMS.some(item => item.row === row);
+                if (!isSelected) {
+                    clearCloudSelection();
+                    const checkbox = row.querySelector('.cloud-file-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = true;
+                        toggleCloudFileSelection(checkbox, name, path, isDir, row.getAttribute('data-owner-id'));
+                    }
+                }
+                e.dataTransfer.setData('text/plain', JSON.stringify({
+                    items: SELECTED_CLOUD_ITEMS.map(item => ({ name: item.name, path: item.path, isDir: item.isDir }))
+                }));
+                e.dataTransfer.effectAllowed = 'move';
+
+                const dragGhost = document.createElement('div');
+                dragGhost.id = 'cloud-drag-ghost';
+                dragGhost.style.position = 'absolute';
+                dragGhost.style.top = '-9999px';
+                dragGhost.style.left = '-9999px';
+                dragGhost.style.display = 'flex';
+                dragGhost.style.alignItems = 'center';
+                dragGhost.style.gap = '10px';
+                dragGhost.style.padding = '8px 16px';
+                dragGhost.style.background = 'rgba(15, 23, 42, 0.95)';
+                dragGhost.style.border = '1px solid rgba(99, 102, 241, 0.4)';
+                dragGhost.style.borderRadius = '20px';
+                dragGhost.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.4)';
+                dragGhost.style.color = '#fff';
+                dragGhost.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+                dragGhost.style.fontSize = '0.82rem';
+                dragGhost.style.fontWeight = '600';
+                dragGhost.style.pointerEvents = 'none';
+                dragGhost.style.whiteSpace = 'nowrap';
+                dragGhost.style.zIndex = '-99999';
+
+                let ghostIcon = isDir ? getFolderIcon() : getFileIcon('.txt');
+                const dotIdx = name.lastIndexOf('.');
+                if (!isDir && dotIdx !== -1) {
+                    const ext = name.substring(dotIdx + 1).toLowerCase();
+                    if (typeof getFileIcon === 'function') {
+                        ghostIcon = getFileIcon(ext);
+                    }
+                }
+                let ghostText = name;
+
+                if (SELECTED_CLOUD_ITEMS.length > 1) {
+                    ghostIcon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="#5f6368"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H8v-2h6v2zm2-4H6v-2h10v2zm0-4H6V6h10v2z"/></svg>`;
+                    ghostText = `Moviendo ${SELECTED_CLOUD_ITEMS.length} elementos`;
+                }
+
+                dragGhost.innerHTML = `
+                    <span style="font-size: 1.15rem; line-height: 1;">${ghostIcon}</span>
+                    <span style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ghostText}</span>
+                `;
+
+                document.body.appendChild(dragGhost);
+
+                e.dataTransfer.setDragImage(dragGhost, 25, 20);
+
+                setTimeout(() => {
+                    if (dragGhost.parentNode) {
+                        dragGhost.parentNode.removeChild(dragGhost);
+                    }
+                }, 0);
+            });
+
+            row.addEventListener('dragend', () => {
+                row.classList.remove('dragging');
+                list.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card').forEach(r => r.classList.remove('drag-over'));
+            });
+
+            if (isDir) {
+                row.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    row.classList.add('drag-over');
+                    e.dataTransfer.dropEffect = 'move';
+                });
+
+                row.addEventListener('dragleave', () => {
+                    row.classList.remove('drag-over');
+                });
+
+                row.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    row.classList.remove('drag-over');
+                    try {
+                        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                        if (data && data.items) {
+                            const targetPath = [path, name].filter(Boolean).join('/');
+                            let movedCount = 0;
+                            for (const item of data.items) {
+                                if (item.isDir && targetPath.startsWith([item.path, item.name].filter(Boolean).join('/'))) {
+                                    continue;
+                                }
+                                const res = await fetch('/api/cloud/move', {
+                                    method: 'POST',
+                                    headers: HEADERS,
+                                    body: JSON.stringify({
+                                        name: item.name,
+                                        old_path: item.path,
+                                        new_path: targetPath,
+                                        view: currentCloudView
+                                    })
+                                });
+                                if (res.ok) movedCount++;
+                            }
+                            if (movedCount > 0) {
+                                clearCloudSelection();
+                                fetchCloudFiles(currentCloudPath, currentCloudView);
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Error drop:", err);
+                    }
+                });
+            }
+        });
+    }
+}
+
+function renderListRow(f, isRecent, getFileTemplateData) {
+    const d = getFileTemplateData(f);
+    return `
+    <div class="cloud-file-row" 
+         data-name="${f.name}" data-path="${d.fpath}" data-is-dir="${f.is_dir}" data-starred="${f.starred}" data-protected="${f.protected === true}"
+         data-trash-id="${f.id || ''}" data-owner-id="${f.owner_id || ''}" data-view="${f.view || ''}" data-shared-with="${f.shared_with || ''}" data-is-mine="${d.isMine}"
+         onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+        <div class="cloud-file-name" style="position: relative; ${currentCloudView === 'home' ? 'padding-left: 0;' : ''}">
+            ${d.checkboxHtml}
+            <span style="font-size: 1.2rem;">${d.icon}</span>
+            <div style="display: flex; flex-direction: column; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${f.name}</span>
+                    ${d.statusBadge}
+                    ${f.starred ? '<span style="color: #fbbf24; font-size: 0.8rem;">★</span>' : ''}
+                    ${f.protected ? '<span style="font-size: 0.8rem; opacity: 0.6; cursor: help;" title="Este elemento está protegido contra eliminación">🔒</span>' : ''}
+                </div>
+                ${(isRecent || f.path !== undefined) ? `<span style="font-size: 0.65rem; opacity: 0.5;">${window.t_cloud('in_lower', 'en')} ${d.displayPath}</span>` : ''}
+            </div>
+        </div>
+        <div class="cloud-file-owner" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim); display: flex; align-items: center; gap: 8px;">
+            ${(currentCloudView === 'shared_by_me' && f.shared_with) ? `<img src="/api/system/user/avatar/${f.shared_with}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;" onerror="this.style.display='none'">` : ((f.owner_id && !d.isMine && currentCloudView !== 'shared_by_me') ? `<img src="/api/system/user/avatar/${f.owner_id}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;" onerror="this.style.display='none'">` : '')}
+            <span>${d.ownerDisplay || window.t_cloud('me', 'Yo')}</span>
+        </div>
+        <div class="cloud-file-date" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim);">
+            ${new Date(f.mtime * 1000).toLocaleDateString(window.currentLang, { day: '2-digit', month: 'short', year: 'numeric' })}
+        </div>
+        <div class="cloud-file-size" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim);">
+            ${f.is_dir ? '--' : formatBytes(f.size)}
+        </div>
+        <div class="cloud-file-actions" style="width: 40px; display: flex; justify-content: flex-end;">
+             <button onclick="handleCloudAction(event, '${f.name}', ${f.is_dir}, '${d.fpath}')" style="background: none; border: none; color: inherit; cursor: pointer; padding: 5px; opacity: 0.5;">⋮</button>
+        </div>
+    </div>`;
+}
+
+function navigateCloud(path, view = null) {
+    let targetView = view || currentCloudView;
+    if ((currentCloudView === 'home' || currentCloudView === 'recent') && !view) {
+        if (path.includes('.computers') || path.startsWith('.computers')) {
+            targetView = 'computers';
+        } else if (path.includes('.backups') || path.startsWith('.backups')) {
+            targetView = 'backups';
+        } else if (path.includes('.business') || path.startsWith('.business')) {
+            targetView = 'business';
+        } else {
+            targetView = 'drive';
+        }
+    }
+    fetchCloudFiles(path, targetView);
+}
+
+function handleCloudNavClick(el, section) {
+    document.querySelectorAll('#cloud-sidebar-nav .cloud-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    el.classList.add('active');
+
+    if (section === 'home') {
+        fetchCloudFiles('', 'home');
+    } else if (section === 'recent') {
+        fetchCloudFiles('', 'recent');
+    } else if (section === 'drive') {
+        fetchCloudFiles('', 'drive');
+    } else if (section === 'computers') {
+        fetchCloudFiles('', 'computers');
+    } else if (section === 'backups') {
+        fetchCloudFiles('', 'backups');
+    } else if (section === 'business') {
+        fetchCloudFiles('', 'business');
+    } else if (section === 'starred') {
+        fetchCloudFiles('', 'starred');
+    } else if (section === 'trash') {
+        fetchCloudFiles('', 'trash');
+    } else if (section === 'shared') {
+        fetchCloudFiles('', 'shared');
+    } else if (section === 'shared_by_me') {
+        fetchCloudFiles('', 'shared_by_me');
+    } else {
+        renderCloudFiles([]);
+    }
+}
+
+function showCloudNewMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('cloud-new-menu');
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+
+    if (currentCloudView === 'computers' && currentCloudPath === '') {
+        menu.innerHTML = `
+            <div class="context-item" onclick="openLinkDeviceModal()">
+                <span style="font-size: 1.1rem;">💻</span> <span data-i18n="new_computer">${window.t_cloud('new_computer') || 'Añadir computadora'}</span>
+            </div>
+        `;
+    } else {
+        menu.innerHTML = `
+            <div class="context-item" onclick="triggerNewItemAction('file')">
+                <span style="font-size:1.1rem; opacity:0.7;">↑</span> <span data-i18n="new_upload_file">${window.t_cloud('new_upload_file') || 'Subir archivo'}</span>
+            </div>
+            <div class="context-item" onclick="triggerNewItemAction('folder')">
+                <span style="font-size:1.1rem; opacity:0.7;">⇡</span> <span data-i18n="new_upload_folder">${window.t_cloud('new_upload_folder') || 'Subir carpeta'}</span>
+            </div>
+            <div class="context-item" onclick="triggerNewItemAction('mkdir')">
+                <span style="font-size:1.1rem; opacity:0.7;">+</span> <span data-i18n="ctx_new_folder">${window.t_cloud('ctx_new_folder') || 'Carpeta nueva'}</span>
+            </div>
+        `;
+    }
+
+    menu.style.display = 'block';
+    menu.style.left = rect.left + 'px';
+    menu.style.top = (rect.bottom + 8) + 'px';
+
+    const closeMenu = () => {
+        menu.style.display = 'none';
+        window.removeEventListener('click', closeMenu);
+    };
+    setTimeout(() => window.addEventListener('click', closeMenu), 10);
+}
+
+let _currentCloudLimitBytes = Infinity;
+let _currentCloudUsedBytes = 0;
+
+async function updateCloudQuotaInfo() {
+    const bar = document.getElementById('cloud-quota-bar');
+    const text = document.getElementById('cloud-quota-text');
+
+    try {
+        const token = getCookie('token') || '';
+        const res = await fetch('/api/cloud/quota', {
+            method: 'GET',
+            headers: { 'X-Token': token, 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+
+        if (!res.ok) throw new Error("Status: " + res.status);
+        const data = await res.json();
+
+        const usedBytes = data.used_bytes || 0;
+        const limitGb = data.limit_gb !== undefined ? data.limit_gb : 5;
+        const freeDisk = data.disk_free || 0;
+
+        const limitBytes = limitGb * 1024 * 1024 * 1024;
+        _currentCloudLimitBytes = limitBytes;
+        _currentCloudUsedBytes = usedBytes;
+        let percent = 0;
+        if (limitBytes === 0) {
+            // If quota is 0, don't show an aggressive 100% full bar
+            percent = usedBytes > 0 ? 100 : 0;
+        } else {
+            percent = (usedBytes / limitBytes) * 100;
+        }
+
+        if (bar) {
+            bar.style.width = Math.min(percent, 100) + '%';
+            // Only show red danger color if limit is actually greater than 0 and we are near it
+            bar.style.background = (percent > 90 && limitBytes > 0) ? 'var(--cpu)' : 'var(--indigo)';
+        }
+
+        if (text) {
+            text.innerHTML = `
+            <div class="quota-text-main" style="font-size: 0.85rem;">
+                ${formatBytes(usedBytes)} ${window.t_cloud('of')} ${limitGb} GB ${window.t_cloud('used')}
+            </div>
+            <div class="quota-text-disk" style="font-size: 0.75rem; margin-top: 6px;">
+                ${window.t_cloud('disk')}: ${formatBytes(freeDisk)} ${window.t_cloud('available')}
+            </div>
+        `;
+        }
+
+        const btn = document.getElementById('cloud-quota-request-btn');
+        if (btn) {
+            if (data.has_pending_request) {
+                btn.innerHTML = window.currentLang === 'en' ? 'Cancel pending request' : 'Cancelar petición pendiente';
+                btn.style.borderColor = 'rgba(248, 113, 113, 0.3)';
+                btn.style.color = 'var(--cpu)';
+                btn.onclick = cancelCloudQuotaRequest;
+            } else {
+                btn.innerHTML = window.t_cloud('get_more_space', 'Obtener más espacio');
+                btn.style.borderColor = 'var(--border)';
+                btn.style.color = 'var(--text-main)';
+                btn.onclick = requestMoreCloudQuota;
+            }
+        }
+    } catch (err) {
+        console.error("Error cuota cloud:", err);
+        if (text) text.innerHTML = `<span style="color:#f87171">${window.currentLang === 'en' ? 'Connection error' : 'Error de conexión'}</span>`;
+    }
+}
+
+async function cancelCloudQuotaRequest() {
+    if (!await NV_Confirm(window.currentLang === 'en' ? 'Are you sure you want to cancel your quota request?' : '¿Seguro que quieres cancelar tu petición de cuota?', window.currentLang === 'en' ? 'Cancel Request' : 'Cancelar petición', window.currentLang === 'en' ? 'Confirm' : 'Confirmar', window.currentLang === 'en' ? 'Back' : 'Volver')) return;
+    try {
+        const res = await fetch('/api/cloud/quota', {
+            method: 'DELETE',
+            headers: HEADERS
+        });
+        if (res.ok) {
+            updateCloudQuotaInfo();
+        }
+    } catch (err) { }
+}
+
+async function requestMoreCloudQuota() {
+    if (!await NV_Confirm(window.currentLang === 'en' ? 'Are you sure you want to request 10GB more from the Admin?' : '¿Seguro que quieres solicitar 10GB más al Administrador?', window.currentLang === 'en' ? 'Request Space' : 'Solicitar espacio', window.currentLang === 'en' ? 'Confirm' : 'Confirmar', window.currentLang === 'en' ? 'Cancel' : 'Cancelar')) return;
+    try {
+        const res = await fetch('/api/cloud/quota', {
+            method: 'POST',
+            headers: HEADERS
+        });
+        if (res.ok) {
+            await NV_Alert(window.currentLang === 'en' ? 'Request sent! Waiting for admin approval.' : '¡Petición enviada! Esperando aprobación del admin.');
+            updateCloudQuotaInfo();
+        } else {
+            const errData = await res.json();
+            await NV_Alert(errData.error || 'Error.');
+        }
+    } catch (err) { }
+}
+
+async function fetchAdminQuotaRequests() {
+    try {
+        const res = await fetch('/api/cloud/admin/quota_requests', { headers: HEADERS });
+        if (res.ok) {
+            const data = await res.json();
+            renderAdminQuotaRequests(data.requests || []);
+        }
+    } catch (err) { console.error(err); }
+}
+
+async function resolveQuotaRequest(id, action) {
+    try {
+        const res = await fetch('/api/cloud/admin/quota_requests', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ id, action })
+        });
+        if (res.ok) {
+            fetchAdminQuotaRequests();
+        }
+    } catch (err) { }
+}
+
+function renderAdminQuotaRequests(requests) {
+    const container = document.getElementById('admin-quota-list');
+    if (!container) return;
+    if (requests.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 20px; opacity: 0.5;">${window.currentLang === 'en' ? 'No pending requests.' : 'No hay peticiones pendientes.'}</div>`;
+        return;
+    }
+
+    let html = '';
+    requests.forEach(r => {
+        html += `
+            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: 600;">${r.username}</div>
+                    <div style="font-size: 0.8rem; opacity: 0.7;">+${r.requested_gb}GB - ${new Date(r.created_at * 1000).toLocaleString(window.currentLang)}</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="resolveQuotaRequest(${r.id}, 'rejected')" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">${window.currentLang === 'en' ? 'Reject' : 'Rechazar'}</button>
+                    <button onclick="resolveQuotaRequest(${r.id}, 'approved')" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">${window.currentLang === 'en' ? 'Approve' : 'Aprobar'}</button>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+
+async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, isFolder = false) {
+    const panel = document.getElementById('cloud-global-upload-panel');
+    const title = document.getElementById('global-upload-title');
+    const details = document.getElementById('global-upload-details');
+
+    panel.style.display = 'flex';
+    details.innerHTML = ''; // Clear previous items
+    details.style.display = 'block';
+    title.innerText = window.currentLang === "en" ? `Uploading 0 of ${files.length} items...` : `Subiendo 0 de ${files.length} elementos...`;
+
+    let completed = 0;
+
+    const maxConcurrent = 4;
+    const maxDomRows = 50;
+    let currentIndex = 0;
+
+    const processNext = async () => {
+        if (currentIndex >= files.length) return;
+        const index = currentIndex++;
+        const file = files[index];
+        const rowId = `upload-row-${Date.now()}-${index}`;
+
+        let uploadPath = baseUploadPath;
+        if (isFolder && file.webkitRelativePath) {
+            const parts = file.webkitRelativePath.split('/');
+            parts.pop();
+            if (parts.length > 0) {
+                uploadPath = [baseUploadPath, ...parts].filter(Boolean).join('/');
+            }
+        }
+
+        if (index < maxDomRows) {
+            const rowHtml = `
+                    <div id="${rowId}" style="padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                            <span style="color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">${file.name}</span>
+                            <span id="${rowId}-pct" style="color: var(--indigo); font-weight: 600;">0%</span>
+                        </div>
+                        <div style="height: 4px; background: rgba(0,0,0,0.2); border-radius: 2px; overflow: hidden;">
+                            <div id="${rowId}-bar" style="height: 100%; width: 0%; background: var(--indigo); transition: width 0.2s;"></div>
+                        </div>
+                    </div>
+                `;
+            details.insertAdjacentHTML('beforeend', rowHtml);
+        }
+
+        await new Promise((resolve) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('path', uploadPath);
+            formData.append('view', baseUploadView);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `/api/cloud/upload?token=${TOKEN}`, true);
+            xhr.setRequestHeader('X-Token', HEADERS['X-Token']);
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable && index < maxDomRows) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    const pctEl = document.getElementById(`${rowId}-pct`);
+                    const barEl = document.getElementById(`${rowId}-bar`);
+                    if (pctEl) pctEl.innerText = pct + '%';
+                    if (barEl) barEl.style.width = pct + '%';
+                }
+            };
+
+            xhr.onload = async () => {
+                let isError = xhr.status !== 200 && xhr.status !== 201;
+                let errMsg = 'Error';
+                let isQuotaError = false;
+
+                if (isError) {
+                    try {
+                        const resJson = JSON.parse(xhr.responseText);
+                        if (resJson.error) {
+                            if (resJson.error.includes("Espacio insuficiente")) {
+                                isQuotaError = true;
+                                errMsg = window.currentLang === 'en' ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más";
+                            } else {
+                                errMsg = resJson.error;
+                            }
+                        }
+                    } catch (e) { }
+                    console.error(`Upload error for ${file.name}:`, errMsg);
+                    
+                    if (index < maxDomRows) {
+                        const pctEl = document.getElementById(`${rowId}-pct`);
+                        const barEl = document.getElementById(`${rowId}-bar`);
+                        if (pctEl) {
+                            pctEl.innerText = 'Error';
+                            pctEl.style.color = '#ef4444';
+                            pctEl.title = errMsg;
+                        }
+                        if (barEl) barEl.style.background = '#ef4444';
+                    }
+                    
+                    if (isQuotaError) {
+                        NV_Alert(errMsg, window.currentLang === 'en' ? 'Upload Failed' : 'Error al subir');
+                    }
+                } else {
+                    if (index < maxDomRows) {
+                        const pctEl = document.getElementById(`${rowId}-pct`);
+                        const barEl = document.getElementById(`${rowId}-bar`);
+                        if (pctEl) {
+                            pctEl.innerText = window.currentLang === 'en' ? 'Completed' : 'Completado';
+                            pctEl.style.color = '#10b981';
+                        }
+                        if (barEl) barEl.style.background = '#10b981';
+                    }
+                }
+                completed++;
+                title.innerText = window.currentLang === "en" ? `Uploading ${completed} of ${files.length} items...` : `Subiendo ${completed} de ${files.length} elementos...`;
+                if (completed === files.length) {
+                    title.innerText = window.currentLang === "en" ? `Finished uploading ${files.length} items.` : `Finalizada la subida de ${files.length} elementos.`;
+                    setTimeout(() => fetchCloudFiles(currentCloudPath, currentCloudView), 500);
+                    updateCloudQuotaInfo();
+                }
+                resolve();
+            };
+
+            xhr.onerror = () => {
+                if (index < maxDomRows) {
+                    const pctEl = document.getElementById(`${rowId}-pct`);
+                    const barEl = document.getElementById(`${rowId}-bar`);
+                    if (pctEl) {
+                        pctEl.innerText = 'Error';
+                        pctEl.style.color = '#ef4444';
+                    }
+                    if (barEl) barEl.style.background = '#ef4444';
+                }
+                completed++;
+                title.innerText = window.currentLang === "en" ? `Uploading ${completed} of ${files.length} items...` : `Subiendo ${completed} de ${files.length} elementos...`;
+                if (completed === files.length) {
+                    title.innerText = window.currentLang === "en" ? `Finished uploading ${files.length} items.` : `Finalizada la subida de ${files.length} elementos.`;
+                    setTimeout(() => fetchCloudFiles(currentCloudPath, currentCloudView), 500);
+                    updateCloudQuotaInfo();
+                }
+                resolve();
+            };
+
+            xhr.send(formData);
+        });
+
+        await processNext();
+    };
+
+    const workers = [];
+    for (let i = 0; i < maxConcurrent; i++) {
+        workers.push(processNext());
+    }
+
+    await Promise.all(workers);
+}
+
+async function handleCloudUpload(e, isFolder = false) {
+    const input = e.target;
+    if (!input.files || input.files.length === 0) return;
+
+    const fileCount = input.files.length;
+    
+    if (fileCount > 2000) {
+        // DO NOT iterate to calculate size, it freezes the browser for 300k+ files!
+        await NV_Alert(window.currentLang === "en" ? 
+            `You are trying to upload a folder with ${fileCount} files. To prevent your browser from crashing, the limit is 2000 files at once. Please compress the folder into a ZIP file first.` : 
+            `Has intentado subir una carpeta enorme con ${fileCount} archivos. Para evitar colapsar tu navegador, el límite es de 2000 archivos a la vez. Por favor, comprímela en un archivo ZIP primero.`
+        );
+        input.value = '';
+        return;
+    }
+
+    let totalSize = 0;
+    for (let i = 0; i < fileCount; i++) {
+        totalSize += input.files[i].size;
+    }
+
+    if (_currentCloudUsedBytes + totalSize > _currentCloudLimitBytes) {
+        await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
+        input.value = '';
+        return;
+    }
+
+    const files = Array.from(input.files);
+
+    // Validar límite de 50GB por archivo
+    const MAX_SIZE = 50 * 1024 * 1024 * 1024;
+    const oversizedFiles = files.filter(f => f.size > MAX_SIZE);
+    if (oversizedFiles.length > 0) {
+        await NV_Alert(window.currentLang === "en" ? `Cannot upload "${oversizedFiles[0].name}" because it exceeds the 50GB limit per file.` : `No se puede subir "${oversizedFiles[0].name}" porque supera el límite máximo de 50GB por archivo.`);
+        input.value = '';
+        return;
+    }
+
+    const baseUploadPath = uploadDestinationOverridePath !== null ? uploadDestinationOverridePath : currentCloudPath;
+    const baseUploadView = uploadDestinationOverrideView !== null ? uploadDestinationOverrideView : currentCloudView;
+
+    await uploadFilesWithProgress(files, baseUploadPath, baseUploadView, isFolder);
+
+    uploadDestinationOverridePath = null;
+    uploadDestinationOverrideView = null;
+    input.value = '';
+}
+
+async function deleteCloudItem(name, path, isDir, trashId = null, fileView = null, ownerId = null) {
+    try {
+        if (!name && !trashId) return;
+
+        const view = fileView || currentCloudView;
+        const isPermanent = currentCloudView === 'trash';
+        const isComputer = currentCloudView === 'computers' && currentCloudPath === '';
+
+        let msg = '';
+        if (view === 'shared') {
+            msg = window.t_cloud('confirm_unshare', '¿Dejar de compartir') + ` "${name}"?`;
+        } else if (isPermanent) {
+            msg = window.t_cloud('confirm_delete_permanent', '¿Eliminar PERMANENTEMENTE') + ` "${name || 'este elemento'}"?`;
+        } else if (isComputer) {
+            msg = window.t_cloud('confirm_unlink', '¿Desvincular y eliminar por completo la computadora') + ` "${name}"?`;
+        } else {
+            const typeStr = isDir ? window.t_cloud('item_folder', 'la carpeta') : window.t_cloud('item_file', 'el archivo');
+            msg = window.t_cloud('confirm_trash', '¿Mover a la papelera') + ` ${typeStr} "${name}"?`;
+        }
+
+        if (!await NV_Confirm(msg, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+
+        let res;
+        if (view === 'shared') {
+            res = await fetch('/api/cloud/unshare', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({ name, path, owner_id: ownerId })
+            });
+        } else {
+            res = await fetch('/api/cloud/delete', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({ name, path, view: currentCloudView === 'trash' ? 'trash' : view, id: trashId })
+            });
+        }
+
+        if (res.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            closeCloudInfoPanel();
+        } else {
+            const data = await res.json();
+            await NV_Alert(data.error || window.currentLang === "en" ? "Error processing request." : "Error al procesar la solicitud.");
+        }
+    } catch (err) {
+        console.error("Error en deleteCloudItem:", err);
+        await NV_Alert(window.currentLang === "en" ? "An unexpected error occurred while deleting. Check console." : "Ocurrió un error inesperado al intentar eliminar. Revisa la consola.");
+    }
+}
+
+async function handleUnshareItem(item) {
+    // Si no se pasa un item por parámetro, usamos el del contexto global
+    const targetItem = item || currentCloudContextItem;
+    if (!targetItem) return;
+
+    const { name, path, ownerId } = targetItem;
+
+    if (currentCloudView === 'shared') {
+        // CASO A: Estás en "Compartidos conmigo". La acción es ocultar/ignorar el archivo que te compartieron.
+        if (!await NV_Confirm(window.t_cloud('confirm_ignore', '¿Seguro que deseas ignorar') + ` "${name}"?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+        try {
+            const res = await fetch('/api/cloud/unshare', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({
+                    name: name,
+                    path: path || '',
+                    owner_id: ownerId || null
+                })
+            });
+            if (res.ok) {
+                fetchCloudFiles(currentCloudPath, currentCloudView);
+                closeCloudInfoPanel();
+            } else {
+                const data = await res.json();
+                await NV_Alert(data.error || window.currentLang === "en" ? "Error ignoring item." : "Error al ignorar el elemento.");
+            }
+        } catch (e) {
+            console.error("Error ignoring shared item:", e);
+            await NV_Alert(window.currentLang === "en" ? "Network error trying to ignore item." : "Error de red al intentar ignorar el elemento.");
+        }
+    } else if (currentCloudView === 'shared_by_me') {
+        // CASO B: Estás en "Compartidos" (por ti). Quieres gestionar quién tiene acceso para quitar a alguien.
+        openCloudShare(name, path);
+    } else {
+        // CASO C: Menú contextual común desde tu unidad si el archivo es compartido por ti
+        // Abre el modal para revocar usuarios directamente
+        openCloudShare(name, path);
+    }
+}
+
+async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
+    const panel = document.getElementById('cloud-info-panel');
+    const body = document.getElementById('info-panel-body');
+    const title = document.getElementById('info-title');
+    const icon = document.getElementById('info-icon');
+
+    panel.style.display = 'flex';
+    title.textContent = window.t_cloud('ctx_rename', 'Cambiar nombre');
+    const ext = oldName.split('.').pop().toLowerCase();
+    icon.textContent = isDir ? '📁' : getFileIcon('.' + ext);
+
+    document.querySelectorAll('.info-tab').forEach(t => t.style.visibility = 'hidden');
+
+    body.innerHTML = `
+        <div style="padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="text-align: center; padding: 8px 0;">
+                <span style="font-size: 2rem; opacity: 0.6;">${isDir ? '📁' : getFileIcon('.' + ext)}</span>
+            </div>
+            <div>
+                <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; display: block;">${window.t_cloud('rename_new_name', 'Nuevo nombre')}</label>
+                <input type="text" id="rename-inline-input" value="${oldName.replace(/"/g, '&quot;')}" 
+                    style="width: 100%; box-sizing: border-box; background: var(--surface, #303134); border: 2px solid var(--indigo, #8ab4f8); border-radius: 6px; padding: 10px 12px; color: var(--text-main); font-size: 0.95rem; outline: none; transition: border-color 0.2s;" />
+                <div id="rename-inline-error" style="font-size: 0.8rem; color: #f87171; margin-top: 8px; min-height: 1.2em;"></div>
+            </div>
+            ${!isDir ? `<div style="font-size: 0.8rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                <span style="font-weight: 600;">${window.t_cloud('rename_format', 'Formato')}:</span> ${ext.toUpperCase()}
+            </div>` : ''}
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
+                <button id="rename-inline-cancel" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; font-weight: 600; padding: 8px 20px; border-radius: 6px; cursor: pointer; transition: all 0.15s;">${window.t_cloud('btn_cancel', 'Cancelar')}</button>
+                <button id="rename-inline-confirm" style="background: var(--indigo, #8ab4f8); border: none; color: #fff; font-size: 0.85rem; font-weight: 700; padding: 8px 24px; border-radius: 6px; cursor: pointer; transition: all 0.15s;">${window.t_cloud('btn_confirm', 'Aceptar')}</button>
+            </div>
+        </div>
+    `;
+
+    const input = document.getElementById('rename-inline-input');
+    const errorEl = document.getElementById('rename-inline-error');
+    const confirmBtn = document.getElementById('rename-inline-confirm');
+    const cancelBtn = document.getElementById('rename-inline-cancel');
+    setTimeout(() => {
+        input.focus();
+        if (!isDir && oldName.includes('.')) {
+            input.setSelectionRange(0, oldName.lastIndexOf('.'));
+        } else {
+            input.select();
+        }
+    }, 50);
+
+    function validateName(name) {
+        if (name.trim() === '') return window.t_cloud('rename_err_empty', 'El nombre no puede estar vacío.');
+        const invalidChars = /[<>:"\/\\|?*]/;
+        if (invalidChars.test(name.trim())) return window.t_cloud('rename_err_invalid', 'Contiene caracteres no permitidos (< > : " / \\ | ? *)');
+        if (name.trim().startsWith('.')) return window.t_cloud('rename_err_dot', 'No puede empezar por punto.');
+        const existing = Array.from(document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card')).find(row => row.getAttribute('data-name') === name.trim());
+        if (existing && name.trim() !== oldName) return window.t_cloud('rename_err_exists', 'Ya existe un elemento con ese nombre.');
+        return null;
+    }
+
+    input.addEventListener('input', () => {
+        const err = validateName(input.value);
+        errorEl.textContent = err || '';
+        confirmBtn.style.opacity = err ? '0.5' : '1';
+        confirmBtn.disabled = !!err;
+    });
+
+    async function doRename() {
+        const newName = input.value.trim();
+        const err = validateName(input.value);
+        if (err) { errorEl.textContent = err; return; }
+        if (newName === oldName) { closeRenamePanel(); return; }
+
+        if (!isDir && oldName.includes('.')) {
+            const oldExt = oldName.split('.').pop();
+            const newExt = newName.split('.').pop();
+            if (!newName.includes('.')) {
+                if (!await NV_Confirm(window.t_cloud('rename_warn_ext_lost', 'El archivo perderá su extensión. ¿Estás seguro?'), window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+            } else if (oldExt !== newExt) {
+                if (!await NV_Confirm(window.t_cloud('rename_warn_ext_change', 'La extensión cambiará') + ` de .${oldExt} a .${newExt}. ` + window.t_cloud('are_you_sure', '¿Estás seguro?'), window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+            }
+        }
+
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Guardando...';
+        const viewToUse = fileView || currentCloudView;
+        try {
+            const res = await fetch('/api/cloud/rename', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({ old_name: oldName, new_name: newName, path: path, view: viewToUse })
+            });
+            if (res.ok) {
+                fetchCloudFiles(currentCloudPath, currentCloudView);
+                closeRenamePanel();
+            } else {
+                const data = await res.json();
+                errorEl.textContent = data.error || 'Error al renombrar.';
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Aceptar';
+            }
+        } catch (err) {
+            errorEl.textContent = 'Error de conexión.';
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Aceptar';
+        }
+    }
+
+    function closeRenamePanel() {
+        document.querySelectorAll('.info-tab').forEach(t => t.style.visibility = 'visible');
+        closeCloudInfoPanel();
+    }
+
+    confirmBtn.onclick = doRename;
+    cancelBtn.onclick = closeRenamePanel;
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); doRename(); }
+        if (e.key === 'Escape') { closeRenamePanel(); }
+    });
+}
+
+async function restoreCloudItem(trashId) {
+    try {
+        const res = await fetch('/api/cloud/restore', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ id: trashId })
+        });
+        if (res.ok) {
+            fetchCloudFiles('', 'trash');
+            closeCloudInfoPanel();
+        } else {
+            const data = await res.json();
+            await NV_Alert(data.error || window.currentLang === "en" ? "Error restoring." : "Error al restaurar.");
+        }
+    } catch (err) { }
+}
+
+async function emptyCloudTrash() {
+    if (!await NV_Confirm(window.t_cloud('confirm_empty_trash', '¿Seguro que quieres vaciar la papelera? Esta acción no se puede deshacer.'), window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+    try {
+        const res = await fetch('/api/cloud/empty_trash', {
+            method: 'POST',
+            headers: HEADERS
+        });
+        if (res.ok) {
+            fetchCloudFiles('', 'trash');
+        }
+    } catch (err) { }
+}
+
+async function toggleCloudProtect(name, path, fileView = null) {
+    try {
+        const view = fileView || currentCloudView;
+        const res = await fetch('/api/cloud/toggle_protect', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, path, view: view })
+        });
+        if (res.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            closeCloudInfoPanel();
+        }
+    } catch (err) {
+        await NV_Alert(window.currentLang === "en" ? "Error changing protection state." : "Error al cambiar estado de protección.");
+    }
+}
+
+async function toggleCloudStar(name, path, fileView = null, ownerId = null) {
+    try {
+        const view = fileView || currentCloudView;
+        const res = await fetch('/api/cloud/toggle_star', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, path, view: view, owner_id: ownerId })
+        });
+        if (res.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            closeCloudInfoPanel();
+        }
+    } catch (err) {
+        await NV_Alert(window.currentLang === "en" ? "Error changing starred state." : "Error al cambiar estado de destacado.");
+    }
+}
+
+async function handleCreateFolder() {
+    if (_currentCloudUsedBytes >= _currentCloudLimitBytes) {
+        await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
+        return;
+    }
+    const name = await NV_Prompt('', '', window.t_cloud('ctx_new_folder', 'Carpeta nueva'), window.t_cloud('btn_confirm', 'Aceptar'), window.t_cloud('btn_cancel', 'Cancelar'));
+    if (name === null) return;
+    if (name.trim() === "") {
+        await NV_Alert(window.currentLang === "en" ? "Folder name cannot be empty." : "El nombre de la carpeta no puede estar vacío.");
+        return;
+    }
+    const trimmedName = name.trim();
+
+    const invalidChars = /[<>:"\/\\|?*]/;
+    if (invalidChars.test(trimmedName)) {
+        await NV_Alert(window.currentLang === 'en' ? 'Name contains invalid characters (< > : \" / \ | ? *)' : 'El nombre contiene caracteres no permitidos (< > : \" / \ | ? *)');
+        return;
+    }
+    if (trimmedName.startsWith('.')) {
+        await NV_Alert(window.currentLang === "en" ? "Name cannot start with a dot." : "El nombre no puede empezar por punto.");
+        return;
+    }
+    const existing = Array.from(document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card')).find(row => row.getAttribute('data-name') === trimmedName);
+    if (existing) {
+        await NV_Alert(window.currentLang === "en" ? "A file or folder with that name already exists." : "Ya existe una carpeta o archivo con ese nombre.");
+        return;
+    }
+
+    const targetPath = uploadDestinationOverridePath !== null ? uploadDestinationOverridePath : currentCloudPath;
+    const targetView = uploadDestinationOverrideView !== null ? uploadDestinationOverrideView : currentCloudView;
+
+    uploadDestinationOverridePath = null;
+    uploadDestinationOverrideView = null;
+
+    try {
+        const res = await fetch('/api/cloud/mkdir', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name: trimmedName, path: targetPath, view: targetView })
+        });
+        const data = await res.json();
+        if (data.error) {
+            await NV_Alert("Error: " + data.error);
+            return;
+        }
+
+        fetchCloudFiles(targetPath, targetView);
+        closeCloudInfoPanel();
+    } catch (err) {
+        await NV_Alert(window.currentLang === "en" ? "Connection error creating folder." : "Error de conexión al crear carpeta.");
+    }
+}
+
+async function downloadCloudFile(name, overridePath = null, forceDownload = false, ownerId = null, fileView = null, trashId = null, ownerName = null, isShared = false) {
+    try {
+        const path = overridePath !== null ? overridePath : currentCloudPath;
+        const view = trashId ? 'trash' : (fileView || currentCloudView);
+        const res = await fetch('/api/cloud/get_token', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, path, view: view, owner_id: ownerId, id: trashId })
+        });
+        const data = await res.json();
+
+        if (!data.t) {
+            if (data.error === 'access_revoked') {
+                closeCloudPreview();
+                await NV_Alert(window.t_cloud('access_revoked', 'Te han quitado el acceso a este archivo.'));
+                loadCloudFiles();
+            } else {
+                await NV_Alert(data.error || window.t_cloud('err_token', 'Error al generar token de acceso.'));
+            }
+            return;
+        }
+
+        const url = `/api/cloud/download?t=${data.t}`;
+        const ext = name.split('.').pop().toLowerCase();
+        const previewExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'mp4', 'webm', 'mov'];
+
+        if (!forceDownload && previewExts.includes(ext)) {
+            openCloudPreview(name, url, path, ownerId, fileView, ownerName, isShared);
+        } else {
+            const link = document.createElement('a');
+            link.href = url + (forceDownload ? '&dl=1' : '');
+            link.download = name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    } catch (err) {
+        alert("Error de seguridad al acceder al archivo.");
+    }
+}
+
+window.openPdfBlob = async function(url) {
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+        newWindow.document.write('<html style="background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;"><body>Cargando documento... / Loading document...</body></html>');
+        newWindow.document.close();
+    }
+    try {
+        const res = await fetch(url, { headers: window.HEADERS || {} });
+        if (!res.ok) throw new Error('Fetch failed');
+        const blob = await res.blob();
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        if (newWindow) {
+            newWindow.location.href = blobUrl;
+        } else {
+            window.open(blobUrl, '_blank');
+        }
+    } catch (e) {
+        if (newWindow) newWindow.location.href = url;
+        else window.open(url, '_blank');
+    }
+};
+
+function openCloudPreview(name, url, path, ownerId = null, fileView = null, ownerName = null, isShared = false) {
+    const modal = document.getElementById('cloud-preview-modal');
+    const body = document.getElementById('preview-body');
+    const nameEl = document.getElementById('preview-filename');
+    const dlBtn = document.getElementById('preview-download-btn');
+    const ext = name.split('.').pop().toLowerCase();
+
+    // Show owner info
+    const ownerLine = document.getElementById('preview-owner');
+    if (ownerLine) {
+        let actualOwner = ownerName || currentCloudContextItem?.owner;
+        if (actualOwner && actualOwner !== 'Yo' && actualOwner !== window.t_cloud('me', 'Yo') && actualOwner !== window.CURRENT_USER) {
+            ownerLine.textContent = window.t_cloud('shared', 'Compartido') + ' ' + window.t_cloud('by_lower', 'por') + ' ' + actualOwner;
+            ownerLine.style.color = 'var(--indigo)';
+        } else {
+            ownerLine.textContent = window.t_cloud('nav_drive', 'Mi unidad');
+            ownerLine.style.color = 'var(--text-muted)';
+        }
+        ownerLine.style.display = 'block';
+    }
+
+    nameEl.innerText = name;
+    dlBtn.onclick = () => downloadCloudFile(name, path, true, ownerId, fileView);
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+        body.innerHTML = `<img src="${url}" style="max-width: 100%; max-height: 75vh; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">`;
+    } else if (['mp4', 'webm', 'mov'].includes(ext)) {
+        body.innerHTML = `
+        <video controls autoplay style="max-width: 100%; max-height: 75vh; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <source src="${url}" type="video/${ext === 'mov' ? 'quicktime' : ext.replace('.', '')}">
+            Tu navegador no soporta la reproducción de video.
+        </video>`;
+    } else if (ext === 'pdf') {
+        const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+            body.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 60vh; text-align: center; color: var(--text-muted);">
+                <div style="font-size: 4rem; margin-bottom: 20px;">📄</div>
+                <h3 style="color: var(--text-main); margin-bottom: 10px; font-size: 1.2rem;">${window.t_cloud('mobile_preview_title', 'Visualización en Móvil')}</h3>
+                <p style="font-size: 0.9rem; margin-bottom: 25px; max-width: 80%;">${window.t_cloud('mobile_preview_desc', 'Los navegadores móviles requieren abrir el documento en una pestaña nueva para poder visualizarlo correctamente.')}</p>
+                <div style="display: flex; gap: 15px;">
+                    <button onclick="window.openPdfBlob('${url}')" style="padding: 12px 24px; border-radius: 8px; border: none; background: var(--indigo); color: white; font-weight: bold; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                        ${window.t_cloud('mobile_preview_open', 'Abrir en el Navegador')}
+                    </button>
+                    <button onclick="document.getElementById('preview-download-btn').click()" style="padding: 12px 24px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-hi); color: var(--text-main); font-weight: bold; font-size: 1rem; cursor: pointer;">
+                        ${window.t_cloud('mobile_preview_download', 'Descargar')}
+                    </button>
+                </div>
+            </div>`;
+        } else {
+            body.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 75vh; border: none; border-radius: 8px;"></iframe>`;
+        }
+    } else {
+        body.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 75vh; border: none; background: #fff; border-radius: 8px;"></iframe>`;
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeCloudPreview() {
+    document.getElementById('cloud-preview-modal').style.display = 'none';
+    document.getElementById('preview-body').innerHTML = '';
+}
+
+function handleCloudAction(e, name, isDir, overridePath = null) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    let trashId = null;
+    let ownerId = null;
+    let isMine = true;
+    let isStarred = false;
+    let isProtected = false;
+
+    // Mapeo seguro del dataset de la fila
+    const targetEl = e.currentTarget || e.target;
+    if (targetEl) {
+        const row = targetEl.closest('.cloud-folder-row, .cloud-file-card, .cloud-file-row');
+        if (row) {
+            trashId = row.getAttribute('data-trash-id') || null;
+            ownerId = row.getAttribute('data-owner-id') || null;
+            isMine = row.getAttribute('data-is-mine') !== 'false';
+            isStarred = row.getAttribute('data-starred') === 'true';
+            isProtected = row.getAttribute('data-protected') === 'true';
+        }
+    }
+
+    currentCloudContextItem = {
+        name: name,
+        isDir: isDir,
+        path: overridePath !== null ? overridePath : currentCloudPath,
+        view: currentCloudView,
+        trashId: trashId,
+        ownerId: ownerId
+    };
+
+    if ((currentCloudView === 'home' || currentCloudView === 'recent') && currentCloudContextItem.path.includes('.computers')) {
+        currentCloudContextItem.view = 'computers';
+    }
+
+    const menu = document.getElementById('cloud-context-menu');
+    const itemActions = document.getElementById('ctx-item-actions');
+    const creationActions = document.getElementById('ctx-creation-actions');
+
+    if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me') {
+        document.getElementById('ctx-download-btn').style.display = 'block';
+
+        // Forzamos la traducción por si acaso
+        const downloadBtn = document.getElementById('ctx-download-btn');
+        if (downloadBtn && downloadBtn.children[1]) {
+            downloadBtn.setAttribute('data-i18n', 'ctx_download');
+            downloadBtn.children[1].innerText = window.t_cloud('ctx_download', 'Descargar');
+        }
+
+        document.getElementById('ctx-info-btn').style.display = 'block';
+        document.getElementById('ctx-unshare-btn').style.display = 'block';
+
+        const unshareText = document.getElementById('ctx-unshare-text');
+        if (unshareText) {
+            if (currentCloudView === 'shared') {
+                unshareText.setAttribute('data-i18n', 'ctx_ignore');
+                unshareText.innerText = window.t_cloud('ctx_ignore', 'Ignorar');
+            } else {
+                unshareText.setAttribute('data-i18n', 'ctx_unshare');
+                unshareText.innerText = window.t_cloud('ctx_unshare', 'Dejar de compartir');
+            }
+        }
+
+        // Ocultación total de herramientas de propietario comunes
+        document.getElementById('ctx-rename-btn').style.display = 'none';
+        document.getElementById('ctx-delete-btn').style.display = 'none';
+        document.getElementById('ctx-share-btn').style.display = 'none';
+        document.getElementById('ctx-protect-btn').style.display = 'none';
+        document.getElementById('ctx-restore-btn').style.display = 'none';
+        document.getElementById('ctx-move-btn').style.display = 'none';
+
+        // Permitimos organizar (star, copy)
+        document.getElementById('ctx-organize-btn').style.display = 'block';
+        document.getElementById('ctx-star-btn').style.display = 'block';
+        document.getElementById('ctx-copy-btn').style.display = 'block';
+
+        const starText = document.getElementById('ctx-star-text');
+        if (starText) {
+            starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
+            starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+        }
+    } else {
+        // RAMA B: Vistas estándar (Mi unidad, Computadoras, Trash...)
+        document.getElementById('ctx-download-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
+        document.getElementById('ctx-info-btn').style.display = 'block';
+        document.getElementById('ctx-organize-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
+        document.getElementById('ctx-copy-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
+
+        // Gestión de visibilidad según propiedad y contexto
+        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine) ? 'none' : 'block';
+        document.getElementById('ctx-delete-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine) ? 'none' : 'block';
+        document.getElementById('ctx-delete-text').innerText = currentCloudView === 'computers' && currentCloudPath === '' ? window.t_cloud('btn_unlink', 'Desvincular') : window.t_cloud('ctx_trash', 'Mover a la papelera');
+        document.getElementById('ctx-share-btn').style.display = (!isMine) ? 'none' : 'block';
+        document.getElementById('ctx-restore-btn').style.display = currentCloudView === 'trash' ? 'block' : 'none';
+
+        const unshareBtn = document.getElementById('ctx-unshare-btn');
+        if (unshareBtn) unshareBtn.style.display = 'none';
+
+        // Destacados dinámicos
+        document.getElementById('ctx-star-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
+        const starText = document.getElementById('ctx-star-text');
+        if (starText) {
+            starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
+            starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+        }
+
+        // Protección dinámicos
+        document.getElementById('ctx-protect-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash') ? 'none' : 'block';
+        const protectText = document.getElementById('ctx-protect-text');
+        const protectIcon = document.getElementById('ctx-protect-icon');
+        if (protectText) {
+            protectText.setAttribute('data-i18n', isProtected ? 'ctx_unprotect' : 'ctx_protect');
+            protectText.innerText = isProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
+        }
+        if (protectIcon) protectIcon.innerText = isProtected ? '🔓' : '🔒';
+
+        // Movimientos
+        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash') ? 'none' : 'block';
+    }
+
+    // Despliegue del panel del menú
+    itemActions.style.display = 'block';
+    creationActions.style.display = 'none';
+    menu.style.display = 'block';
+
+    // Cálculo geométrico de la pantalla
+    const rect = menu.getBoundingClientRect();
+    const menuWidth = rect.width || 200;
+    const menuHeight = rect.height || 300;
+    const submenuWidth = 180;
+
+    let x = e.clientX;
+    let y = e.clientY;
+
+    if (x - submenuWidth < 0) {
+        x = submenuWidth + 10;
+    }
+    if (x + menuWidth > window.innerWidth - 10) {
+        x = window.innerWidth - menuWidth - 10;
+    }
+    if (y + menuHeight > window.innerHeight - 10) {
+        y = window.innerHeight - menuHeight - 10;
+        if (y < 0) y = 10;
+    }
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+}
+
+function closeCloudInfoPanel() {
+    const panel = document.getElementById('cloud-info-panel');
+    if (panel) panel.style.display = 'none';
+    currentCloudInfoItem = null;
+    window.currentCloudInfoItem = null;
+}
+
+async function toggleCloudInfoPanel() {
+    const panel = document.getElementById('cloud-info-panel');
+    if (!panel) return;
+    if (panel.style.display === 'flex') {
+        closeCloudInfoPanel();
+    } else {
+        panel.style.display = 'flex';
+    }
+}
+
+function refreshCloudInfoPanel() {
+    const panel = document.getElementById('cloud-info-panel');
+    if (panel && panel.style.display === 'flex' && currentCloudInfoItem) {
+        showCloudInfo(currentCloudInfoItem.name, currentCloudInfoItem.path, currentCloudInfoItem.id, currentCloudInfoItem.owner_id);
+    }
+}
+
+function switchCloudInfoTab(btn, tab) {
+    document.querySelectorAll('.info-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+
+    if (!currentCloudInfoItem) return;
+
+    if (tab === 'details') {
+        showCloudDetails(currentCloudInfoItem.name, currentCloudInfoItem.path, currentCloudInfoItem.data);
+    } else {
+        showCloudActivity(currentCloudInfoItem.name, currentCloudInfoItem.path, currentCloudInfoItem.owner_id);
+    }
+}
+
+async function showCloudInfo(name, path, trashId = null, ownerId = null) {
+    const panel = document.getElementById('cloud-info-panel');
+    const body = document.getElementById('info-panel-body');
+    const title = document.getElementById('info-title');
+
+    panel.style.display = 'flex';
+    body.innerHTML = `<div style="display:flex; justify-content:center; padding:20px;"><div class="loading-spinner"></div></div>`;
+    const displayTitle = name.length > 25 ? name.substring(0, 22) + '...' : name;
+    title.innerText = displayTitle;
+
+    document.querySelectorAll('.info-tab').forEach(t => t.classList.remove('active'));
+    const firstTab = document.querySelector('.info-tab');
+    if (firstTab) firstTab.classList.add('active');
+
+    const activityTab = document.querySelector('.info-tab:nth-child(2)');
+    const isComputer = currentCloudView === 'computers' && currentCloudPath === '';
+    if (currentCloudView === 'trash' || isComputer) {
+        if (activityTab) activityTab.style.display = 'none';
+    } else {
+        if (activityTab) activityTab.style.display = 'block';
+    }
+
+    try {
+        const res = await fetch('/api/cloud/info', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, path, view: currentCloudView, id: trashId, owner_id: ownerId })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        currentCloudInfoItem = { name, path, data, id: trashId, owner_id: ownerId };
+        window.currentCloudInfoItem = currentCloudInfoItem;
+        showCloudDetails(name, path, data);
+    } catch (err) {
+        body.innerHTML = `<div style="padding:20px; color:#f87171;">${err.message}</div>`;
+    }
+}
+
+function showCloudDetails(name, path, data) {
+    const body = document.getElementById('info-panel-body');
+    const icon = document.getElementById('info-icon');
+    const ext = name.split('.').pop().toLowerCase();
+    const owner = data.owner || 'Usuario';
+
+    const isComputer = currentCloudView === 'computers' && currentCloudPath === '';
+
+    if (isComputer) {
+        icon.innerText = '💻';
+    } else {
+        icon.innerText = data.is_dir ? '📁' : getFileIcon('.' + ext);
+    }
+
+    const isTrash = currentCloudView === 'trash';
+    let previewHtml = `<span style="font-size: 4rem; opacity: 0.2;">${data.is_dir ? '📁' : getFileIcon('.' + ext)}</span>`;
+
+    if (isComputer) {
+        previewHtml = `<span style="font-size: 5rem; display: block; filter: drop-shadow(0 8px 20px rgba(99,102,241,0.25)); text-align: center;">💻</span>`;
+    } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'].includes(ext)) {
+        const trashId = currentCloudInfoItem ? currentCloudInfoItem.id : null;
+        const ownerId = data.owner_id || '';
+        const idParam = (isTrash && trashId) ? `&id=${trashId}` : '';
+        const ownerParam = ownerId ? `&owner_id=${ownerId}` : '';
+        previewHtml = `<img src="/api/cloud/preview?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}&view=${currentCloudView}${idParam}${ownerParam}" style="max-width:100%; max-height:100%; object-fit:cover;">`;
+    }
+
+    let typeText = data.is_dir ? window.t_cloud('folder_caps', 'Carpeta') : window.t_cloud('file_caps', 'Archivo') + ' ' + ext.toUpperCase();
+    let locationText = path || window.t_cloud('my_drive', 'Mi unidad');
+
+    if (isComputer) {
+        typeText = window.t_cloud('linked_device', 'Dispositivo Vinculado');
+        locationText = window.t_cloud('nav_computers', 'Computadoras');
+    }
+
+    body.innerHTML = `
+        <div class="info-file-preview">
+            ${previewHtml}
+        </div>
+
+        <div style="padding: 0 4px;">
+            <div class="info-section-title">${window.t_cloud('who_has_access', 'Quién tiene acceso').toUpperCase()}</div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                ${data.owner_id ?
+            `<img src="/api/system/user/avatar/${data.owner_id}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" onerror="this.outerHTML='<div style=\\'width: 36px; height: 36px; border-radius: 50%; background: #4285f4; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);\\'>${owner.charAt(0).toUpperCase()}</div>'">`
+            :
+            `<div style="width: 36px; height: 36px; border-radius: 50%; background: #4285f4; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);">
+                        ${owner.charAt(0).toUpperCase()}
+                    </div>`
+        }
+                <div>
+                    <div style="font-size: 0.9rem; font-weight: 600; color: #ffffff;">${owner}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); opacity: 0.9;">${window.t_cloud('col_owner', 'Propietario')}</div>
+                </div>
+            </div>
+            ${(data.shared_users && data.shared_users.length > 0) ? data.shared_users.map(u => `
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <img src="/api/system/user/avatar/${u.user_id}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;" onerror="this.outerHTML='<div style=\\'width: 30px; height: 30px; border-radius: 50%; background: #6366f1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;\\'>👥</div>'">
+                <div>
+                    <div style="font-size: 0.85rem; font-weight: 500; color: var(--text-main);">${u.username}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-dim); opacity: 0.9;">${window.t_cloud('guest', 'Invitado')}</div>
+                </div>
+            </div>`).join('') : ''}
+        </div>
+
+        <div style="margin-top: 24px; padding: 0 4px;">
+            <div class="info-section-title">${window.t_cloud('file_details', 'Detalles del archivo').toUpperCase()}</div>
+            <div class="info-detail-row">
+                <div class="info-detail-label">${window.t_cloud('type', 'Tipo')}</div>
+                <div class="info-detail-value">${typeText}</div>
+            </div>
+            <div class="info-detail-row">
+                <div class="info-detail-label">${window.t_cloud('col_size', 'Tamaño')}</div>
+                <div class="info-detail-value">${formatBytes(data.size)}</div>
+            </div>
+            <div class="info-detail-row">
+                <div class="info-detail-label">${window.t_cloud('location', 'Ubicación')}</div>
+                <div class="info-detail-value">${locationText}</div>
+            </div>
+            <div class="info-detail-row">
+                <div class="info-detail-label">${window.t_cloud('modified', 'Modificado')}</div>
+                <div class="info-detail-value">${new Date(data.mtime * 1000).toLocaleString(window.currentLang)}</div>
+            </div>
+            <div class="info-detail-row">
+                <div class="info-detail-label">${window.t_cloud('created', 'Creado')}</div>
+                <div class="info-detail-value">${new Date(data.ctime * 1000).toLocaleString(window.currentLang)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function copyInfoSyncCommand() {
+    const cmdBox = document.getElementById('info-sync-cmd-box');
+    if (!cmdBox) return;
+
+    navigator.clipboard.writeText(cmdBox.innerText.trim()).then(() => {
+        NV_Alert(window.t_cloud('link_modal_token_copied', 'Token copiado al portapapeles'));
+    }).catch(err => {
+        console.error("Error al copiar:", err);
+    });
+}
+
+function showSyncInstructionsAlert(deviceName) {
+    const cleanName = deviceName.replace('', '');
+    const alertHtml = `
+        <div style="text-align: left; line-height: 1.5; font-size: 0.9rem; color: #e2e8f0; font-family: sans-serif;">
+            <div style="font-weight: 700; color: #fbbf24; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-size: 1.05rem;">
+                <span>💡</span> Guía de Ejecución Permanente (nohup)
+            </div>
+            <p style="margin-bottom: 12px; color: #94a3b8; font-size: 0.85rem;">Si deseas que el Agente de Sincronización siga ejecutándose en tu ordenador incluso si cierras la ventana de tu terminal física, ejecútalo usando <b>nohup</b> en segundo plano:</p>
+            <div style="position: relative; margin-bottom: 16px;">
+                <pre id="adv-sync-cmd" style="background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.78rem; color: #818cf8; word-break: break-all; white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.05); margin: 0; padding-right: 70px; min-height: 50px;">nohup python3 -c "$(curl -fsSLk '${window.location.origin}/api/cloud/sync-agent/script?device=${encodeURIComponent(cleanName)}&token=${TOKEN}')" &amp;</pre>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('adv-sync-cmd').innerText.trim()); NV_Alert('¡Comando avanzado copiado!');" style="position: absolute; right: 6px; top: 6px; padding: 4px 8px; border-radius: 4px; border: none; background: var(--indigo); color: #fff; font-size: 0.7rem; font-weight: 600; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">Copiar</button>
+            </div>
+            <div style="font-weight: 600; color: #ffffff; margin-bottom: 6px; font-size: 0.85rem;">Instrucciones rápidas:</div>
+            <ol style="margin-left: 20px; padding: 0; color: #cbd5e1; font-size: 0.82rem; line-height: 1.6;">
+                <li style="margin-bottom: 4px;">Copia el comando de arriba haciendo clic en "Copiar".</li>
+                <li style="margin-bottom: 4px;">Pégalo en tu terminal física y presiona <b>Enter</b>.</li>
+                <li>¡Listo! El agente se ejecutará en segundo plano permanentemente y los logs se guardarán en <code style="background:rgba(255,255,255,0.1); padding:2px 4px; border-radius:3px; font-family:monospace; font-size:0.75rem;">nohup.out</code>.</li>
+            </ol>
+        </div>
+    `;
+    NV_Alert(alertHtml);
+}
+
+async function showCloudActivity(name, path, ownerId = null) {
+    const body = document.getElementById('info-panel-body');
+    body.innerHTML = `<div style="display:flex; justify-content:center; padding:20px;"><div class="loading-spinner"></div></div>`;
+
+    try {
+        const res = await fetch('/api/cloud/item_activity', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, path, owner_id: ownerId })
+        });
+        const data = await res.json();
+
+        if (!data.activity || data.activity.length === 0) {
+            body.innerHTML = `<div style="text-align:center; padding:40px; opacity:0.5;">${window.t_cloud('no_recent_activity', 'No hay actividad reciente')}</div>`;
+            return;
+        }
+
+        let html = `<div style="padding: 10px 4px;">`;
+        data.activity.forEach(act => {
+            const date = new Date(act.time * 1000);
+            const timeStr = date.toLocaleTimeString(window.currentLang, { hour: '2-digit', minute: '2-digit' });
+            const dateStr = date.toLocaleDateString(window.currentLang, { day: '2-digit', month: 'short' });
+
+            // Backward compatibility: old activities may have Spanish strings
+            const actMap = {
+                "Subiste": "act_subiste",
+                "Creaste la carpeta": "act_creaste_la_carpeta",
+                "Desvinculaste el dispositivo": "act_desvinculaste_el_dispositivo",
+                "Renombraste": "act_renombraste",
+                "Abrió": "act_abrio",
+                "Descargó": "act_descargo"
+            };
+            const actKey = act.action.startsWith('act_') ? act.action : (actMap[act.action] || act.action);
+            const translatedAction = window.t_cloud(actKey, act.action);
+
+            html += `
+                <div style="display: flex; gap: 15px; margin-bottom: 24px; position: relative;">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--indigo-dim); color: var(--indigo); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; z-index: 1;">
+                            ${translatedAction.charAt(0).toUpperCase()}
+                        </div>
+                        <div style="width: 1px; flex: 1; background: var(--border); margin: 4px 0;"></div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: #ffffff;">${translatedAction}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${act.user} • ${dateStr}, ${timeStr}</div>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div>`;
+        body.innerHTML = html;
+
+    } catch (err) {
+        body.innerHTML = `<div style="padding:20px; color:#f87171;">Error al cargar actividad.</div>`;
+    }
+}
+
+document.addEventListener('contextmenu', function (e) {
+    const menu = document.getElementById('cloud-context-menu');
+    const viewCloud = document.getElementById('view-cloud');
+    const explorer = document.getElementById('cloud-explorer-main');
+    const itemActions = document.getElementById('ctx-item-actions');
+
+    if (viewCloud && viewCloud.classList.contains('active')) {
+
+
+
+        e.preventDefault();
+
+        if (explorer && explorer.contains(e.target)) {
+            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+            if (currentCloudView === 'home') return;
+
+            const row = e.target.closest('.cloud-file-row') || e.target.closest('.cloud-folder-row') || e.target.closest('.cloud-file-card') || e.target.closest('.cloud-suggested-card');
+            const isTrashView = currentCloudView === 'trash';
+
+            const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            if (row) {
+                const name = row.getAttribute('data-name');
+                const path = row.getAttribute('data-path');
+                const isDir = row.getAttribute('data-is-dir') === 'true';
+                const trashId = row.getAttribute('data-trash-id');
+
+                if (isMobile) {
+                    const checkbox = row.querySelector('.cloud-file-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        toggleCloudFileSelection(checkbox, name, path, isDir, row.getAttribute('data-owner-id'));
+                    }
+                    return;
+                }
+
+                if (name || trashId) {
+                    if (isTrashView) {
+                        itemActions.style.display = 'block';
+                        document.getElementById('ctx-star-btn').style.display = 'none';
+                        document.getElementById('ctx-rename-btn').style.display = 'none';
+                        document.getElementById('ctx-protect-btn').style.display = 'none';
+                        document.getElementById('ctx-download-btn').style.display = 'none';
+                        document.getElementById('ctx-share-btn').style.display = 'none';
+                        document.getElementById('ctx-organize-btn').style.display = 'none';
+
+                        const delBtn = document.getElementById('ctx-delete-btn');
+                        document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_delete_perm', 'Eliminar permanentemente');
+
+                        const restoreBtn = document.getElementById('ctx-restore-btn');
+                        restoreBtn.style.display = 'block';
+
+                        menu.querySelector('#ctx-creation-actions').style.display = 'none';
+                        currentCloudContextItem = { name, path, isDir, trashId, ownerId: row.getAttribute('data-owner-id') };
+                    } else if (currentCloudView === 'computers' && currentCloudPath === '') {
+                        document.getElementById('ctx-download-btn').style.display = 'none';
+                        document.getElementById('ctx-rename-btn').style.display = 'none';
+                        document.getElementById('ctx-share-btn').style.display = 'none';
+                        document.getElementById('ctx-organize-btn').style.display = 'none';
+                        document.getElementById('ctx-protect-btn').style.display = 'none';
+                        document.getElementById('ctx-info-btn').style.display = 'block';
+
+                        document.getElementById('ctx-delete-btn').style.display = 'block';
+                        document.getElementById('ctx-delete-text').innerText = window.t_cloud('btn_unlink', 'Desvincular');
+                        document.getElementById('ctx-restore-btn').style.display = 'none';
+                        menu.querySelector('#ctx-creation-actions').style.display = 'none';
+
+                        const fileView = row.getAttribute('data-view');
+                        currentCloudContextItem = { name, path, isDir, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id') };
+                        itemActions.style.display = 'block';
+                    } else {
+                        document.getElementById('ctx-download-btn').style.display = 'block';
+                        document.getElementById('ctx-star-btn').style.display = 'block';
+                        const isMineRow = row.getAttribute('data-is-mine') === 'true';
+                        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        document.getElementById('ctx-protect-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        document.getElementById('ctx-share-btn').style.display = (currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+
+                        const unshareBtn = document.getElementById('ctx-unshare-btn');
+                        if (unshareBtn) {
+                            unshareBtn.style.display = ((currentCloudView === 'shared' && !isMineRow) || currentCloudView === 'shared_by_me') ? 'block' : 'none';
+                            const unshareText = document.getElementById('ctx-unshare-text');
+                            if (unshareText) {
+                                if (currentCloudView === 'shared') {
+                                    unshareText.setAttribute('data-i18n', 'ctx_ignore');
+                                    unshareText.innerText = window.t_cloud('ctx_ignore', 'Ignorar');
+                                } else {
+                                    unshareText.setAttribute('data-i18n', 'ctx_unshare');
+                                    unshareText.innerText = window.t_cloud('ctx_unshare', 'Dejar de compartir');
+                                }
+                            }
+                        }
+
+                        document.getElementById('ctx-organize-btn').style.display = 'block';
+                        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        document.getElementById('ctx-copy-btn').style.display = 'block';
+                        document.getElementById('ctx-info-btn').style.display = 'block';
+
+                        document.getElementById('ctx-delete-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_trash', 'Mover a la papelera');
+                        document.getElementById('ctx-restore-btn').style.display = 'none';
+                        menu.querySelector('#ctx-creation-actions').style.display = 'none';
+
+                        const isStarred = row.getAttribute('data-starred') === 'true';
+                        const fileView = row.getAttribute('data-view');
+                        const sharedWith = row.getAttribute('data-shared-with');
+                        currentCloudContextItem = { name, path, isDir, starred: isStarred, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), sharedWith: sharedWith };
+                        itemActions.style.display = 'block';
+
+                        const starText = document.getElementById('ctx-star-text');
+                        starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
+                        starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+
+                        const isProtected = row.getAttribute('data-protected') === 'true';
+                        const protectText = document.getElementById('ctx-protect-text');
+                        const protectIcon = document.getElementById('ctx-protect-icon');
+
+                        if (protectText) {
+                            protectText.setAttribute('data-i18n', isProtected ? 'ctx_unprotect' : 'ctx_protect');
+                            protectText.innerText = isProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
+                        }
+                        if (protectIcon) protectIcon.innerText = isProtected ? '🔓' : '🔒';
+                    }
+                } else {
+                    currentCloudContextItem = null;
+                    itemActions.style.display = 'none';
+                }
+            } else {
+                currentCloudContextItem = null;
+                itemActions.style.display = 'none';
+            }
+
+            const isAllowedView = (currentCloudView === 'drive' || (currentCloudView === 'computers' && currentCloudPath !== ''));
+
+            if (!isAllowedView && !currentCloudContextItem) {
+                menu.style.display = 'none';
+                return;
+            }
+
+            const creationItems = Array.from(menu.children).filter(child => child.id !== 'ctx-item-actions');
+            creationItems.forEach(item => {
+                item.style.display = isAllowedView ? '' : 'none';
+            });
+
+            menu.style.display = 'block';
+
+            let x = e.pageX;
+            let y = e.pageY;
+            const menuWidth = 200;
+            const menuHeight = menu.offsetHeight || 220;
+
+            if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+            if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+        } else {
+            if (menu) menu.style.display = 'none';
+        }
+    } else {
+        if (menu) menu.style.display = 'none';
+    }
+});
+
+document.addEventListener('click', function (e) {
+    const menu = document.getElementById('cloud-context-menu');
+    if (menu) menu.style.display = 'none';
+});
+
+document.getElementById('cloud-context-menu').addEventListener('click', async function (e) {
+    e.stopPropagation();
+    const btn = e.target.closest('.context-item');
+
+    if (!btn || !currentCloudContextItem) return;
+
+    // On mobile, tapping the submenu parent shouldn't close the whole menu
+    if (btn.classList.contains('has-submenu')) {
+        return;
+    }
+
+    this.style.display = 'none';
+
+    const action = btn.id;
+    const { name, path, isDir, trashId } = currentCloudContextItem;
+    switch (action) {
+        case 'ctx-download-btn':
+            downloadCloudFile(name, path, true, currentCloudContextItem.ownerId || null, currentCloudContextItem.view || null);
+            break;
+        case 'ctx-rename-btn':
+            setTimeout(() => renameCloudItem(name, path, currentCloudContextItem.view, isDir), 50);
+            break;
+        case 'ctx-delete-btn':
+            setTimeout(() => deleteCloudItem(name, path, isDir, trashId, currentCloudContextItem.view || null), 50);
+            break;
+        case 'ctx-restore-btn':
+            restoreCloudItem(trashId);
+            break;
+        case 'ctx-star-btn':
+            toggleCloudStar(name, path, currentCloudContextItem.view || null, currentCloudContextItem.ownerId || null);
+            break;
+        case 'ctx-protect-btn':
+            toggleCloudProtect(name, path, currentCloudContextItem.view || null);
+            break;
+        case 'ctx-share-btn':
+            openCloudShare(name, path);
+            break;
+        case 'ctx-unshare-btn':
+            handleUnshareItem(currentCloudContextItem);
+            break;
+        case 'ctx-info-btn':
+            showCloudInfo(name, path, trashId, currentCloudContextItem?.ownerId || null);
+            break;
+        case 'ctx-move-btn':
+            setTimeout(() => openCloudMove(name, path, isDir, false), 50);
+            break;
+        case 'ctx-copy-btn':
+            setTimeout(() => openCloudMove(name, path, isDir, true), 50);
+            break;
+    }
+    this.style.display = 'none';
+});
+
+let moveTargetName = '';
+let moveTargetOldPath = '';
+let moveTargetNewPath = '';
+let moveTargetIsDir = false;
+let isMoveAction = true;
+
+async function openCloudMove(name, oldPath, isDir = false, isCopy = false) {
+    if (isCopy && _currentCloudUsedBytes >= _currentCloudLimitBytes) {
+        await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
+        return;
+    }
+    if (currentCloudView === 'shared' || (currentCloudContextItem && currentCloudContextItem.view === 'shared')) {
+        await NV_Alert(window.currentLang === "en" ? "Cannot move or copy shared files." : "No se puede mover ni copiar archivos compartidos.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+    isMultiMove = false;
+    moveTargetName = name;
+    moveTargetOldPath = oldPath;
+    moveTargetNewPath = '';
+    moveTargetIsDir = isDir;
+    isMoveAction = !isCopy;
+
+    const modal = document.getElementById('cloud-move-modal');
+    if (!modal) {
+        await NV_Alert("Error: El modal de mover/copiar no se encuentra en el HTML.");
+        return;
+    }
+
+    const titleActionEl = document.getElementById('move-modal-title-action');
+    if (titleActionEl) titleActionEl.innerText = isCopy ? (window.t_cloud('ctx_copy_title') || 'Copiar') : (window.t_cloud('ctx_move_title') || 'Mover');
+
+    const btnConfirm = document.getElementById('btn-confirm-move');
+    if (btnConfirm) btnConfirm.innerText = isCopy ? (window.t_cloud('btn_copy_here') || 'Copiar aquí') : (window.t_cloud('btn_move_here') || 'Mover aquí');
+
+    const nameEl = document.getElementById('move-filename');
+    if (nameEl) nameEl.innerText = name;
+
+    const displayEl = document.getElementById('move-selected-path-display');
+    if (displayEl) displayEl.innerText = '/ (' + window.t_cloud('nav_drive', 'Mi unidad') + ')';
+
+    modal.style.display = 'flex';
+
+    await loadCloudFoldersTree();
+}
+
+function closeCloudMoveModal() {
+    document.getElementById('cloud-move-modal').style.display = 'none';
+}
+
+async function loadCloudFoldersTree() {
+    const container = document.getElementById('cloud-move-tree-container');
+    if (!container) {
+        console.error("[Cloud Debug] Tree container not found!");
+        return;
+    }
+
+    container.innerHTML = '<div style="text-align: center; opacity: 0.5; padding: 20px;">Cargando directorios...</div>';
+
+    const viewQuery = (currentCloudView === 'shared') ? 'drive' : currentCloudView;
+
+    try {
+        const res = await fetch(`/api/cloud/folders?view=${viewQuery}`, { headers: HEADERS });
+        if (!res.ok) {
+            container.innerHTML = '<div style="text-align: center; color: #f87171; padding: 20px;">Error al cargar directorios</div>';
+            return;
+        }
+
+        const data = await res.json();
+        if (data.tree) {
+            container.innerHTML = '';
+            container.appendChild(renderFolderNode(data.tree));
+        } else {
+            container.innerHTML = '<div style="text-align: center; opacity: 0.5; padding: 20px;">No se encontraron carpetas</div>';
+        }
+    } catch (err) {
+        console.error("Error cargando el árbol de carpetas:", err);
+        container.innerHTML = '<div style="text-align: center; color: #f87171; padding: 20px;">Error al cargar carpetas</div>';
+    }
+}
+
+function renderFolderNode(node, depth = 0) {
+    const li = document.createElement('div');
+    li.style.display = 'flex';
+    li.style.flexDirection = 'column';
+    li.style.paddingLeft = '12px';
+    li.style.position = 'relative';
+
+    const folderRow = document.createElement('div');
+    folderRow.className = 'folder-tree-row';
+    folderRow.style.display = 'flex';
+    folderRow.style.alignItems = 'center';
+    folderRow.style.gap = '6px';
+    folderRow.style.padding = '6px 8px';
+    folderRow.style.borderRadius = '6px';
+    folderRow.style.cursor = 'pointer';
+    folderRow.style.transition = 'all 0.2s';
+    folderRow.style.userSelect = 'none';
+
+    if (moveTargetNewPath === node.path) {
+        folderRow.style.background = 'rgba(129, 140, 248, 0.2)';
+        folderRow.style.border = '1px solid rgba(129, 140, 248, 0.4)';
+    } else {
+        folderRow.style.border = '1px solid transparent';
+    }
+
+    const arrow = document.createElement('span');
+    arrow.style.fontFamily = 'monospace';
+    arrow.style.fontSize = '0.75rem';
+    arrow.style.opacity = '0.5';
+    arrow.style.width = '14px';
+    arrow.style.display = 'inline-block';
+
+    const hasSubdirs = node.subdirs && node.subdirs.length > 0;
+    const isExpanded = depth < 2;
+    if (hasSubdirs) {
+        arrow.innerText = isExpanded ? '▼' : '▶';
+        arrow.style.cursor = 'pointer';
+    } else {
+        arrow.innerText = '•';
+        arrow.style.opacity = '0.2';
+    }
+
+    const icon = document.createElement('span');
+    icon.innerText = '📁';
+    icon.style.fontSize = '1.05rem';
+
+    const label = document.createElement('span');
+    label.innerText = (node.path === '' && !node.name.includes('💻')) ? window.t_cloud('nav_drive', 'Mi unidad') : node.name;
+    label.style.fontWeight = '500';
+
+    folderRow.appendChild(arrow);
+    folderRow.appendChild(icon);
+    folderRow.appendChild(label);
+
+    li.appendChild(folderRow);
+
+    const childrenContainer = document.createElement('div');
+    childrenContainer.style.display = isExpanded ? 'flex' : 'none';
+    childrenContainer.style.flexDirection = 'column';
+    childrenContainer.style.borderLeft = '1px dashed rgba(255,255,255,0.15)';
+    childrenContainer.style.marginLeft = '16px';
+    childrenContainer.style.paddingLeft = '4px';
+
+    if (hasSubdirs) {
+        node.subdirs.forEach(sub => {
+            childrenContainer.appendChild(renderFolderNode(sub, depth + 1));
+        });
+    }
+
+    li.appendChild(childrenContainer);
+
+    arrow.onclick = (e) => {
+        if (!hasSubdirs) return;
+        e.stopPropagation();
+        if (childrenContainer.style.display === 'none') {
+            childrenContainer.style.display = 'flex';
+            arrow.innerText = '▼';
+        } else {
+            childrenContainer.style.display = 'none';
+            arrow.innerText = '▶';
+        }
+    };
+
+    folderRow.onclick = (e) => {
+        document.querySelectorAll('.folder-tree-row').forEach(row => {
+            row.style.background = 'transparent';
+            row.style.border = '1px solid transparent';
+        });
+
+        folderRow.style.background = 'rgba(129, 140, 248, 0.2)';
+        folderRow.style.border = '1px solid rgba(129, 140, 248, 0.4)';
+
+        moveTargetNewPath = node.path;
+        document.getElementById('move-selected-path-display').innerText = node.path ? `/${node.path}` : '/ (' + window.t_cloud('nav_drive', 'Mi unidad') + ')';
+    };
+
+    return li;
+}
+
+async function confirmCloudMove() {
+    if (!isMoveAction) {
+        if (currentCloudView !== 'shared' && moveTargetNewPath === moveTargetOldPath) {
+            await NV_Alert(window.t_cloud('err_same_dest', "La carpeta de destino es igual a la carpeta actual."));
+            return;
+        }
+        await copyCloudItem(moveTargetName, moveTargetOldPath, moveTargetNewPath);
+        closeCloudMoveModal();
+        return;
+    }
+
+    if (isMultiMove) {
+        let movedCount = 0;
+        for (const item of multiMoveItems) {
+            if (moveTargetNewPath === item.path) continue;
+            if (item.isDir) {
+                const targetNormalized = moveTargetNewPath ? moveTargetNewPath + '/' : '';
+                const sourceNormalized = item.path ? item.path + '/' : '';
+                const selfPath = sourceNormalized + item.name + '/';
+                if (targetNormalized === selfPath || targetNormalized.startsWith(selfPath)) {
+                    continue;
+                }
+            }
+            try {
+                const res = await fetch('/api/cloud/move', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ name: item.name, old_path: item.path, new_path: moveTargetNewPath, view: currentCloudView })
+                });
+                if (res.ok) movedCount++;
+            } catch (err) {
+                console.error("Error al mover item en lote:", err);
+            }
+        }
+        if (movedCount > 0) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            clearCloudSelection();
+        }
+        closeCloudMoveModal();
+        return;
+    }
+
+    if (moveTargetNewPath === moveTargetOldPath) {
+        await NV_Alert(window.t_cloud('err_same_dest', "La carpeta de destino es igual a la carpeta actual."));
+        return;
+    }
+
+    if (moveTargetIsDir) {
+        const targetNormalized = moveTargetNewPath ? moveTargetNewPath + '/' : '';
+        const sourceNormalized = moveTargetOldPath ? moveTargetOldPath + '/' : '';
+        const selfPath = sourceNormalized + moveTargetName + '/';
+
+        if (targetNormalized === selfPath || targetNormalized.startsWith(selfPath)) {
+            await NV_Alert(window.currentLang === "en" ? "Cannot move a directory into itself or a subdirectory." : "No se puede mover un directorio dentro de sí mismo o de uno de sus subdirectorios.");
+            return;
+        }
+    }
+
+    await moveCloudItem(moveTargetName, moveTargetOldPath, moveTargetNewPath);
+    closeCloudMoveModal();
+}
+
+async function moveCloudItem(name, oldPath, newPath) {
+    try {
+        const res = await fetch('/api/cloud/move', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, old_path: oldPath, new_path: newPath, view: currentCloudView })
+        });
+        if (res.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            closeCloudInfoPanel();
+        }
+        else {
+            const data = await res.json();
+            await NV_Alert(data.error || window.currentLang === "en" ? "Error moving" : "Error al mover");
+        }
+    } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error moving" : "Error de red al mover"); }
+}
+
+async function copyCloudItem(name, oldPath, newPath) {
+    try {
+        const ownerId = currentCloudContextItem ? currentCloudContextItem.ownerId : null;
+        // Add " (Copia)" suffix when copying a shared file
+        let copyName = name;
+        if (ownerId && currentCloudView === 'shared') {
+            const dotIdx = name.lastIndexOf('.');
+            if (dotIdx > 0) {
+                copyName = name.substring(0, dotIdx) + ' (Copia)' + name.substring(dotIdx);
+            } else {
+                copyName = name + ' (Copia)';
+            }
+        }
+        const res = await fetch('/api/cloud/copy', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ name, new_name: copyName, old_path: oldPath, new_path: newPath, view: currentCloudView, owner_id: ownerId })
+        });
+        if (res.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            closeCloudInfoPanel();
+            await NV_Alert(window.currentLang === "en" ? "Copy saved successfully." : "Copia guardada con éxito.");
+        }
+        else {
+            const data = await res.json();
+            await NV_Alert(data.error || window.currentLang === "en" ? "Error saving copy" : "Error al guardar copia");
+        }
+    } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error saving copy" : "Error de red al guardar copia"); }
+}
+
+let selectedUsersToShare = [];
+let _existingShares = [];
+
+async function openCloudShare(name, path) {
+    if (currentCloudView === 'shared' || (currentCloudContextItem && currentCloudContextItem.view === 'shared')) {
+        await NV_Alert(window.currentLang === "en" ? "Cannot share files that were shared with you." : "No puedes compartir archivos que han sido compartidos contigo.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+    const modal = document.getElementById('cloud-share-modal');
+    document.getElementById('share-filename').innerText = name;
+    document.getElementById('share-user-search').value = '';
+    document.getElementById('share-search-results').style.display = 'none';
+    selectedUsersToShare = [];
+    _existingShares = [];
+    renderSelectedUsers();
+
+    // Load already shared users
+    try {
+        const res = await fetch('/api/cloud/share/status', {
+            method: 'POST', headers: HEADERS,
+            body: JSON.stringify({ name, path })
+        });
+        const data = await res.json();
+        _existingShares = data.shares || [];
+    } catch (e) { }
+
+    const isManageMode = (currentCloudView === 'shared_by_me');
+    const addSection = document.getElementById('share-add-section');
+    const contactsSection = document.getElementById('share-contacts-section');
+    const selectedSection = document.getElementById('selected-users-container');
+    const confirmBtn = document.getElementById('btn-confirm-share');
+    const manageSection = document.getElementById('share-manage-section');
+    const actionLabel = document.getElementById('share-modal-action');
+
+    if (actionLabel) {
+        actionLabel.innerText = isManageMode ? window.t_cloud('people_with_access', 'Personas con acceso') : window.t_cloud('share_action', 'Compartir');
+    }
+
+    if (isManageMode) {
+        if (addSection) addSection.style.display = 'none';
+        if (contactsSection) contactsSection.style.display = 'none';
+        if (selectedSection) selectedSection.style.display = 'none';
+        if (confirmBtn) confirmBtn.style.display = 'none';
+        if (manageSection) manageSection.style.display = 'block';
+        renderManageShares();
+    } else {
+        if (addSection) addSection.style.display = 'block';
+        if (contactsSection) contactsSection.style.display = 'block';
+        if (selectedSection) selectedSection.style.display = 'flex';
+        if (confirmBtn) confirmBtn.style.display = 'inline-block';
+        if (manageSection) manageSection.style.display = 'none';
+        loadCloudContacts();
+    }
+
+    modal.style.display = 'flex';
+}
+
+function renderManageShares() {
+    const container = document.getElementById('share-manage-list');
+    if (!container) return;
+
+    if (_existingShares.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 20px; opacity: 0.5; font-size: 0.85rem;">${window.t_cloud('no_shared_users', 'No hay usuarios con acceso')}</div>`;
+        return;
+    }
+
+    container.innerHTML = _existingShares.map(s => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 8px; transition: background 0.2s;" class="contact-item-row">
+            <img src="/api/system/user/avatar/${s.user_id}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border);" onerror="this.outerHTML='<div style=\'width: 36px; height: 36px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;\'>${s.username.charAt(0).toUpperCase()}</div>'">
+            <div style="flex: 1;">
+                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">${s.username}</div>
+                <div style="font-size: 0.7rem; color: var(--text-dim); opacity: 0.8;">${window.t_cloud('guest', 'Invitado')}</div>
+            </div>
+            <button onclick="revokeCloudShare('${s.user_id}', '${s.username.replace(/'/g, "\\'")}', event)"
+                style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
+                onmouseover="this.style.background='rgba(239,68,68,0.25)';this.style.transform='scale(1.1)'" 
+                onmouseout="this.style.background='rgba(239,68,68,0.1)';this.style.transform='scale(1)'"
+                title="${window.t_cloud('ctx_unshare', 'Dejar de compartir')}">&times;</button>
+        </div>
+    `).join('');
+}
+
+function closeCloudShareModal() {
+    document.getElementById('cloud-share-modal').style.display = 'none';
+}
+
+async function loadCloudContacts() {
+    const list = document.getElementById('share-contacts-list');
+    try {
+        const res = await fetch('/api/cloud/contacts', { headers: HEADERS });
+        const data = await res.json();
+
+        if (!data.contacts || data.contacts.length === 0) {
+            list.innerHTML = `<div style="font-size: 0.85rem; opacity: 0.5; text-align: center; padding: 10px;">${window.t_cloud('share_no_friends', 'No tienes amigos agregados.')}</div>`;
+            return;
+        }
+
+        list.innerHTML = data.contacts.map(c => {
+            const already = _existingShares.some(s => s.user_id === c.user_id);
+            return `
+                <div class="contact-item-row" onclick="${already ? '' : "selectUserForSharing('" + c.user_id + "', '" + c.username.replace(/'/g, "\\'") + "')"}" 
+                     style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: ${already ? 'default' : 'pointer'}; transition: background 0.2s; opacity: ${already ? 0.5 : 1};">
+                    <img src="/api/system/user/avatar/${c.user_id}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="this.outerHTML='<div style=\\'width: 32px; height: 32px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;\\'>${c.username.charAt(0).toUpperCase()}</div>'">
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.9rem; font-weight: 600;">${c.username}</div>
+                    </div>
+                    ${already ? '<button onclick="revokeCloudShare(\'' + c.user_id + '\', \'' + c.username.replace(/'/g, "\\'") + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">' + window.t_cloud('share_revoke', 'REVOCAR') + '</button>' : ''}
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Error cargando amigos:", err);
+    }
+}
+
+async function searchUsersForSharing(query) {
+    const results = document.getElementById('share-search-results');
+    if (!query || query.length < 2) {
+        results.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/cloud/users/search?q=${encodeURIComponent(query)}`, { headers: HEADERS });
+        const data = await res.json();
+
+        if (!data.users || data.users.length === 0) {
+            results.innerHTML = `<div style="padding: 12px; font-size: 0.85rem; opacity: 0.5;">
+        ${window.t_cloud('share_no_friends_found', 'No se encontraron amigos.')}
+        </div>`;
+        } else {
+            results.innerHTML = data.users.map(u => {
+                const already = _existingShares.some(s => s.user_id === u.user_id);
+                return `
+                <div onclick="${already ? '' : "selectUserForSharing('" + u.user_id + "', '" + u.username.replace(/'/g, "\\'") + "')"}" 
+                     style="padding: 10px 16px; cursor: ${already ? 'default' : 'pointer'}; border-bottom: 1px solid var(--border); transition: background 0.2s; display: flex; align-items: center; gap: 10px; opacity: ${already ? 0.5 : 1};">
+                    <img src="/api/system/user/avatar/${u.user_id}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="this.outerHTML='<div style=\\'width: 24px; height: 24px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;\\'>${u.username.charAt(0).toUpperCase()}</div>'">
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.85rem; font-weight: 600;">${u.username}</div>
+                    </div>
+                    ${already ? '<button onclick="revokeCloudShare(\'' + u.user_id + '\', \'' + u.username.replace(/'/g, "\\'") + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">REVOCAR</button>' : '<div style="font-size:0.7rem;color:#4285f4;font-weight:700;">SELECCIONAR</div>'}
+                </div>
+            `}).join('');
+        }
+        results.style.display = 'block';
+    } catch (err) { }
+}
+
+function selectUserForSharing(uid, username) {
+    if (selectedUsersToShare.find(u => u.uid === uid)) return;
+    if (_existingShares.some(s => s.user_id === uid)) return;
+    selectedUsersToShare.push({ uid, username });
+    renderSelectedUsers();
+
+    // Hide search results and clear input
+    const results = document.getElementById('share-search-results');
+    if (results) results.style.display = 'none';
+    const input = document.getElementById('share-user-search');
+    if (input) input.value = '';
+}
+
+function removeSelectedUser(uid) {
+    selectedUsersToShare = selectedUsersToShare.filter(u => u.uid !== uid);
+    renderSelectedUsers();
+}
+
+async function revokeCloudShare(uid, username, event) {
+    if (event) event.stopPropagation();
+    const itemName = document.getElementById('share-filename').innerText;
+    if (!await NV_Confirm(`${window.t_cloud('confirm_unshare_user', '¿Dejar de compartir con')} ${username}?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+
+    try {
+        const res = await fetch('/api/cloud/unshare', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                name: itemName,
+                path: currentCloudContextItem ? currentCloudContextItem.path : '',
+                shared_with: uid
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            _existingShares = _existingShares.filter(s => s.user_id !== uid);
+
+            // If in manage mode, re-render the manage list
+            const manageSection = document.getElementById('share-manage-section');
+            if (manageSection && manageSection.style.display === 'block') {
+                renderManageShares();
+                // If no more shares, close modal and refresh
+                if (_existingShares.length === 0) {
+                    closeCloudShareModal();
+                }
+            } else {
+                loadCloudContacts();
+                const q = document.getElementById('share-user-search').value;
+                if (q && q.length >= 2) searchUsersForSharing(q);
+            }
+
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+        } else {
+            NV_Alert(data.error || window.currentLang === "en" ? "Error revoking access" : "Error al revocar acceso");
+        }
+    } catch (err) {
+        NV_Alert(window.currentLang === "en" ? "Connection error" : "Error de conexión");
+    }
+}
+
+function renderSelectedUsers() {
+    const container = document.getElementById('selected-users-container');
+    const btn = document.getElementById('btn-confirm-share');
+
+    if (selectedUsersToShare.length === 0) {
+        container.innerHTML = `<div style="font-size: 0.85rem; opacity: 0.4;">${window.t_cloud('share_nobody_selected', 'Nadie seleccionado')}</div>`;
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        return;
+    }
+
+    btn.disabled = false;
+    btn.style.opacity = '1';
+
+    container.innerHTML = selectedUsersToShare.map(u => `
+        <div style="display: flex; align-items: center; gap: 6px; background: var(--indigo-dim); color: var(--text-main); padding: 4px 10px; border-radius: 100px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--indigo);">
+            <img src="/api/system/user/avatar/${u.uid}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;" onerror="this.outerHTML='<div style=\\'width: 16px; height: 16px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 9px;\\'>${u.username.charAt(0).toUpperCase()}</div>'">
+            ${u.username}
+            <span onclick="removeSelectedUser('${u.uid}')" style="cursor: pointer; opacity: 0.6; font-size: 1rem; line-height: 1;">&times;</span>
+        </div>
+    `).join('');
+}
+
+async function confirmCloudShare() {
+    if (selectedUsersToShare.length === 0 || !currentCloudContextItem) return;
+    if (currentCloudView === 'shared' || currentCloudContextItem.view === 'shared') {
+        return;
+    }
+
+    const { name, path } = currentCloudContextItem;
+    const uids = selectedUsersToShare.map(u => u.uid);
+
+    try {
+        const res = await fetch('/api/cloud/share', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                name: name,
+                path: path,
+                view: currentCloudView,
+                shared_with: uids
+            })
+        });
+
+        if (res.ok) {
+            closeCloudShareModal();
+            await NV_Alert(window.currentLang === "en" ? `File shared with ${selectedUsersToShare.length} user(s).` : `Archivo compartido con ${selectedUsersToShare.length} usuario(s).`);
+        } else {
+            const data = await res.json();
+            await NV_Alert("Error: " + (data.error || window.currentLang === "en" ? "Could not share." : "No se pudo compartir."));
+        }
+    } catch (err) {
+        await NV_Alert(window.currentLang === "en" ? "Connection error sharing." : "Error de conexión al compartir.");
+    }
+}
+
+let linkDevicePollInterval = null;
+let _currentLinkDeviceOS = 'linux';
+let _currentLinkDeviceToken = null;
+let _existingDevicesAtOpen = new Set();
+
+async function openLinkDeviceModal() {
+    const modal = document.getElementById('cloud-link-device-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('sync-command-text').innerText = 'Generando token seguro...';
+        _existingDevicesAtOpen = new Set();
+        try {
+            const devRes = await fetch('/api/cloud/files?view=computers', { headers: HEADERS });
+            if (devRes.ok) {
+                const devData = await devRes.json();
+                (devData.files || []).forEach(f => _existingDevicesAtOpen.add(f.name));
+            }
+        } catch (e) { }
+        try {
+            const res = await fetch('/api/cloud/sync-agent/generate-token', {
+                method: 'POST',
+                headers: HEADERS
+            });
+            if (res.ok) {
+                const data = await res.json();
+                _currentLinkDeviceToken = data.temp_token;
+            }
+        } catch (e) { console.error("Error al generar token del agente", e); }
+        const userAgent = navigator.userAgent.toLowerCase();
+        if (userAgent.includes('win')) {
+            _currentLinkDeviceOS = 'windows';
+        } else if (userAgent.includes('mac')) {
+            _currentLinkDeviceOS = 'mac';
+        } else {
+            _currentLinkDeviceOS = 'linux';
+        }
+
+        setLinkDeviceOS(_currentLinkDeviceOS);
+        setLinkDeviceOS(_currentLinkDeviceOS);
+        if (linkDevicePollInterval) clearInterval(linkDevicePollInterval);
+        linkDevicePollInterval = setInterval(async () => {
+            try {
+                const res = await fetch('/api/cloud/files?view=computers', { headers: HEADERS });
+                if (res.ok) {
+                    const data = await res.json();
+                    const files = data.files || [];
+                    const newDevice = files.find(f => f.active && !_existingDevicesAtOpen.has(f.name));
+                    if (newDevice) {
+                        clearInterval(linkDevicePollInterval);
+                        linkDevicePollInterval = null;
+                        closeLinkDeviceModal();
+                        await fetchCloudFiles(newDevice.name, 'computers');
+                        await NV_Alert(window.currentLang === "en" ? `Computer "${newDevice.name.replace('', '')}" linked successfully!` : `¡Computadora "${newDevice.name.replace('', '')}" vinculada con éxito!`);
+                    }
+                }
+            } catch (err) { }
+        }, 2500);
+    }
+}
+
+function setLinkDeviceOS(os) {
+    _currentLinkDeviceOS = os;
+    const btns = ['os-btn-linux', 'os-btn-mac', 'os-btn-windows'];
+    btns.forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        const isActive = id === `os-btn-${os}`;
+        btn.style.background = isActive ? 'var(--indigo)' : 'transparent';
+        btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
+        btn.style.fontWeight = isActive ? '700' : '500';
+    });
+    generateSyncCommand();
+}
+
+function closeLinkDeviceModal() {
+    const modal = document.getElementById('cloud-link-device-modal');
+    if (modal) modal.style.display = 'none';
+    if (linkDevicePollInterval) {
+        clearInterval(linkDevicePollInterval);
+        linkDevicePollInterval = null;
+    }
+}
+
+function generateSyncCommand() {
+    const cmdText = document.getElementById('sync-command-text');
+    if (!cmdText) return;
+
+    if (!_currentLinkDeviceToken) {
+        cmdText.innerText = "Error: no se pudo obtener token de seguridad.";
+        return;
+    }
+
+    cmdText.innerText = _currentLinkDeviceToken;
+}
+
+function copySyncCommand() {
+
+    const cmdText = document.getElementById('sync-command-text');
+    if (!cmdText) return;
+
+    navigator.clipboard.writeText(cmdText.innerText).then(() => {
+        NV_Alert(window.t_cloud('link_modal_token_copied', 'Token copiado al portapapeles'));
+    }).catch(err => {
+        console.error("Error al copiar:", err);
+    });
+}
+
+function setLinkDeviceTab(tab) {
+    const btnTerminal = document.getElementById('tab-btn-terminal');
+    const btnBrowser = document.getElementById('tab-btn-browser');
+    const contentTerminal = document.getElementById('link-device-terminal-content');
+    const contentBrowser = document.getElementById('link-device-browser-content');
+
+    if (!btnTerminal || !btnBrowser || !contentTerminal || !contentBrowser) return;
+
+    if (tab === 'terminal') {
+        btnTerminal.style.background = 'var(--indigo)';
+        btnTerminal.style.color = '#fff';
+        btnBrowser.style.background = 'transparent';
+        btnBrowser.style.color = 'var(--text-muted)';
+        contentTerminal.style.display = 'block';
+        contentBrowser.style.display = 'none';
+    } else {
+        btnBrowser.style.background = 'var(--indigo)';
+        btnBrowser.style.color = '#fff';
+        btnTerminal.style.background = 'transparent';
+        btnTerminal.style.color = 'var(--text-muted)';
+        contentTerminal.style.display = 'none';
+        contentBrowser.style.display = 'block';
+    }
+}
+
+async function handleLinkDeviceFolderSelect(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const deviceName = 'Navegador Web';
+
+    const progressContainer = document.getElementById('link-device-upload-progress');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressPercent = document.getElementById('upload-progress-percent');
+    const progressStatus = document.getElementById('upload-progress-status');
+    const progressCount = document.getElementById('upload-progress-count');
+    const dropzone = document.getElementById('link-device-dropzone');
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (dropzone) dropzone.style.pointerEvents = 'none';
+
+    const totalFiles = files.length;
+    let uploadedCount = 0;
+
+    try {
+        if (progressStatus) progressStatus.innerText = window.t_cloud('link_modal_registering', "Registrando dispositivo...");
+        const pingRes = await fetch('/api/cloud/sync-agent/ping', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                device: deviceName,
+                os: 'Web-Browser'
+            })
+        });
+
+        if (!pingRes.ok) {
+            throw new Error(window.t_cloud('link_modal_err_register', "No se pudo registrar el dispositivo."));
+        }
+
+        for (let i = 0; i < totalFiles; i++) {
+            const file = files[i];
+            const relPath = file.webkitRelativePath;
+            const parts = relPath.split('/');
+            parts.shift();
+            const filename = parts.pop();
+            const subDir = parts.join('/');
+
+            let uploadSubpath = `${deviceName}`;
+            if (subDir) {
+                uploadSubpath += `/${subDir}`;
+            }
+
+            if (progressStatus) progressStatus.innerText = `${window.t_cloud('link_modal_uploading', 'Subiendo: ')}${filename}`;
+            if (progressCount) progressCount.innerText = `${window.t_cloud('link_modal_processing_file', 'Procesando archivo')} ${i + 1} ${window.t_cloud('of', 'de')} ${totalFiles}`;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadUrl = `/api/cloud/upload?path=${encodeURIComponent(uploadSubpath)}&view=computers`;
+            const uploadRes = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Token': TOKEN
+                },
+                body: formData
+            });
+
+            if (uploadRes.ok) {
+                uploadedCount++;
+                const percent = Math.round((uploadedCount / totalFiles) * 100);
+                if (progressBar) progressBar.style.width = `${percent}%`;
+                if (progressPercent) progressPercent.innerText = `${percent}%`;
+            }
+        }
+
+        if (progressStatus) progressStatus.innerText = window.t_cloud('link_modal_sync_complete', "¡Sincronización completada!");
+        if (progressPercent) progressPercent.innerText = "100%";
+        if (progressBar) progressBar.style.width = "100%";
+
+        setTimeout(async () => {
+            closeLinkDeviceModal();
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (dropzone) dropzone.style.pointerEvents = 'auto';
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressPercent) progressPercent.innerText = '0%';
+
+            await fetchCloudFiles(deviceName + "", 'computers');
+            await NV_Alert(window.currentLang === "en" ? `Web Sync complete! Successfully uploaded ${uploadedCount} of ${totalFiles} files.` : `¡Sincronización Web completada! Se han subido ${uploadedCount} de ${totalFiles} archivos correctamente.`);
+        }, 1500);
+
+    } catch (err) {
+        console.error("Error en sincronización web:", err);
+        if (progressStatus) progressStatus.innerText = "Error al sincronizar.";
+        if (dropzone) dropzone.style.pointerEvents = 'auto';
+        await NV_Alert(window.currentLang === "en" ? "An error occurred syncing folder via browser." : "Ocurrió un error al sincronizar la carpeta mediante el navegador.");
+    }
+}
+
+let uploadDestinationOverridePath = null;
+let uploadDestinationOverrideView = null;
+
+function triggerNewItemAction(action) {
+    document.getElementById('cloud-new-menu').style.display = 'none';
+    
+    // Close sidebar on mobile if it is open
+    const sidebar = document.querySelector('.cloud-sidebar');
+    const overlay = document.getElementById('cloud-sidebar-overlay');
+    if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('mobile-open')) {
+        sidebar.classList.remove('mobile-open');
+        if (overlay) overlay.classList.remove('active');
+    }
+    
+    if (currentCloudView !== 'home' && currentCloudView !== 'computers') {
+        uploadDestinationOverridePath = '';
+        uploadDestinationOverrideView = 'home';
+        fetchCloudFiles('', 'home');
+        executeNewItemAction(action);
+    } else {
+        uploadDestinationOverridePath = null;
+        uploadDestinationOverrideView = null;
+        executeNewItemAction(action);
+    }
+}
+
+function executeNewItemAction(action) {
+    if (action === 'file') {
+        document.getElementById('cloud-upload-input').click();
+    } else if (action === 'folder') {
+        document.getElementById('cloud-folder-upload-input').click();
+    } else if (action === 'mkdir') {
+        handleCreateFolder();
+    }
+}
+
+let SELECTED_CLOUD_ITEMS = [];
+let isMultiMove = false;
+let multiMoveItems = [];
+
+function toggleCloudFileSelection(checkbox, name, path, isDir, ownerId) {
+    const row = checkbox.closest('.cloud-file-row') || checkbox.closest('.cloud-folder-row') || checkbox.closest('.cloud-file-card');
+    if (checkbox.checked) {
+        row.classList.add('selected');
+        SELECTED_CLOUD_ITEMS.push({ name, path, isDir, ownerId, row });
+    } else {
+        row.classList.remove('selected');
+        SELECTED_CLOUD_ITEMS = SELECTED_CLOUD_ITEMS.filter(item => item.row !== row);
+    }
+    updateCloudMultiSelectBar();
+}
+
+function clearCloudSelection() {
+
+    document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card').forEach(row => {
+        row.classList.remove('selected');
+        const chk = row.querySelector('.cloud-file-checkbox');
+        if (chk) chk.checked = false;
+    });
+
+    SELECTED_CLOUD_ITEMS = [];
+
+    updateCloudMultiSelectBar();
+}
+
+function updateCloudMultiSelectBar() {
+    const bar = document.getElementById('cloud-multi-select-bar');
+    const count = document.getElementById('cloud-multi-select-count');
+    if (!bar || !count) return;
+
+    if (SELECTED_CLOUD_ITEMS.length > 0) {
+        bar.style.display = 'flex';
+        count.innerText = `${SELECTED_CLOUD_ITEMS.length} ` + (SELECTED_CLOUD_ITEMS.length > 1 ? window.t_cloud('selected_plural', 'seleccionados') : window.t_cloud('selected_single', 'seleccionado'));
+
+        const btnZip = document.getElementById('btn-cloud-multi-zip');
+        const btnMove = document.getElementById('btn-cloud-multi-move');
+        const btnDelete = document.getElementById('btn-cloud-multi-delete');
+        const btnDeleteText = document.getElementById('btn-cloud-multi-delete-text');
+        const btnRestore = document.getElementById('btn-cloud-multi-restore');
+
+        if (currentCloudView === 'trash') {
+            if (btnZip) btnZip.style.display = 'none';
+            if (btnMove) btnMove.style.display = 'none';
+            if (btnRestore) btnRestore.style.display = 'block';
+            if (btnDeleteText) btnDeleteText.innerText = window.t_cloud('ctx_delete_perm', 'Eliminar definitivamente');
+            if (btnDelete) {
+                btnDelete.style.background = 'rgba(248,113,113,0.1)';
+                btnDelete.style.borderColor = 'rgba(248,113,113,0.3)';
+                btnDelete.style.color = '#f87171';
+            }
+        } else if (currentCloudView === 'computers' && currentCloudPath === '') {
+            if (btnZip) btnZip.style.display = 'none';
+            if (btnMove) btnMove.style.display = 'none';
+            if (btnRestore) btnRestore.style.display = 'none';
+            if (btnDeleteText) btnDeleteText.innerText = window.t_cloud('btn_unlink', 'Desvincular');
+            if (btnDelete) {
+                btnDelete.style.background = 'rgba(248,113,113,0.1)';
+                btnDelete.style.borderColor = 'rgba(248,113,113,0.3)';
+                btnDelete.style.color = '#f87171';
+            }
+        } else {
+            if (btnZip) btnZip.style.display = 'block';
+            if (btnMove) btnMove.style.display = 'block';
+            if (btnRestore) btnRestore.style.display = 'none';
+            if (btnDeleteText) btnDeleteText.innerText = window.t_cloud('btn_delete', 'Eliminar');
+            if (btnDelete) {
+                btnDelete.style.background = 'rgba(248,113,113,0.1)';
+                btnDelete.style.borderColor = 'rgba(248,113,113,0.3)';
+                btnDelete.style.color = '#f87171';
+            }
+        }
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function handleCloudRowClick(event, name, path, isDir, ownerId, isTrash, defaultActionString) {
+
+    if (event.target.classList.contains('cloud-file-checkbox')) return;
+    if (event.target.closest('.cloud-file-checkbox')) return;
+    if (event.target.tagName === 'BUTTON') return;
+    if (event.target.tagName === 'INPUT') return;
+
+    const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    if (currentCloudView === 'home') {
+        new Function(defaultActionString)();
+        return;
+    }
+
+    if (event.ctrlKey || event.shiftKey || event.metaKey) {
+        event.stopPropagation();
+        event.preventDefault();
+        const row = event.currentTarget;
+        const checkbox = row.querySelector('.cloud-file-checkbox');
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            toggleCloudFileSelection(checkbox, name, path, isDir, ownerId);
+        }
+        return;
+    }
+
+    if (SELECTED_CLOUD_ITEMS.length > 0) {
+        event.stopPropagation();
+        event.preventDefault();
+        const row = event.currentTarget;
+        const checkbox = row.querySelector('.cloud-file-checkbox');
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            toggleCloudFileSelection(checkbox, name, path, isDir, ownerId);
+        }
+        return;
+    }
+
+    new Function(defaultActionString)();
+}
+
+function showCloudProgressToast(message) {
+    let toast = document.getElementById('cloud-progress-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'cloud-progress-toast';
+        toast.style.position = 'fixed';
+        toast.style.bottom = '24px';
+        toast.style.right = '24px';
+        toast.style.background = 'var(--surface-hi)';
+        toast.style.border = '1px solid rgba(99, 102, 241, 0.3)';
+        toast.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+        toast.style.borderRadius = '12px';
+        toast.style.padding = '16px 20px';
+        toast.style.zIndex = '99999';
+        toast.style.display = 'flex';
+        toast.style.alignItems = 'center';
+        toast.style.gap = '15px';
+        toast.style.color = 'var(--text-main)';
+        toast.style.fontFamily = 'inherit';
+        toast.style.fontSize = '0.85rem';
+        toast.style.backdropFilter = 'blur(10px)';
+        toast.style.animation = 'slideInRight 0.3s ease';
+
+        toast.innerHTML = `
+            <div class="cloud-toast-spinner" style="width: 20px; height: 20px; border: 2.5px solid rgba(99,102,241,0.2); border-top-color: var(--indigo); border-radius: 50%; animation: cloud-spin 0.8s linear infinite;"></div>
+            <span class="cloud-toast-text">${message}</span>
+        `;
+
+        if (!document.getElementById('cloud-toast-style')) {
+            const style = document.createElement('style');
+            style.id = 'cloud-toast-style';
+            style.innerHTML = `
+                @keyframes cloud-spin { to { transform: rotate(360deg); } }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(toast);
+    } else {
+        toast.querySelector('.cloud-toast-text').innerText = message;
+        toast.style.display = 'flex';
+    }
+}
+
+function hideCloudProgressToast() {
+    const toast = document.getElementById('cloud-progress-toast');
+    if (toast) {
+        toast.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 300);
+    }
+}
+
+async function downloadSelectedAsZip() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+
+    showCloudProgressToast(`Comprimiendo ${SELECTED_CLOUD_ITEMS.length} elementos...`);
+
+    try {
+        const items = SELECTED_CLOUD_ITEMS.map(item => ({
+            name: item.name,
+            path: item.path,
+            owner_id: item.ownerId
+        }));
+
+        const res = await fetch('/api/cloud/get_multi_token', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                items,
+                view: currentCloudView
+            })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            const token = data.t;
+
+            showCloudProgressToast("Iniciando descarga...");
+
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = `/api/cloud/download?t=${token}`;
+            document.body.appendChild(iframe);
+            setTimeout(() => iframe.remove(), 5000);
+
+            setTimeout(() => {
+                hideCloudProgressToast();
+                clearCloudSelection();
+            }, 1500);
+        } else {
+            const data = await res.json();
+            hideCloudProgressToast();
+            await NV_Alert(data.error || window.currentLang === "en" ? "Error preparing download." : "Error al preparar la descarga.");
+        }
+    } catch (err) {
+        hideCloudProgressToast();
+        await NV_Alert(window.currentLang === "en" ? "Network error zipping and downloading." : "Error de red al intentar comprimir y descargar.");
+    }
+}
+
+async function moveSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+
+    isMultiMove = true;
+    multiMoveItems = [...SELECTED_CLOUD_ITEMS];
+    moveTargetNewPath = '';
+
+    const modal = document.getElementById('cloud-move-modal');
+    if (!modal) {
+        await NV_Alert("Error: El modal de mover no se encuentra.");
+        return;
+    }
+
+    const titleActionEl = document.getElementById('move-modal-title-action');
+    if (titleActionEl) titleActionEl.innerText = window.t_cloud('ctx_move_title', 'Mover');
+
+    const btnConfirm = document.getElementById('btn-confirm-move');
+    if (btnConfirm) btnConfirm.innerText = window.t_cloud('btn_move_here', 'Mover aquí');
+
+    const nameEl = document.getElementById('move-filename');
+    if (nameEl) {
+        const count = SELECTED_CLOUD_ITEMS.length;
+        const itemsStr = count === 1 ? window.t_cloud('selected_single', 'seleccionado') : window.t_cloud('selected_plural', 'seleccionados');
+        const elementStr = count === 1 ? window.t_cloud('item_single', 'elemento') : window.t_cloud('item_plural', 'elementos');
+        nameEl.innerText = `${count} ${elementStr} ${itemsStr}`;
+    }
+
+    const displayEl = document.getElementById('move-selected-path-display');
+    if (displayEl) displayEl.innerText = '/ (' + window.t_cloud('nav_drive', 'Mi unidad') + ')';
+
+    modal.style.display = 'flex';
+    await loadCloudFoldersTree();
+}
+
+async function deleteSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+
+    const isPermanent = currentCloudView === 'trash';
+    const isComputer = currentCloudView === 'computers' && currentCloudPath === '';
+    const isShared = currentCloudView === 'shared';
+    let msg = window.t_cloud('confirm_trash_multi', '¿Mover los') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected_to_trash', 'elementos seleccionados a la papelera?');
+    if (isShared) {
+        msg = window.t_cloud('confirm_unshare_multi', '¿Dejar de compartir los') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected', 'elementos seleccionados') + '?';
+    } else if (isPermanent) {
+        msg = window.t_cloud('confirm_delete_permanent', '¿Eliminar PERMANENTEMENTE') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected', 'elementos seleccionados') + '?';
+    } else if (isComputer) {
+        msg = SELECTED_CLOUD_ITEMS.length === 1
+            ? window.t_cloud('confirm_unlink', '¿Desvincular y eliminar por completo la computadora') + ` "${SELECTED_CLOUD_ITEMS[0].name}"?`
+            : window.t_cloud('confirm_unlink_multi', '¿Desvincular y eliminar por completo las') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('computers_selected', 'computadoras seleccionadas') + '?';
+    }
+
+    if (!await NV_Confirm(msg, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+
+    let deletedCount = 0;
+    for (const item of SELECTED_CLOUD_ITEMS) {
+        try {
+            const itemView = item.row.getAttribute('data-view') || currentCloudView;
+            let res;
+            if (isShared || itemView === 'shared') {
+                res = await fetch('/api/cloud/unshare', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ name: item.name, path: item.path, owner_id: item.ownerId })
+                });
+            } else {
+                res = await fetch('/api/cloud/delete', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ name: item.name, path: item.path, view: currentCloudView === 'trash' ? 'trash' : itemView, id: item.row.getAttribute('data-trash-id') || null })
+                });
+            }
+            if (res.ok) {
+                deletedCount++;
+            }
+        } catch (err) {
+            console.error("Error al eliminar item:", err);
+        }
+    }
+
+    if (deletedCount > 0) {
+        fetchCloudFiles(currentCloudPath, currentCloudView);
+        clearCloudSelection();
+        closeCloudInfoPanel();
+    }
+}
+
+async function restoreSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+
+    let restoredCount = 0;
+    const itemsToRestore = [...SELECTED_CLOUD_ITEMS];
+
+    for (const item of itemsToRestore) {
+        const trashId = item.row.getAttribute('data-trash-id') || null;
+        if (!trashId) continue;
+        try {
+            const res = await fetch('/api/cloud/restore', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({ id: trashId })
+            });
+            if (res.ok) {
+                restoredCount++;
+            }
+        } catch (err) {
+            console.error("Error al restaurar elemento seleccionando:", err);
+        }
+    }
+
+    if (restoredCount > 0) {
+        fetchCloudFiles(currentCloudPath, currentCloudView);
+        clearCloudSelection();
+        closeCloudInfoPanel();
+    }
+}
+
+function initMarqueeSelection() {
+    const list = document.getElementById('cloud-file-list');
+    if (!list) return;
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const viewCloud = document.getElementById('view-cloud');
+            if (viewCloud && viewCloud.classList.contains('active')) {
+                clearCloudSelection();
+            }
+        }
+    });
+
+    list.addEventListener('mousedown', (e) => {
+
+        if (e.button !== 0) return;
+        if (currentCloudView === 'home') return;
+        if (e.target.closest('.cloud-file-row') || e.target.closest('.cloud-folder-row') || e.target.closest('.cloud-file-card') || e.target.closest('button') || e.target.closest('.cloud-sidebar') || e.target.closest('.cloud-header') || e.target.closest('.cloud-table-header')) return;
+
+        const initialStartX = e.clientX;
+        const initialStartY = e.clientY;
+        const startScrollY = list.scrollTop;
+
+        let selectionBox = document.getElementById('cloud-drag-selection-box');
+        if (!selectionBox) {
+            selectionBox = document.createElement('div');
+            selectionBox.id = 'cloud-drag-selection-box';
+            selectionBox.style.position = 'fixed';
+            selectionBox.style.border = '1.5px dashed var(--indigo)';
+            selectionBox.style.background = 'rgba(99, 102, 241, 0.12)';
+            selectionBox.style.borderRadius = '4px';
+            selectionBox.style.pointerEvents = 'none';
+            selectionBox.style.zIndex = '99999';
+            selectionBox.style.display = 'none';
+            document.body.appendChild(selectionBox);
+        }
+
+        let isDragging = false;
+
+        function onMouseMove(moveEvent) {
+            const currentScrollY = list.scrollTop;
+            const scrollDiff = currentScrollY - startScrollY;
+
+            const startX = initialStartX;
+            const startY = initialStartY - scrollDiff;
+
+            const currentX = moveEvent.clientX;
+            const currentY = moveEvent.clientY;
+
+            if (!isDragging && (Math.abs(currentX - startX) > 5 || Math.abs(currentY - startY) > 5)) {
+                isDragging = true;
+                selectionBox.style.display = 'block';
+
+                if (!moveEvent.ctrlKey && !moveEvent.shiftKey && !moveEvent.metaKey) {
+                    clearCloudSelection();
+                }
+            }
+
+            if (isDragging) {
+                const left = Math.min(startX, currentX);
+                const top = Math.min(startY, currentY);
+                const width = Math.abs(startX - currentX);
+                const height = Math.abs(startY - currentY);
+
+                selectionBox.style.left = `${left}px`;
+                selectionBox.style.top = `${top}px`;
+                selectionBox.style.width = `${width}px`;
+                selectionBox.style.height = `${height}px`;
+
+                list.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card').forEach(row => {
+                    const rowRect = row.getBoundingClientRect();
+                    const boxRect = {
+                        left: left,
+                        top: top,
+                        right: left + width,
+                        bottom: top + height
+                    };
+
+                    const intersects = !(
+                        rowRect.right < boxRect.left ||
+                        rowRect.left > boxRect.right ||
+                        rowRect.bottom < boxRect.top ||
+                        rowRect.top > boxRect.bottom
+                    );
+
+                    const name = row.getAttribute('data-name');
+                    const path = row.getAttribute('data-path');
+                    const isDir = row.getAttribute('data-is-dir') === 'true';
+                    const ownerId = row.getAttribute('data-owner-id');
+                    const checkbox = row.querySelector('.cloud-file-checkbox');
+
+                    if (intersects) {
+                        if (checkbox && !checkbox.checked) {
+                            checkbox.checked = true;
+                            row.classList.add('selected');
+                            if (!SELECTED_CLOUD_ITEMS.some(item => item.row === row)) {
+                                SELECTED_CLOUD_ITEMS.push({ name, path, isDir, ownerId, row });
+                            }
+                        }
+                    } else {
+
+                        if (!moveEvent.ctrlKey && !moveEvent.shiftKey && !moveEvent.metaKey) {
+                            if (checkbox && checkbox.checked) {
+                                checkbox.checked = false;
+                                row.classList.remove('selected');
+                                SELECTED_CLOUD_ITEMS = SELECTED_CLOUD_ITEMS.filter(item => item.row !== row);
+                            }
+                        }
+                    }
+                });
+                updateCloudMultiSelectBar();
+            }
+        }
+
+        function onMouseUp(upEvent) {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            if (selectionBox) {
+                selectionBox.style.display = 'none';
+            }
+
+            if (!isDragging && !upEvent.ctrlKey && !upEvent.shiftKey && !upEvent.metaKey) {
+                clearCloudSelection();
+            }
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+}
+
+let currentCloudLayout = localStorage.getItem('nullvoid_cloud_layout') || 'list';
+
+function setCloudLayout(layout) {
+    currentCloudLayout = layout;
+    localStorage.setItem('nullvoid_cloud_layout', layout);
+
+    const btnList = document.getElementById('btn-cloud-layout-list');
+    const btnGrid = document.getElementById('btn-cloud-layout-grid');
+
+    if (btnList && btnGrid) {
+        if (layout === 'grid') {
+            btnList.style.background = 'transparent';
+            btnList.style.color = 'var(--text-muted)';
+            btnGrid.style.background = 'var(--indigo)';
+            btnGrid.style.color = '#fff';
+        } else {
+            btnList.style.background = 'var(--indigo)';
+            btnList.style.color = '#fff';
+            btnGrid.style.background = 'transparent';
+            btnGrid.style.color = 'var(--text-muted)';
+        }
+    }
+
+    if (typeof CLOUD_FILES !== 'undefined' && CLOUD_FILES) {
+        renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
+    }
+}
+
+function initCloudLayout() {
+    const layout = localStorage.getItem('nullvoid_cloud_layout') || 'list';
+    setCloudLayout(layout);
+}
+
+function initDragAndDropUpload() {
+    const viewCloud = document.getElementById('view-cloud');
+    const overlay = document.getElementById('cloud-drop-overlay');
+    const targetNameSpan = document.getElementById('cloud-drop-target-name');
+    if (!viewCloud || !overlay) return;
+
+    let dragTimer = null;
+    let activeDropPath = '';
+    let activeDropView = 'drive';
+
+    function isDragExternalFiles(e) {
+        if (!e.dataTransfer || !e.dataTransfer.types) return false;
+        for (let i = 0; i < e.dataTransfer.types.length; i++) {
+            if (e.dataTransfer.types[i] === 'Files') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getCurrentFolderName() {
+        if (!currentCloudPath) {
+            if (currentCloudView === 'computers') return window.t_cloud('nav_computers', 'Computadoras');
+            if (currentCloudView === 'trash') return window.t_cloud('nav_trash', 'Papelera');
+            return window.t_cloud('nav_drive', 'Mi unidad');
+        }
+        const parts = currentCloudPath.split('/');
+        return parts[parts.length - 1];
+    }
+
+    function updateOverlayTarget(name, isDir) {
+        if (targetNameSpan) {
+            const icon = isDir ? '📁' : '☁';
+            targetNameSpan.innerHTML = `<span class="cloud-drop-target-icon">${icon}</span> ${name}`;
+        }
+    }
+
+    window.addEventListener('dragover', (e) => {
+        if (!isDragExternalFiles(e)) return;
+
+        const viewCloudActive = document.getElementById('view-cloud');
+        if (!viewCloudActive || !viewCloudActive.classList.contains('active')) return;
+
+        const isAllowedView = (currentCloudView === 'drive' || (currentCloudView === 'computers' && currentCloudPath !== ''));
+        if (!isAllowedView) return;
+
+        e.preventDefault();
+
+        if (!overlay.classList.contains('active')) {
+            overlay.classList.add('active');
+            activeDropPath = currentCloudPath;
+            activeDropView = currentCloudView;
+            updateOverlayTarget(getCurrentFolderName(), false);
+        }
+
+        if (dragTimer) {
+            clearTimeout(dragTimer);
+        }
+
+        dragTimer = setTimeout(() => {
+            overlay.classList.remove('active');
+            document.querySelectorAll('.cloud-folder-row, .cloud-file-row').forEach(el => {
+                el.classList.remove('external-drop-target');
+            });
+        }, 200);
+
+        const folderEl = e.target.closest('.cloud-folder-row, .cloud-file-row[data-is-dir="true"]');
+
+        document.querySelectorAll('.cloud-folder-row, .cloud-file-row').forEach(el => {
+            if (el !== folderEl) el.classList.remove('external-drop-target');
+        });
+
+        if (folderEl) {
+            folderEl.classList.add('external-drop-target');
+            const folderName = folderEl.getAttribute('data-name');
+            const folderPath = folderEl.getAttribute('data-path');
+
+            activeDropPath = [folderPath, folderName].filter(Boolean).join('/');
+            activeDropView = currentCloudView;
+            updateOverlayTarget(folderName, true);
+        } else {
+            activeDropPath = currentCloudPath;
+            activeDropView = currentCloudView;
+            updateOverlayTarget(getCurrentFolderName(), false);
+        }
+    });
+
+    window.addEventListener('drop', async (e) => {
+        if (!isDragExternalFiles(e)) return;
+
+        const viewCloudActive = document.getElementById('view-cloud');
+        if (!viewCloudActive || !viewCloudActive.classList.contains('active')) return;
+
+        const isAllowedView = (currentCloudView === 'drive' || (currentCloudView === 'computers' && currentCloudPath !== ''));
+        if (!isAllowedView) return;
+
+        e.preventDefault();
+
+        if (dragTimer) {
+            clearTimeout(dragTimer);
+            dragTimer = null;
+        }
+
+        overlay.classList.remove('active');
+
+        document.querySelectorAll('.cloud-folder-row, .cloud-file-row').forEach(el => {
+            el.classList.remove('external-drop-target');
+        });
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
+
+        if (activeDropView === 'trash') {
+            NV_Alert(window.currentLang === "en" ? "Cannot upload files directly to Trash." : "No se pueden subir archivos directamente a la Papelera.", window.currentLang === "en" ? "Restriction" : "Restricción");
+            return;
+        }
+
+        const targetFolderName = targetNameSpan ? targetNameSpan.textContent.replace('☁', '').replace('📁', '').trim() : getCurrentFolderName();
+
+
+
+        await uploadFilesWithProgress(files, activeDropPath, activeDropView, false);
+
+
+    });
+}
+
+function initClipboardPaste() {
+    document.addEventListener('paste', async (e) => {
+        // Only handle paste when cloud view is active
+        const viewCloudActive = document.getElementById('view-cloud');
+        if (!viewCloudActive || !viewCloudActive.classList.contains('active')) return;
+
+        // Don't intercept paste if user is typing in an input/textarea
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return;
+
+        // Only allow paste in writable views
+        const isAllowedView = (currentCloudView === 'drive' || (currentCloudView === 'computers' && currentCloudPath !== ''));
+        if (!isAllowedView) return;
+
+        const items = e.clipboardData?.items;
+        if (!items || items.length === 0) return;
+
+        const files = [];
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) {
+                    // Generate a meaningful name for clipboard images (screenshots)
+                    if (file.name === 'image.png' || !file.name || file.name === 'blob') {
+                        const now = new Date();
+                        const timestamp = now.getFullYear().toString() +
+                            String(now.getMonth() + 1).padStart(2, '0') +
+                            String(now.getDate()).padStart(2, '0') + '_' +
+                            String(now.getHours()).padStart(2, '0') +
+                            String(now.getMinutes()).padStart(2, '0') +
+                            String(now.getSeconds()).padStart(2, '0');
+                        const ext = file.type.split('/')[1] || 'png';
+                        const newName = `Clipboard_${timestamp}.${ext}`;
+                        files.push(new File([file], newName, { type: file.type }));
+                    } else {
+                        files.push(file);
+                    }
+                }
+            }
+        }
+
+        if (files.length === 0) return;
+
+        e.preventDefault();
+        await uploadFilesWithProgress(files, currentCloudPath, currentCloudView, false);
+    });
+}
+
+function initCloud() {
+    initMarqueeSelection();
+    initCloudLayout();
+    initDragAndDropUpload();
+    initClipboardPaste();
+    window.addEventListener('language_changed', () => {
+        if (typeof fetchCloudFiles === 'function') {
+            fetchCloudFiles(currentCloudPath || '', currentCloudView || 'drive');
+        }
+    });
+
+    Object.assign(window, {
+        fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud,
+        handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs,
+        handleCloudUpload, deleteCloudItem, requestMoreCloudQuota,
+        fetchAdminQuotaRequests, resolveQuotaRequest,
+        setCloudLayout, handleCloudAction, handleCloudRowClick,
+        triggerNewItemAction, openLinkDeviceModal, removeSelectedUser,
+        emptyCloudTrash, downloadCloudFile,
+        showCloudNewMenu, clearCloudSelection, closeCloudMoveModal,
+        confirmCloudMove, closeCloudPreview,
+        downloadSelectedAsZip, deleteSelectedItems, moveSelectedItems,
+        restoreSelectedItems, closeCloudInfoPanel,
+        loadCloudFoldersTree, openCloudMove,
+        openCloudPreview, openCloudShare, executeNewItemAction,
+        renderListRow, renderFolderNode,
+        closeLinkDeviceModal, setLinkDeviceTab, setLinkDeviceOS,
+        copySyncCommand, toggleCloudInfoPanel, switchCloudInfoTab,
+        confirmCloudShare, closeCloudShareModal, handleCreateFolder,
+        generateSyncCommand, searchUsersForSharing, handleLinkDeviceFolderSelect,
+        selectUserForSharing, refreshCloudInfoPanel, showCloudInfo,
+        handleUnshareItem, revokeCloudShare, toggleCloudFileSelection
+    });
+}
+
+export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud };
+

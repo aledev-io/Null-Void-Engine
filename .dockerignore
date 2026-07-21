@@ -1,0 +1,35 @@
+# ==============================================================================
+# NULL-VOID ENGINE - GLOBAL DOCKER IGNORE
+# ==============================================================================
+
+# --- Datos y Persistencia Nativas (La verdad absoluta está en los Volúmenes) ---
+data/
+null-void-service/data/
+src/data/
+tmp/
+
+# --- Bases de Datos Locales Sueltas ---
+*.db
+*.db-shm
+*.db-wal
+
+# --- Archivos del Entorno e Información Sensible ---
+.env
+.vscode/
+.idea/
+*.spec
+
+# --- Entornos Virtuales y Dependencias ---
+venv/
+env/
+.venv/
+
+# --- Temporales de Python y Compilación ---
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+dist/
+build/

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Correo - Null-Void Engine</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/mail.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
+    <!-- Theme is applied before paint to avoid flash -->
+    <script>let __t=localStorage.getItem('theme'); if(!__t){__t=window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';} document.documentElement.setAttribute('data-theme', __t);</script>
+</head>
+
+<body>
+    <div id="topbar">
+        <div class="tb-left">
+            <button id="btn-mobile-menu" class="btn" style="display: none; background: transparent; border: 1px solid var(--border); color: var(--text-main); border-radius: 8px; padding: 6px; cursor: pointer;" onclick="toggleMailSidebar()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <div style="font-weight:800;font-size:1.05rem;color:var(--text-main);" data-i18n="app_name_mail">Correo</div>
+        </div>
+        <div class="tb-center">
+            <div class="search-bar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" data-i18n-placeholder="mail_search" placeholder="Buscar en el correo electrónico">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+            </div>
+        </div>
+        <div class="tb-right" style="display:flex;align-items:center;gap:12px;white-space:nowrap;flex-shrink:0;">
+            <button class="btn-theme" id="btn-toggle-lang" onclick="toggleLanguage()" title="Cambiar idioma" data-i18n-title="lang_title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+            </button>
+            <button class="btn-theme" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema" data-i18n-title="theme_title">
+                <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></svg>
+            </button>
+        </div>
+    </div>
+
+    <div id="mail-app">
+        <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleMailSidebar()"></div>
+        <div id="sidebar">
+            <button class="btn-compose" onclick="openCompose()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span data-i18n="mail_compose">Redactar</span>
+            </button>
+            <div id="sidebar-scrollable-content" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; margin-top: 16px; margin-right: -12px; padding-right: 12px;">
+                <div id="folder-nav" style="flex: none; overflow: visible; height: auto;"></div>
+
+                <div class="sidebar-section-title" style="margin: 16px 16px 8px; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="mail_settings">Ajustes</div>
+                <div style="padding: 0 12px; display: flex; flex-direction: column; gap: 2px;">
+                    <div class="nav-link active" id="btn-toggle-mode" onclick="setMailMode('internal')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;background:var(--surface-hi);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span id="text-toggle-mode" data-i18n="mail_mode_internal" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ user }}@nullvoid</span>
+                    </div>
+                    <div class="nav-link" id="btn-google-account" onclick="setMailMode('google')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                        <span id="google-account-text" data-i18n="mail_link_google">Vincular Google</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User profile footer matching dashboard -->
+            <div class="sidebar-footer-inline" style="padding: 12px 12px 16px 12px; margin-top: auto;">
+                <div class="tb-user" id="profile-trigger" onclick="toggleUserMenu(event)">
+                    <div class="tb-avatar" id="nav-avatar">
+                        <img src="/api/system/user/avatar/{{ user }}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.outerHTML='<span>{{ user[0]|upper }}</span>'">
+                    </div>
+                    <span id="nav-username">{{ user }}</span>
+                    <div class="profile-dropdown" id="user-menu" style="padding: 4px; border-radius: 12px; width: 228px; min-width: auto; background: var(--surface-hi, #1a2847); border: 1px solid var(--border); left: -12px;">
+                        <div class="cloud-nav-item" onclick="window.location.href='/app'"
+                            style="padding:5px 12px;display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:10px;font-size:0.80rem;cursor:pointer;color:var(--text-main); border-radius:8px; transition: background 0.2s; width: 100%; box-sizing: border-box;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.05)'"
+                            onmouseout="this.style.background='transparent'">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            <span data-i18n="mail_back_menu">Volver al Menú</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                function toggleUserMenu(e) {
+                    e.stopPropagation();
+                    const menu = document.getElementById('user-menu');
+                    menu.classList.toggle('show');
+                }
+                document.addEventListener('DOMContentLoaded', () => {
+                    const currentUser = "{{ user }}";
+                    const nameDisplay = document.getElementById('nav-username');
+                    if (currentUser && nameDisplay) {
+                        nameDisplay.textContent = currentUser;
+                    }
+                });
+                document.addEventListener('click', (e) => {
+                    const menu = document.getElementById('user-menu');
+                    if (menu && menu.classList.contains('show')) {
+                        const trigger = document.getElementById('profile-trigger');
+                        if (!menu.contains(e.target) && (!trigger || !trigger.contains(e.target))) {
+                            menu.classList.remove('show');
+                        }
+                    }
+                });
+            </script>
+        </div>
+
+        <div id="inbox-panel">
+            <div class="panel-header" id="inbox-panel-header" style="justify-content:flex-start;gap:16px;">
+                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" title="Seleccionar todos">                    <div id="default-actions" style="display:flex;gap:8px;">
+                        <button class="btn-icon" id="btn-refresh" onclick="loadCurrentFolder(false, true); loadFolders(true);" title="Actualizar" data-i18n-title="mail_tt_refresh">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-12.28l5.57 5.57"></path>
+                            </svg>
+                        </button>
+                        <div style="width:1px;height:16px;background:var(--border);margin:0 4px;"></div>
+                        <button class="btn-icon" id="btn-bulk-read" title="Marcar como leído" data-i18n-title="mail_tt_read" style="opacity:0.5;pointer-events:none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 8.4c.5.38.8.97.8 1.6v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 .8-1.6l8-6a2 2 0 0 1 2.4 0l8 6z"></path><polyline points="22.2 10 12 17.66 1.8 10"></polyline></svg>
+                        </button>
+                        <div style="position:relative;">
+                            <button class="btn-icon" title="Más opciones" data-i18n-title="mail_tt_more" onclick="this.nextElementSibling.classList.toggle('show')" onblur="setTimeout(() => this.nextElementSibling.classList.remove('show'), 200)">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="1.5"></circle>
+                                    <circle cx="12" cy="5" r="1.5"></circle>
+                                    <circle cx="12" cy="19" r="1.5"></circle>
+                                </svg>
+                            </button>
+                            <div class="profile-dropdown" style="padding: 4px; border-radius: 12px; width: 220px; background: var(--surface-hi, #1a2847); border: 1px solid var(--border); left: 0; top: 100%; bottom: auto; margin-top: 8px;">
+                                <div class="cloud-nav-item" onclick="markAllAsRead()" style="padding:8px 12px;display:flex;align-items:center;font-size:0.85rem;cursor:pointer;color:var(--text-main); border-radius:8px; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                    <span data-i18n="mail_tt_read">Marcar todo como leído</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="bulk-actions" style="display:none;gap:8px;">
+                        <button class="btn-icon" id="btn-bulk-archive" title="Archivar" data-i18n-title="mail_tt_archive" onclick="bulkAction('archive')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                        </button>
+                        <button class="btn-icon" id="btn-bulk-unarchive" title="Mover a Recibidos" data-i18n-title="mail_tt_unarchive"
+                            onclick="bulkAction('unarchive')" style="display:none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="12" y1="16" x2="12" y2="12"></line><polyline points="10 14 12 12 14 14"></polyline></svg>
+                        </button>
+
+                        <button class="btn-icon" title="Marcar como spam" data-i18n-title="mail_tt_spam" onclick="bulkAction('spam')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        </button>
+                        
+                        <button class="btn-icon" id="btn-delete" title="Eliminar" data-i18n-title="mail_tt_delete" onclick="deleteEmails()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                        
+                        <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
+                        <button class="btn-icon" id="btn-bulk-read-toggle" title="Marcar como no leído" data-i18n-title="mail_tt_unread" onclick="bulkAction('unread')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        </button>
+                        <button class="btn-icon" title="Mover a" data-i18n-title="mail_tt_move" onclick="bulkAction('move')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><polyline points="12 11 15 14 18 11"></polyline><line x1="15" y1="14" x2="15" y2="8"></line></svg>
+                        </button>
+                        <button class="btn-icon" title="Más opciones" data-i18n-title="mail_tt_more">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1.5"></circle><circle cx="12" cy="5" r="1.5"></circle><circle cx="12" cy="19" r="1.5"></circle></svg>
+                        </button>
+                    </div>
+            </div>
+            <div id="trash-banner" style="display:none; padding:12px 16px; background:var(--surface-hi); text-align:center; font-size:0.85rem; color:var(--text-muted); border-bottom:1px solid var(--border);">
+                <span data-i18n="mail_trash_warn">Los mensajes que lleven más de 30 días en la Papelera se eliminarán automáticamente. </span>
+                <a href="#" onclick="emptyTrash(); return false;" data-i18n="mail_trash_empty" style="color:var(--indigo); text-decoration:none; font-weight:500;">Vaciar papelera ahora</a>
+            </div>
+            <div class="email-list" id="email-list"></div>
+        </div>
+
+        <!-- READER PANEL -->
+        <div id="reader-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:var(--surface);">
+            <div class="reader-content" id="reader-content">
+                <div class="panel-header" style="gap:8px;">
+                    <button class="btn-icon" onclick="backToList()" title="Volver a la lista" data-i18n-title="mail_tt_back">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <button class="btn-icon" title="Archivar" data-i18n-title="mail_tt_archive" onclick="singleAction('archive')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                    </button>
+                    <button class="btn-icon" title="Marcar como spam" data-i18n-title="mail_tt_spam" onclick="singleAction('spam')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" title="Eliminar" data-i18n-title="mail_tt_delete" onclick="deleteSingleEmail()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                    <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
+                    <button class="btn-icon" title="Marcar como no leído" data-i18n-title="mail_tt_unread" onclick="singleAction('unread')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" title="Mover a" data-i18n-title="mail_tt_move">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            <polyline points="12 11 15 14 18 11"></polyline>
+                            <line x1="15" y1="14" x2="15" y2="8"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="reader-header" style="border-bottom:1px solid var(--border);">
+                    <h1 class="reader-subject" id="read-subject">Asunto</h1>
+                    <div class="reader-meta">
+                        <div class="reader-avatar" id="read-avatar">U</div>
+                        <div class="reader-sender-info">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;width:100%;">
+                                <span class="reader-sender-name" id="read-from">Remitente</span>
+                                <span class="reader-date" id="read-date">Fecha</span>
+                            </div>
+                            <div class="to-me-btn" onclick="toggleMetaDropdown()">
+                                para mí
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                            <div id="email-meta-dropdown" class="meta-dropdown-container">
+                                <table class="meta-table">
+                                    <tr>
+                                        <td class="meta-label">de:</td>
+                                        <td class="meta-value" id="meta-from">...</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">para:</td>
+                                        <td class="meta-value" id="meta-to">...</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">fecha:</td>
+                                        <td class="meta-value" id="meta-date">...</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">asunto:</td>
+                                        <td class="meta-value" id="meta-subject">...</td>
+                                    </tr>
+                                    <tr id="meta-row-sent">
+                                        <td class="meta-label">enviado por:</td>
+                                        <td class="meta-value" id="meta-sent-by">...</td>
+                                    </tr>
+                                    <tr id="meta-row-signed">
+                                        <td class="meta-label">firmado por:</td>
+                                        <td class="meta-value" id="meta-signed-by">...</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">seguridad:</td>
+                                        <td class="meta-value" id="meta-security">...</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="reader-reply-actions" id="reader-actions" style="display:none;margin-top:20px;">
+                        <button class="btn-reply-action" onclick="replyEmail()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 14 4 9 9 4"></polyline>
+                                <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                            </svg>
+                            Responder
+                        </button>
+                        <button class="btn-reply-action" onclick="forwardEmail()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 14 20 9 15 4"></polyline>
+                                <path d="M4 20v-7a4 4 0 0 1 4-4h12"></path>
+                            </svg>
+                            Reenviar
+                        </button>
+                    </div>
+                </div>
+                <div class="reader-body" id="read-body"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Compose window -->
+    <div class="compose-window" id="compose-modal">
+        <div class="compose-header" onclick="toggleMinimize()">
+            <h3 data-i18n="mail_new_message">Mensaje nuevo</h3>
+            <div class="compose-header-actions">
+                <button class="btn-minimize" onclick="toggleMinimize();event.stopPropagation();" title="Minimizar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <button class="btn-expand" onclick="toggleExpand();event.stopPropagation();" title="Pantalla completa">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <polyline points="9 21 3 21 3 15"></polyline>
+                        <line x1="21" y1="3" x2="14" y2="10"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                </button>
+                <button class="btn-close" onclick="closeCompose();event.stopPropagation();" title="Cerrar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="compose-body">
+            <div class="compose-field">
+                <label data-i18n="mail_from">De</label>
+                <input type="text" id="compose-from" readonly
+                    style="color:var(--text-muted);cursor:not-allowed;opacity:0.8;" title="Remitente actual">
+            </div>
+            <div class="compose-field">
+                <label data-i18n="mail_to">Para</label>
+                <input type="email" id="compose-to" list="contact-suggestions" data-i18n-placeholder="mail_to_placeholder" placeholder="destinatario@ejemplo.com">
+                <span class="cc-toggle" onclick="toggleCc()" data-i18n="mail_cc_bcc">CC CCO</span>
+            </div>
+            <div class="compose-cc-fields" id="cc-fields">
+                <div class="compose-field">
+                    <label data-i18n="mail_cc">Cc</label>
+                    <input type="email" id="compose-cc" list="contact-suggestions">
+                </div>
+                <div class="compose-field">
+                    <label data-i18n="mail_bcc">Cco</label>
+                    <input type="email" id="compose-bcc" list="contact-suggestions">
+                </div>
+            </div>
+            <datalist id="contact-suggestions"></datalist>
+            <div class="compose-field" style="border-bottom:none;">
+                <label data-i18n="mail_subject">Asunto</label>
+                <input type="text" id="compose-subject" data-i18n-placeholder="mail_subject_placeholder" placeholder="Asunto del correo">
+            </div>
+            <div id="compose-attachments-list" style="padding:0 16px 8px 16px;display:flex;flex-wrap:wrap;gap:8px;">
+            </div>
+            <textarea class="compose-editor" id="compose-body" data-i18n-placeholder="mail_body_placeholder" placeholder="Escribe tu mensaje aquí..."></textarea>
+        </div>
+        <div class="compose-footer">
+            <div
+                style="display:flex;align-items:stretch;border-radius:20px;overflow:hidden;box-shadow:0 2px 8px rgba(99,102,241,0.3);">
+                <button class="btn-send" onclick="sendEmail(false)"
+                    style="border-radius:0;box-shadow:none;" data-i18n="mail_send">Enviar</button>
+                <div style="width:1px;background:rgba(255,255,255,0.2);"></div>
+                <button class="btn-send" onclick="openScheduleModal()"
+                    style="border-radius:0;box-shadow:none;padding:8px 12px;" title="Programar envío">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <div class="compose-toolbar">
+                <button title="Opciones de formato">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 7V4h16v3"></path>
+                        <path d="M9 20h6"></path>
+                        <path d="M12 4v16"></path>
+                    </svg>
+                </button>
+                <input type="file" id="compose-attachments" multiple style="display:none"
+                    onchange="updateAttachmentsList()">
+                <button title="Adjuntar archivos" onclick="document.getElementById('compose-attachments').click()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
+                        </path>
+                    </svg>
+                </button>
+                <button title="Insertar enlace">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                </button>
+                <button title="Insertar emoji">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                        <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                        <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                    </svg>
+                </button>
+            </div>
+            <span class="alias-badge">Alias SMTP</span>
+            <button class="btn-trash" onclick="closeCompose()" title="Descartar borrador">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Schedule Modal -->
+    <div class="modal-overlay" id="schedule-modal" onclick="if(event.target===this) this.classList.remove('show');">
+        <div class="modal"
+            style="max-width:400px;background:var(--bg-card);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;padding:0;">
+            <div
+                style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round" style="color:var(--indigo);">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <h3 style="margin:0;font-weight:700;font-size:1.1rem;color:var(--text-main);">Programar envío</h3>
+                </div>
+                <button onclick="document.getElementById('schedule-modal').classList.remove('show');"
+                    style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;display:flex;padding:4px;"
+                    onmouseover="this.style.color='var(--text-main)'" onmouseout="this.style.color='var(--text-muted)'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div style="padding:24px;">
+                <label
+                    style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.05em;">Fecha
+                    y Hora</label>
+                <input type="datetime-local" id="schedule-datetime"
+                    style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text-main);padding:12px 16px;border-radius:8px;outline:none;font-size:0.95rem;font-family:inherit;transition:border-color 0.2s;color-scheme:dark;"
+                    onfocus="this.style.borderColor='var(--indigo)'" onblur="this.style.borderColor='var(--border)'">
+            </div>
+            <div
+                style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:12px;background:var(--surface);">
+                <button class="btn"
+                    style="background:transparent;color:var(--text-main);border:1px solid var(--border);padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;"
+                    onclick="document.getElementById('schedule-modal').classList.remove('show');">Cancelar</button>
+                <button class="btn-send"
+                    style="background:var(--indigo);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(99,102,241,0.3);"
+                    onclick="executeScheduledSend()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Config Modal -->
+    <div class="modal-overlay" id="google-config-modal"
+        onclick="if(event.target===this) this.classList.remove('show');">
+        <div class="modal"
+            style="width: 90%; max-width:500px; max-height: 90vh; background:var(--bg-card);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;padding:0;">
+            <div
+                style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round" style="color:var(--indigo);">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    <h3 style="margin:0;font-weight:700;font-size:1.1rem;color:var(--text-main);" data-i18n="mail_how_to_link">¿Cómo vincular tu
+                        cuenta de Google?</h3>
+                </div>
+                <button onclick="document.getElementById('google-config-modal').classList.remove('show');"
+                    style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;display:flex;padding:4px;"
+                    onmouseover="this.style.color='var(--text-main)'" onmouseout="this.style.color='var(--text-muted)'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div style="padding:24px; overflow-y: auto; flex: 1;">
+                <p style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-top:0;margin-bottom:20px;" data-i18n="mail_google_desc">
+                    Para conectar de forma segura con la red de Google, Null-Void Engine requiere una <strong>Contraseña
+                        de Aplicación</strong>.
+                    Por razones de seguridad, Google no permite usar tu contraseña personal directamente en aplicaciones
+                    de terceros.
+                </p>
+                <div
+                    style="background:rgba(129,140,248,0.08);border:1px solid var(--indigo-dim);border-radius:8px;padding:16px;margin-bottom:24px;">
+                    <div
+                        style="display:flex;align-items:center;gap:8px;margin-bottom:12px;color:var(--indigo);font-weight:700;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;">
+                        💡 <span data-i18n="mail_link_instructions">Instrucciones de Vinculación</span>:
+                    </div>
+                    <ol style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--text-muted);line-height:1.6;">
+                        <li style="margin-bottom:6px;" data-i18n="mail_google_step1">Accede a tu <strong>Cuenta de Google</strong> y dirígete a la
+                            pestaña <strong>Seguridad</strong>.</li>
+                        <li style="margin-bottom:6px;" data-i18n="mail_google_step2">Asegúrate de tener activada la <strong>Verificación en dos
+                                pasos</strong>.</li>
+                        <li style="margin-bottom:6px;" data-i18n="mail_google_step3">Busca la sección <strong>Contraseñas de aplicaciones</strong> y
+                            genera una nueva (ej. "Null-Void Mail").</li>
+                        <li data-i18n="mail_google_step4">Copia la contraseña de 16 letras que aparece en pantalla y pégala aquí abajo.</li>
+                    </ol>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <!-- Hidden inputs to prevent password manager autofill -->
+                    <input style="display:none" type="email" name="fakeusernameremembered" />
+                    <input style="display:none" type="password" name="fakepasswordremembered" />
+                    <label
+                        style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.05em;" data-i18n="mail_email_label">Correo
+                        Electrónico</label>
+                    <input type="email" id="google-email" autocomplete="off" data-lpignore="true"
+                        data-i18n-placeholder="mail_email_placeholder" placeholder="tu.correo@gmail.com"
+                        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text-main);padding:12px 16px;border-radius:8px;outline:none;font-size:0.95rem;font-family:inherit;transition:border-color 0.2s;"
+                        onfocus="this.style.borderColor='var(--indigo)'"
+                        onblur="this.style.borderColor='var(--border)'">
+                </div>
+                <div style="margin-bottom:8px;">
+                    <label
+                        style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.05em;" data-i18n="mail_google_pass">Contraseña
+                        de Aplicación</label>
+                    <input type="password" id="google-app-pass" autocomplete="new-password" data-lpignore="true"
+                        placeholder="xxxx xxxx xxxx xxxx"
+                        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text-main);padding:12px 16px;border-radius:8px;outline:none;font-size:0.95rem;font-family:inherit;transition:border-color 0.2s;letter-spacing:0.1em;"
+                        onfocus="this.style.borderColor='var(--indigo)'"
+                        onblur="this.style.borderColor='var(--border)'">
+                </div>
+            </div>
+            <div
+                style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:12px;background:var(--surface);">
+                <button class="btn"
+                    style="background:transparent;color:var(--text-main);border:1px solid var(--border);padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;"
+                    onclick="document.getElementById('google-config-modal').classList.remove('show');" data-i18n="mail_close">Cerrar</button>
+                <button class="btn-send"
+                    style="background:var(--indigo);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(99,102,241,0.3);"
+                    onclick="saveGoogleConfig()" data-i18n="mail_link_account">Vincular Cuenta</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.CURRENT_USER = "{{ user }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script>
+        if (window.I18n) window.I18n.init();
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/mail/main.js') }}"></script>
+</body>
+</html>

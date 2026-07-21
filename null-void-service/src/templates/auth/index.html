@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <meta name="color-scheme" content="light dark" />
+    <meta name="darkreader-lock" />
+
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9fafb" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f172a" />
+    <title>Null-Void Engine</title>
+    <script>
+        (function () {
+            let __theme = localStorage.getItem('theme');
+            if (!__theme) { __theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+            document.documentElement.setAttribute('data-theme', __theme);
+        })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/auth.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/responsive.css') }}">
+    <style>
+        :root {
+            --login-bg-image: url("{{ url_for('static', filename='img/login-bg.jpg') }}");
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root">
+
+        <button class="btn-lang-float" id="btn-toggle-lang" onclick="toggleLanguage()" data-i18n-title="lang_title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                </path>
+            </svg>
+        </button>
+        <button class="btn-theme-float" id="btn-toggle-theme" onclick="toggleTheme()" data-i18n-title="theme_title">
+            <svg id="theme-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+
+        <!-- PANEL IZQUIERDO -->
+        <div id="panel-left">
+            <div id="branding">
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    Null-Void Engine
+                </div>
+                <div class="main-title">Null-Void Engine</div>
+                <div class="main-desc">
+                    Sistema modular para infraestructura local,<br>
+                    almacenamiento en la nube y telemetría en tiempo real.
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL DERECHO -->
+        <div id="panel-right">
+            <div id="card">
+                <span class="card-icon">⬡</span>
+                <div class="card-title" id="card-title">Bienvenido</div>
+                <div class="card-sub" id="card-sub">Inicia sesión para continuar</div>
+
+                <!-- LOGIN -->
+                <div id="login-form">
+                    <div class="field-group">
+                        <label class="field-label" for="inp-user">Usuario</label>
+                        <input class="field-input" id="inp-user" type="text" placeholder="Nombre de usuario"
+                            autocomplete="username" />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="inp-pass">Contraseña</label>
+                        <div class="pass-wrapper">
+                            <input class="field-input" id="inp-pass" type="password" placeholder="••••••••"
+                                autocomplete="current-password" />
+                            <span class="toggle-pass" onclick="UI.togglePassword('inp-pass')">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                    <div id="error-msg" class="msg-area"></div>
+                    <button id="btn-submit" class="form-btn">
+                        <span class="btn-text">Iniciar sesión</span>
+                        <div class="spinner"></div>
+                    </button>
+                    <div class="toggle-link">¿No tienes cuenta? <a href="#" onclick="toggleForm(event)">Regístrate</a>
+                    </div>
+                </div>
+
+                <!-- REGISTER -->
+                <div id="register-form" style="display:none;">
+                    <div class="field-group">
+                        <label class="field-label" for="reg-user">Usuario</label>
+                        <input class="field-input" id="reg-user" type="text" placeholder="Nombre de usuario"
+                            autocomplete="username" />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="reg-pass">Contraseña</label>
+                        <div class="pass-wrapper">
+                            <input class="field-input" id="reg-pass" type="password" placeholder="••••••••"
+                                autocomplete="new-password" />
+                            <span class="toggle-pass" onclick="UI.togglePassword('reg-pass')">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="reg-pass2">Confirmar contraseña</label>
+                        <div class="pass-wrapper">
+                            <input class="field-input" id="reg-pass2" type="password" placeholder="••••••••"
+                                autocomplete="new-password" />
+                            <span class="toggle-pass" onclick="UI.togglePassword('reg-pass2')">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                    <div id="register-msg" class="msg-area"></div>
+                    <button id="btn-register" class="form-btn">
+                        <span class="btn-text">Crear cuenta</span>
+                        <div class="spinner"></div>
+                    </button>
+                    <div class="toggle-link">¿Ya tienes cuenta? <a href="#" onclick="toggleForm(event)">Inicia
+                            sesión</a></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/auth/main.js') }}"></script>
+</body>
+
+</html>

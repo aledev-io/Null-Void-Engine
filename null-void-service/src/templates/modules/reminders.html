@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recordatorios - Null-Void Engine</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
+    <script>
+        (function () {
+            let __theme = localStorage.getItem('theme');
+            if (!__theme) { __theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+            document.documentElement.setAttribute('data-theme', __theme);
+        })();
+    </script>
+    <style>
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        .sidebar {
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            z-index: 100;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        .topbar {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            flex-shrink: 0;
+        }
+
+        .btn-new {
+            background: var(--indigo);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 24px;
+            transition: all 0.2s;
+        }
+
+        .btn-new:hover {
+            background: var(--indigo-hi, #6366f1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .nav-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            background: var(--nav-active, rgba(99, 102, 241, 0.15));
+            color: var(--indigo);
+        }
+
+        .nav-item .badge {
+            margin-left: auto;
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+
+        .nav-item.active .badge {
+            background: var(--indigo);
+            color: white;
+        }
+
+        .nav-section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 16px 0 8px 14px;
+        }
+
+        .reminders-grid {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            align-content: start;
+        }
+
+        .reminder-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .reminder-card:hover {
+            border-color: var(--border-hi);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .reminder-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: var(--card-color, var(--indigo));
+        }
+
+        .reminder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .reminder-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--text-main);
+            margin: 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .reminder-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .reminder-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .tag-badge {
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-main);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                height: 100%;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .btn-mobile-menu {
+                display: flex !important;
+            }
+            .reminders-grid {
+                padding: 16px;
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar overlay for mobile -->
+        <div id="sidebar-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:90;" onclick="toggleSidebar()"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:32px; padding: 0 10px;">
+                <div style="width:28px; height:28px; background:var(--indigo); border-radius:6px; display:flex; align-items:center; justify-content:center; color:white; font-weight:800; font-size:12px;">NV</div>
+                <span style="font-weight:800; font-size:1.1rem; color:var(--text-main);">Null-Void</span>
+            </div>
+
+            <button class="btn-new" onclick="window.location.href='/calendar'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span data-i18n="new_reminder">Nuevo Recordatorio</span>
+            </button>
+
+            <div style="flex:1; overflow-y:auto; padding-right:8px;">
+                <div class="nav-item active" onclick="setFilter('all', this)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span data-i18n="filter_all">Todos</span>
+                    <span class="badge" id="badge-all">0</span>
+                </div>
+                <div class="nav-item" onclick="setFilter('upcoming', this)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span data-i18n="filter_upcoming">Próximos</span>
+                    <span class="badge" id="badge-upcoming">0</span>
+                </div>
+                <div class="nav-item" onclick="setFilter('important', this)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                    <span data-i18n="filter_important">Importantes</span>
+                    <span class="badge" id="badge-important">0</span>
+                </div>
+
+                <div class="nav-section-title" data-i18n="categories">Categorías</div>
+                <div class="nav-item" onclick="setFilter('cat-trabajo', this)">
+                    <div style="width:10px; height:10px; border-radius:50%; background:#4bc8c8;"></div>
+                    <span data-i18n="cat_trabajo">Trabajo</span>
+                </div>
+                <div class="nav-item" onclick="setFilter('cat-estudio', this)">
+                    <div style="width:10px; height:10px; border-radius:50%; background:#f5a623;"></div>
+                    <span data-i18n="cat_estudio">Estudio</span>
+                </div>
+                <div class="nav-item" onclick="setFilter('cat-salud', this)">
+                    <div style="width:10px; height:10px; border-radius:50%; background:#6bd46b;"></div>
+                    <span data-i18n="cat_salud">Salud</span>
+                </div>
+                <div class="nav-item" onclick="setFilter('cat-personal', this)">
+                    <div style="width:10px; height:10px; border-radius:50%; background:#7c6af7;"></div>
+                    <span data-i18n="cat_personal">Personal</span>
+                </div>
+                <div class="nav-item" onclick="setFilter('cat-ocio', this)">
+                    <div style="width:10px; height:10px; border-radius:50%; background:#f97066;"></div>
+                    <span data-i18n="cat_ocio">Ocio</span>
+                </div>
+            </div>
+
+            <!-- Profile Footer -->
+            <div class="sidebar-footer-inline" style="margin-top:auto; padding-top:16px; border-top:1px solid var(--border); position:relative;">
+                <div class="tb-user" id="profile-trigger" onclick="toggleUserMenu(event)" style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                    <div class="tb-avatar" style="width:36px; height:36px; border-radius:50%; background:var(--indigo); display:flex; align-items:center; justify-content:center; color:white; font-weight:700;">
+                        {{ user[0]|upper }}
+                    </div>
+                    <span style="font-weight:600;">{{ user }}</span>
+                </div>
+                <div class="profile-dropdown" id="user-menu" style="bottom: 100%; margin-bottom: 12px; left: 0; width: 100%; padding: 4px; border-radius: 12px; background: var(--surface-hi, #1e293b); border: 1px solid var(--border); display: none; position: absolute;">
+                    <div class="nav-item" onclick="window.location.href='/app'" style="margin-bottom: 0;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        <span data-i18n="back_menu">Volver al Menú</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <button class="btn-icon btn-mobile-menu" style="display:none; border:1px solid var(--border);" onclick="toggleSidebar()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    <h2 style="margin:0; font-size:1.2rem; font-weight:800;" id="page-title" data-i18n="page_title_all">Todos los Recordatorios</h2>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button class="btn-icon" onclick="window.location.href='/app'" title="Dashboard">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </button>
+                    <button class="btn-icon" onclick="toggleLanguage()" title="Idioma">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    </button>
+                    <button class="btn-icon" onclick="toggleTheme()" title="Tema">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Grid -->
+            <div class="reminders-grid" id="reminders-grid">
+                <!-- Tarjetas de recordatorio inyectadas aquí -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        window.TOKEN = "{{ token }}";
+        window.currentFilter = 'all';
+
+        const i18n = {
+            es: {
+                new_reminder: "Nuevo Recordatorio",
+                filter_all: "Todos", filter_upcoming: "Próximos", filter_important: "Importantes",
+                categories: "Categorías",
+                cat_trabajo: "Trabajo", cat_estudio: "Estudio", cat_salud: "Salud", cat_personal: "Personal", cat_ocio: "Ocio",
+                page_title_all: "Todos los Recordatorios", page_title_upcoming: "Próximos", page_title_important: "Importantes",
+                empty_title: "Todo al día", empty_sub: "No hay recordatorios que coincidan con este filtro.",
+                label_passed: "Pasado", label_today: "Hoy", label_tomorrow: "Mañana", label_upcoming: "Próximamente",
+                no_desc: "Sin descripción", all_day: "Todo el día"
+            },
+            en: {
+                new_reminder: "New Reminder",
+                filter_all: "All", filter_upcoming: "Upcoming", filter_important: "Important",
+                categories: "Categories",
+                cat_trabajo: "Work", cat_estudio: "Study", cat_salud: "Health", cat_personal: "Personal", cat_ocio: "Leisure",
+                page_title_all: "All Reminders", page_title_upcoming: "Upcoming", page_title_important: "Important",
+                empty_title: "All caught up", empty_sub: "No reminders match this filter.",
+                label_passed: "Past", label_today: "Today", label_tomorrow: "Tomorrow", label_upcoming: "Upcoming",
+                no_desc: "No description", all_day: "All day"
+            }
+        };
+
+        window.currentLang = localStorage.getItem('lang') || (navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en');
+        window.t_rem = function(key) { return (i18n[window.currentLang] || i18n['es'])[key] || key; };
+
+        function applyI18n() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                el.textContent = window.t_rem(el.getAttribute('data-i18n'));
+            });
+        }
+        
+        function toggleLanguage() {
+            window.currentLang = window.currentLang === 'es' ? 'en' : 'es';
+            localStorage.setItem('lang', window.currentLang);
+            applyI18n();
+            if (window.renderReminders) window.renderReminders();
+        }
+
+        function toggleTheme() {
+            let t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+            localStorage.setItem('theme', t);
+        }
+
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            const ov = document.getElementById('sidebar-overlay');
+            if (sb.classList.contains('open')) {
+                sb.classList.remove('open');
+                ov.style.display = 'none';
+            } else {
+                sb.classList.add('open');
+                ov.style.display = 'block';
+            }
+        }
+
+        function toggleUserMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('user-menu');
+            if (menu.style.display === 'block') {
+                menu.style.display = 'none';
+            } else {
+                menu.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('click', () => {
+            const menu = document.getElementById('user-menu');
+            if (menu) menu.style.display = 'none';
+        });
+
+        function setFilter(filter, el) {
+            window.currentFilter = filter;
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            if (el) el.classList.add('active');
+            
+            let titleKey = 'page_title_all';
+            if (filter === 'upcoming') titleKey = 'page_title_upcoming';
+            if (filter === 'important') titleKey = 'page_title_important';
+            if (filter.startsWith('cat-')) titleKey = filter.replace('-', '_');
+            
+            document.getElementById('page-title').setAttribute('data-i18n', titleKey);
+            applyI18n();
+            
+            if (window.renderReminders) window.renderReminders();
+            if (window.innerWidth <= 768) toggleSidebar();
+        }
+
+        document.addEventListener('DOMContentLoaded', applyI18n);
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/reminders/main.js') }}"></script>
+</body>
+</html>
