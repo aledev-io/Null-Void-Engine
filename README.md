@@ -149,35 +149,37 @@ Si deseas acceder a tu panel de **Null-Void Engine** de forma segura desde cualq
 
 ---
 
-## Módulos y Vistas
+## Características y Módulos Integrados
 
-### Login
-Al ingresar, el sistema solicita autenticación a través de una pantalla de acceso segura.
-
-### Vista de Dashboard
-Una vez autenticado, se accede al **Panel de Control principal (Dashboard)**. Este menú dinámico organiza los módulos habilitados, proporcionando acceso directo a los servicios locales.
+La suite Null-Void Engine es un ecosistema completo que integra las siguientes herramientas en un único entorno:
 
 ### Asistente IA (Nexus AI)
+* **Integración Local con Ollama:** Conexión directa a modelos de lenguaje locales (ej. TinyLLama, Deepseek).
+* **Procesamiento de Archivos e Imágenes:** Soporte para adjuntar documentos que la IA puede leer y procesar.
+* **Renderizado Avanzado:** Visualización offline de Markdown, bloques de código con resaltado de sintaxis y fórmulas matemáticas (KaTeX).
 
-* **Integración Local con Ollama:** Conexión directa a modelos de lenguaje locales (por ejemplo, TinyLLama).
-* **Procesamiento de Archivos:** Soporte completo para adjuntar imágenes y documentos con previsualización en miniatura (*file chips*).
-* **Renderizado Avanzado:** Renderizado offline de Markdown e iluminación de sintaxis en bloques de código de forma fluida.
-* **Historial Completo:** Guardado persistente de chats individuales por usuario en el sistema.
+### Automatización y Web Scraper
+* **Microservicio Dedicado:** Un servicio paralelo en Python especializado en extraer, parsear y automatizar la recolección de datos web en segundo plano de varios .
+* **Base de Datos Propia:** Almacenamiento estructurado de los datos extraídos para su consulta y filtrado para un análisis exhaustivo.
 
-### Chat local
+### Vault (Gestor de Contraseñas Zero-Knowledge)
+* **Privacidad Absoluta:** Almacenamiento seguro de credenciales mediante cifrado en el lado del cliente. El servidor solo almacena blobs binarios (`.enc`) opacos.
+* **Prevención de Pérdida de Datos:** Sistema automático de copias de seguridad (.bak) con rotación segura para evitar corrupción.
 
-* **Tiempo Real Síncrono:** Comunicación instantánea bidireccional mediante **Socket.IO**.
-* **Micro-indicadores UX:** Indicador en tiempo real cuando un usuario está escribiendo y estado de conexión ("Online").
-* **Sincronización Multipespaña:** Sincronización automática de lecturas y estados de chat en múltiples pestañas abiertas en el mismo navegador.
+### Notificaciones Push y Recordatorios
+* **Service Workers Background:** Recepción de notificaciones nativas en el sistema operativo incluso si la pestaña está cerrada, usando WebPush.
+* **Gestor de Recordatorios:** Programación de alertas personalizadas integradas con las notificaciones del sistema.
+
+### Telemetría y Monitorización
+* **Dashboard en Tiempo Real:** Visualización gráfica del uso de CPU, RAM, disco y red mediante WebSockets interactivos y `Chart.js` del consumo de recursos del servidor.
 
 ### Null-Void Cloud
-
-* **Gestor de Archivos Moderno:** Interfaz interactiva de arrastrar y soltar (*drag & drop*), subidas múltiples, descargas y navegación de carpetas.
-* **Sincronización Local:** Vinculación bidireccional con directorios locales mediante un agente asíncrono seguro (CLI) y la File System Access API nativa del navegador.
+* **Gestor de Archivos LOCAL:** sistema de almacenamiento y organización local.
 
 ### Calendario de Eventos
+* **Planificación Visual:** Vistas fluidas (mensual, semanal, diaria).
 
-* **Planificación Interactiva:** Vistas mensuales, semanales y diarias fluidas para organizar y hacer un seguimiento visual de tus tareas y compromisos.
-* **Gestión de Eventos Completa:** Creación rápida de actividades, personalización de colores, descripción y categorización en tiempo real.
-* **Importación y Exportación:** Compatibilidad nativa para importar y exportar calendarios completos en formatos universales (JSON/ICS) para integración externa.
-* **Sistema de Notificaciones Integrado:** Alertas visuales locales y recordatorios automáticos de eventos próximos.
+### ERP, Facturas y Otras Utilidades
+* **Gestor de Facturas:** Organización y seguimiento de facturación.
+* **App Marketplace:** Ecosistema para instalar y gestionar nuevos módulos de forma dinámica.
+* **Chat Local:** Mensajería instantánea encriptada de punto a punto para redes privadas.
