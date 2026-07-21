@@ -197,14 +197,15 @@ export function initCalendarWidget() {
             let tagClass, tagText;
             if (isPassed) {
                 tagClass = 'tag-gray';
-                tagText = 'Pasado';
+                tagText = window.t ? window.t('label_passed') : 'Pasado';
             } else if (isToday) {
                 tagClass = 'tag-red';
-                tagText = 'Hoy';
+                tagText = window.t ? window.t('label_today') : 'Hoy';
             } else {
                 tagClass = 'tag-yellow';
-                tagText = 'Próximo';
+                tagText = window.t ? window.t('label_upcoming') : 'Próximo';
             }
+
 
             let timeText = ev.date;
             if (ev.startTime) timeText += ` ${ev.startTime}`;
