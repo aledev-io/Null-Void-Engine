@@ -26,11 +26,26 @@ export const PushNotifications = {
             const vapidData = await vapidRes.json();
             const applicationServerKey = this.urlBase64ToUint8Array(vapidData.public_key);
 
-            // Subscribe
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: applicationServerKey
-            });
+            let subscription;
+            try {
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: applicationServerKey
+                });
+            } catch (subErr) {
+                if (subErr.name === 'InvalidStateError' || subErr.message.includes('different application server key')) {
+                    console.log("VAPID key changed. Unsubscribing old push subscription...");
+                    const oldSub = await registration.pushManager.getSubscription();
+                    if (oldSub) await oldSub.unsubscribe();
+
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: applicationServerKey
+                    });
+                } else {
+                    throw subErr;
+                }
+            }
 
             // Send subscription to backend
             const subRes = await fetch('/api/system/webpush/subscribe', {
@@ -99,11 +114,13 @@ export const PushNotifications = {
 
 window.PushNotifications = PushNotifications;
 
-// Auto-initialize if permissions are granted or on user interaction, 
-// usually it's best to bind this to a UI button, but if we want it automatic:
 document.addEventListener('DOMContentLoaded', () => {
     // Check if user already granted permission, if so, we just subscribe quietly
+    // unless they explicitly disabled it in settings
     if (Notification.permission === 'granted') {
-        PushNotifications.init();
+        const isDisabled = localStorage.getItem('nv_notif_push_disabled') === 'true';
+        if (!isDisabled) {
+            PushNotifications.init();
+        }
     }
 });

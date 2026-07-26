@@ -121,7 +121,9 @@ export const Storage = {
       const res = await fetch(API_BASE, { headers: _apiHeaders() });
       if (!res.ok) return;
       const events = await res.json();
-      localStorage.setItem(_getStorageKey(), JSON.stringify(events));
+      const incoming = JSON.stringify(events);
+      if (incoming === localStorage.getItem(_getStorageKey())) return;
+      localStorage.setItem(_getStorageKey(), incoming);
       window.dispatchEvent(new CustomEvent('calendar:synced'));
     } catch (err) {
       console.info('[Storage] Modo offline: usando localStorage.', err.message);
@@ -130,5 +132,6 @@ export const Storage = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  Storage.syncFromAPI();
+  // Delay sync to avoid double render competing with initial paint
+  setTimeout(() => Storage.syncFromAPI(), 1500);
 });

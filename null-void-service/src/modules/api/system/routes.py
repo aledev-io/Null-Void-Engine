@@ -94,6 +94,59 @@ def subscribe_webpush():
         traceback.print_exc()
         return jsonify(error=str(e)), 500
 
+@system_bp.route('/fcm/subscribe', methods=['POST'])
+def subscribe_fcm():
+    token = request.cookies.get('token') or request.headers.get('X-Token')
+    user_id = sess.get_user_id(token)
+    if not user_id:
+        return jsonify(error="No autorizado"), 401
+        
+    data = request.json
+    fcm_token = data.get('token')
+    
+    if not fcm_token:
+        return jsonify(error="Token missing"), 400
+        
+    import time
+    from core.database import get_db
+    import sqlite3
+    try:
+        with get_db() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO fcm_subs 
+                   (user_id, token, created_at)
+                   VALUES (?, ?, ?)""",
+                (user_id, fcm_token, time.time())
+            )
+            conn.commit()
+        return jsonify(success=True)
+    except sqlite3.IntegrityError as e:
+        return jsonify(error=f"Integrity Error: {str(e)}"), 500
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+@system_bp.route('/fcm/unsubscribe', methods=['POST'])
+def unsubscribe_fcm():
+    token = request.cookies.get('token') or request.headers.get('X-Token')
+    user_id = sess.get_user_id(token)
+    if not user_id:
+        return jsonify(error="No autorizado"), 401
+        
+    data = request.json
+    fcm_token = data.get('token')
+    
+    if not fcm_token:
+        return jsonify(error="Token missing"), 400
+        
+    from core.database import get_db
+    try:
+        with get_db() as conn:
+            conn.execute("DELETE FROM fcm_subs WHERE token = ?", (fcm_token,))
+            conn.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
 @system_bp.route('/webpush/unsubscribe', methods=['POST'])
 def unsubscribe_webpush():
     token = request.cookies.get('token') or request.headers.get('X-Token')

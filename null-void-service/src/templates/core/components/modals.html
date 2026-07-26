@@ -2,47 +2,156 @@
     .notif-modal-overlay {
         display: none;
         position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5);
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
         z-index: 2000;
         backdrop-filter: blur(8px);
         align-items: center;
         justify-content: center;
         padding: 1rem;
     }
+
     .notif-modal-container {
         background: var(--surface-hi);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         width: 100%;
-        max-width: 800px;
+        max-width: 600px;
+        height: 600px;
         max-height: 85vh;
         border-radius: 16px;
         border: 1px solid var(--border);
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
     }
+
     .notif-modal-header {
-        padding: 24px 30px;
+        padding: 20px 24px;
         border-bottom: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 16px;
+        gap: 12px;
     }
+
     .notif-modal-header h2 {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         font-weight: 700;
         color: var(--text-main);
+        white-space: nowrap;
     }
+
     .notif-modal-actions {
         display: flex;
-        gap: 12px;
+        gap: 6px;
         align-items: center;
     }
+
+    .notif-icon-btn {
+        width: 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text-sub);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .notif-icon-btn:hover {
+        background: var(--surface-hi);
+        color: var(--text-main);
+        border-color: var(--indigo-dim);
+    }
+
+    .notif-icon-btn.active-toggle {
+        background: rgba(99, 102, 241, 0.12);
+        border-color: var(--indigo-dim);
+        color: var(--indigo);
+    }
+
+    /* Tooltip nativo simple, sin dependencias */
+    .notif-icon-btn[data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-card, #1e1f22);
+        color: var(--text-main);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+        z-index: 10;
+    }
+
+    .notif-icon-btn[data-tooltip]:hover::after {
+        opacity: 1;
+    }
+
+    /* Ocultar tooltip si el menú está abierto */
+    .notif-overflow.open .notif-icon-btn[data-tooltip]::after {
+        display: none !important;
+    }
+
+    /* Menú overflow (kebab) */
+    .notif-overflow {
+        position: relative;
+    }
+
+    .notif-overflow-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        background: var(--bg-card, #1e1f22);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px;
+        min-width: 180px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        z-index: 10001;
+    }
+
+    .notif-overflow.open .notif-overflow-menu {
+        display: block;
+    }
+
+    .notif-overflow-item {
+        padding: 9px 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #f87171;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: background 0.15s ease;
+        white-space: nowrap;
+    }
+
+    .notif-overflow-item:hover {
+        background: rgba(248, 113, 113, 0.12);
+    }
+
     .notif-modal-body {
         padding: 20px;
         overflow-y: auto;
@@ -51,72 +160,311 @@
         flex-direction: column;
         gap: 10px;
     }
-    
+
     @media (max-width: 768px) {
         .notif-modal-overlay {
             padding: 16px;
             align-items: center;
         }
+
         .notif-modal-container {
             max-width: 100%;
             width: 100%;
             max-height: 90vh;
             border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         }
+
         .notif-modal-header {
             padding: 16px;
             gap: 12px;
         }
+
         .notif-modal-header h2 {
             font-size: 1.15rem;
             line-height: 1.2;
         }
+
         .notif-modal-actions {
             gap: 8px;
         }
-        .notif-modal-actions button[id="clear-all-notifs"] {
-            padding: 6px 10px !important;
-            font-size: 0.75rem !important;
-        }
+
         .notif-modal-body {
             padding: 16px;
         }
     }
-    
+
     @media (max-height: 500px) and (orientation: landscape) {
         .notif-modal-overlay {
             padding: 0.5rem;
             align-items: center;
         }
+
         .notif-modal-container {
             max-height: 95vh;
             border-radius: 12px;
         }
+
         .notif-modal-header {
             padding: 12px 16px;
         }
+
         .notif-modal-header h2 {
             font-size: 1.1rem;
         }
+
         .notif-modal-body {
             padding: 12px;
         }
     }
+
+    /* Notification Items & Empty State */
+    .notif-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        text-align: center;
+        gap: 16px;
+    }
+
+    .notif-empty-icon {
+        width: 64px;
+        height: 64px;
+        background: var(--surface-hi);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-sub);
+        opacity: 0.6;
+    }
+
+    .notif-empty-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+
+    .notif-empty-text {
+        font-size: 13px;
+        color: var(--text-sub);
+        max-width: 280px;
+        line-height: 1.6;
+    }
+
+    .notif-item {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        animation: slideInNotif 0.3s ease-out backwards;
+    }
+
+    @keyframes slideInNotif {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .notif-item:hover {
+        background: var(--surface-hi);
+        border-color: var(--indigo-dim);
+    }
+
+    .notif-item.unread {
+        border-left: 3px solid var(--indigo);
+        background: rgba(99, 102, 241, 0.05);
+    }
+
+    .notif-item-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 20px;
+    }
+
+    .notif-item.success .notif-item-icon {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+    }
+
+    .notif-item.warning .notif-item-icon {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+    }
+
+    .notif-item.error .notif-item-icon {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+    }
+
+    .notif-item.info .notif-item-icon {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+    }
+
+    .notif-item-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .notif-item-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+
+    .notif-item-text {
+        font-size: 13px;
+        color: var(--text-sub);
+        line-height: 1.5;
+    }
+
+    .notif-item-time {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .notif-item-close {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-sub);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+        border-radius: 6px;
+    }
+
+    .notif-item-close:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+
+    .notif-modal-body::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .notif-modal-body::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .notif-modal-body::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+    }
+
+    .notif-modal-body::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+    }
+
+    .notif-modal-container {
+        animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes slideUpModal {
+        from {
+            transform: scale(0.95);
+            opacity: 0;
+        }
+
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
 </style>
 
-<div id="notif-modal" class="notif-modal-overlay">
+<div id="notif-modal" class="notif-modal-overlay" onclick="if(event.target === this) this.style.display='none';">
     <div class="notif-modal-container">
         <div class="notif-modal-header">
-            <h2><span data-i18n="notif_title_modal">Historial de Notificaciones</span></h2>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <h2><span data-i18n="notif_title_modal">Historial de Notificaciones</span></h2>
+            </div>
+
             <div class="notif-modal-actions">
-                <button id="clear-all-notifs"
-                    style="background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.2); color: #f87171; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: background 0.2s;"><span
-                        data-i18n="clear_all">Limpiar todo</span></button>
-                <button id="close-notif-modal"
-                    style="background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 1.8rem; line-height: 1;">&times;</button>
+                <button id="mark-all-read" class="notif-icon-btn" data-tooltip="Marcar todo como leído"
+                    data-i18n-title="mark_all_read_title"
+                    onclick="if(typeof window.markAllNotificationsRead === 'function') window.markAllNotificationsRead()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>
+
+                <div class="notif-overflow" id="notif-overflow">
+                    <button class="notif-icon-btn" data-tooltip="Más opciones" data-i18n-title="mail_tt_more"
+                        onclick="document.getElementById('notif-overflow').classList.toggle('open')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="1.6"></circle>
+                            <circle cx="12" cy="12" r="1.6"></circle>
+                            <circle cx="12" cy="19" r="1.6"></circle>
+                        </svg>
+                    </button>
+                    <div class="notif-overflow-menu">
+                        <div class="notif-overflow-item" id="enable-web-push"
+                            onclick="if(typeof window.requestPushPermission === 'function') window.requestPushPermission()"
+                            style="display: none; color: #10b981;" data-i18n-title="enable_push_title">
+                            <span id="enable-web-push-text" data-i18n="enable_push">Activar Notificaciones</span>
+                        </div>
+                        <div class="notif-overflow-item" id="clear-all-notifs"
+                            data-i18n-title="clear_all_title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                <path d="M10 11v6"></path>
+                                <path d="M14 11v6"></path>
+                            </svg>
+                            <span data-i18n="clear_all">Limpiar historial</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="close-notif-modal" class="notif-icon-btn" data-tooltip="Cerrar modal" data-i18n-title="notif_close">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
         </div>
+
+        <script>
+            // Cierra el menú overflow al hacer clic fuera
+            document.addEventListener('click', function (e) {
+                var overflow = document.getElementById('notif-overflow');
+                if (overflow && overflow.classList.contains('open') && !overflow.contains(e.target)) {
+                    overflow.classList.remove('open');
+                }
+            });
+        </script>
         <div id="notif-history-list" class="notif-modal-body">
         </div>
     </div>
@@ -204,8 +552,8 @@
         <div class="am-body">
             <div class="am-upload-card" onclick="document.getElementById('avatar-upload-cfg').click()">
                 <div class="am-upload-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="17 8 12 3 7 8"></polyline>
                         <line x1="12" y1="3" x2="12" y2="15"></line>

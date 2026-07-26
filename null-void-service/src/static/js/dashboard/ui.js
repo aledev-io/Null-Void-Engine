@@ -96,9 +96,16 @@ export function updateNetStatus() {
 
 
 export async function handleLogout() {
-    await fetch('/api/logout', { method: 'POST', headers: window.HEADERS }).catch(() => { });
+    const fcmToken = localStorage.getItem('nv_fcm_token');
+    const body = fcmToken ? JSON.stringify({ fcm_token: fcmToken }) : null;
+    await fetch('/api/logout', { 
+        method: 'POST', 
+        headers: window.HEADERS,
+        body: body
+    }).catch(() => { });
     localStorage.removeItem('theme');
     localStorage.removeItem('nv_chat_contact');
+    localStorage.removeItem('nv_fcm_token');
     location.href = '/';
 }
 

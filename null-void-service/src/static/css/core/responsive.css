@@ -58,9 +58,21 @@
     .nav-grid {
         grid-template-columns: repeat(2, 1fr) !important;
     }
+}
 
+@media (max-width: 560px) {
+    .dash-card {
+        padding: 16px !important;
+    }
+    
+    .dashboard-grid .dash-card {
+        width: 100% !important;
+        max-width: 320px !important;
+        margin: 0 auto !important;
+    }
+}
 
-
+@media (max-width: 900px) {
     .monitor-head {
         flex-direction: column;
         align-items: flex-start !important;
@@ -302,7 +314,8 @@
 
 @media (max-width: 560px) {
     #notif-modal>div {
-        width: calc(100vw - 16px) !important;
+        width: 92% !important;
+        max-width: 360px !important;
         max-height: 90vh !important;
         border-radius: 12px !important;
     }

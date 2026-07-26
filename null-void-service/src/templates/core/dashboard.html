@@ -26,10 +26,11 @@
         }
         window.addEventListener('touchmove', function () { }, { passive: true });
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}?v=1.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/dashboard.css') }}?v=1.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/responsive.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/dashboard_notes.css') }}" />
     <style>
         :root {
             /* ── Backgrounds (dark-to-light: bg-primary → surface-hi) ── */
@@ -153,7 +154,6 @@
         .sidebar-nav .nav-item:hover {
             background: rgba(110, 166, 254, 0.1) !important;
             color: var(--accent) !important;
-            transform: translateX(2px);
         }
 
         .sidebar-nav .nav-btn.active,
@@ -332,11 +332,9 @@
     <div class="layout-wrapper">
         <!-- Barra lateral -->
         <aside id="main-sidebar" class="sidebar">
-            <div class="sidebar-header"
-                onclick="showView('menu')"
+            <div class="sidebar-header" onclick="showView('menu')"
                 style="display: flex; align-items: center; gap: 12px; padding: 12px 8px; margin-bottom: 12px; cursor: pointer; transition: opacity 0.2s;"
-                onmouseover="this.style.opacity='0.8'"
-                onmouseout="this.style.opacity='1'">
+                onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                 <!-- Logo Badge -->
                 <div
                     style="display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px;">
@@ -447,12 +445,14 @@
                             </svg>
                         </button>
                         <button class="btn-icon" id="btn-notifications-history" title="Historial de notificaciones"
-                            data-i18n-title="notif_title" style="width: 32px; height: 32px;">
+                            data-i18n-title="notif_title" style="width: 32px; height: 32px; position: relative;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                             </svg>
+                            <span id="notif-badge-count"
+                                style="display: none; position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: bold; width: 16px; height: 16px; border-radius: 50%; align-items: center; justify-content: center; border: 2px solid var(--surface); box-sizing: content-box;"></span>
                         </button>
                     </div>
                 </div>
@@ -493,7 +493,8 @@
                                     Tu panel de control está completamente configurado. Accede rápidamente a tus módulos
                                     favoritos desde aquí.</p>
                                 <div class="welcome-buttons" style="display: flex; gap: 10px;">
-                                    <button onclick="showView('onboarding'); if(window.PushNotifications) window.PushNotifications.init();"
+                                    <button
+                                        onclick="showView('onboarding'); if(window.PushNotifications) window.PushNotifications.init();"
                                         style="padding: 8px 16px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: none; border-radius: 8px; color: #fff; font-weight: 600; font-size: 12px; cursor: pointer; transition: var(--transition);"
                                         onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(110, 166, 254, 0.3)'"
                                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
@@ -582,7 +583,164 @@
                             </div>
                         </div>
 
+                        <!-- FILA 2: Notas -->
+                        <div class="dash-card notes-dash-card"
+                            style="margin-top:20px; display:flex; flex-direction:column; overflow:hidden;">
+                            <section class="notes-view active" id="notes-view" style="display: flex;">
+                                <div id="notes-list-view"
+                                    style="display:flex;flex-direction:column;height:100%;width:100%;">
+                                    <div class="notes-topbar">
+                                        <div style="display:flex;align-items:center;gap:10px;">
+                                            <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()"
+                                                title="Abrir Menú" style="display:none; padding:4px;">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2">
+                                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                            <h2 data-i18n="note_notes">Notas</h2>
+                                        </div>
+                                        <button class="btn-primary" onclick="createNewNote()"
+                                            style="background: var(--accent); box-shadow: none;">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2.5">
+                                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                            </svg>
+                                            <span data-i18n="note_new">Nueva Nota</span>
+                                        </button>
+                                    </div>
 
+                                    <div class="notes-toolbar">
+                                        <div class="notes-search-wrap">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2">
+                                                <circle cx="11" cy="11" r="8"></circle>
+                                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                            </svg>
+                                            <input type="text" data-i18n-placeholder="note_search"
+                                                placeholder="Buscar Notas" id="notes-search-input"
+                                                oninput="filterNotes(this.value)">
+                                        </div>
+
+                                        <!-- Filters removed per user request -->
+
+                                    </div>
+
+                                    <div class="notes-list-container" id="notes-list-container">
+                                    </div>
+                                </div>
+
+                                <div class="note-editor" id="note-editor">
+                                    <div class="note-editor-topbar">
+                                        <button class="btn-icon" onclick="closeEditor()" data-i18n-title="note_back"
+                                            title="Volver a notas">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2">
+                                                <polyline points="15 18 9 12 15 6"></polyline>
+                                            </svg>
+                                        </button>
+                                        <span class="note-editor-title-text" data-i18n="note_notes"
+                                            style="font-size:0.85rem;color:var(--text-dim);">Notas</span>
+                                        <div class="note-editor-actions">
+                                            <div id="active-collaborators" class="active-collaborators-list"></div>
+                                            <span id="editor-wordcount"
+                                                style="font-size:0.75rem;color:var(--text-dim);margin-right:8px;white-space:nowrap;"></span>
+                                            <button class="btn-icon" data-i18n-title="note_undo" title="Deshacer"
+                                                onclick="undoNote()">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2">
+                                                    <polyline points="9 14 4 9 9 4"></polyline>
+                                                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                                                </svg>
+                                            </button>
+                                            <button class="btn-icon" data-i18n-title="note_redo" title="Rehacer"
+                                                onclick="redoNote()">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2">
+                                                    <polyline points="15 14 20 9 15 4"></polyline>
+                                                    <path d="M4 20v-7a4 4 0 0 1 4-4h12"></path>
+                                                </svg>
+                                            </button>
+
+
+
+                                        </div>
+                                    </div>
+
+                                    <div class="note-editor-body">
+                                        <input type="text" class="note-title-input" id="note-title-input"
+                                            data-i18n-placeholder="note_title_ph" placeholder="Escribe un título..."
+                                            oninput="updateEditorMeta()" maxlength="25">
+                                        <div class="note-meta-bar" id="note-meta-bar">Hoy a las 12:00 AM &nbsp; 0
+                                            palabras &nbsp; 0
+                                            caracteres</div>
+                                        <div class="note-format-bar">
+                                            <button class="fmt-btn" title="H1" onclick="insertFormat('h1')">H₁</button>
+                                            <button class="fmt-btn" title="H2" onclick="insertFormat('h2')">H₂</button>
+                                            <button class="fmt-btn" title="H3" onclick="insertFormat('h3')">H₃</button>
+                                            <div class="fmt-divider"></div>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_ul"
+                                                title="Lista sin orden" onclick="insertFormat('ul')">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2">
+                                                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                                                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                                                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                                                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_ol" title="Lista numerada"
+                                                onclick="insertFormat('ol')">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2">
+                                                    <line x1="10" y1="6" x2="21" y2="6"></line>
+                                                    <line x1="10" y1="12" x2="21" y2="12"></line>
+                                                    <line x1="10" y1="18" x2="21" y2="18"></line>
+                                                    <path d="M4 6h1v4"></path>
+                                                    <path d="M4 10h2"></path>
+                                                    <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path>
+                                                </svg>
+                                            </button>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_check" title="Checkbox"
+                                                onclick="insertFormat('check')">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2">
+                                                    <polyline points="9 11 12 14 22 4"></polyline>
+                                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11">
+                                                    </path>
+                                                </svg>
+                                            </button>
+                                            <div class="fmt-divider"></div>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_bold" title="Negrita"
+                                                onclick="insertFormat('bold')"><strong>B</strong></button>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_italic" title="Cursiva"
+                                                onclick="insertFormat('italic')"><em>I</em></button>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_underline"
+                                                title="Subrayado" onclick="insertFormat('underline')"><u>U</u></button>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_strike" title="Tachado"
+                                                onclick="insertFormat('strike')"><s>S</s></button>
+                                            <button class="fmt-btn" data-i18n-title="note_fmt_code" title="Código"
+                                                onclick="insertFormat('code')">&lt;/&gt;</button>
+                                        </div>
+                                        <div class="note-editor-content-wrapper"
+                                            style="position: relative; height: 100%; width: 100%;">
+                                            <textarea class="note-content-input" id="note-content-input"
+                                                data-i18n-placeholder="note_content_ph" placeholder="Escribe algo..."
+                                                oninput="updateEditorMeta()"></textarea>
+                                            <div id="note-cursors-overlay"
+                                                style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 10;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                        </div>
 
                     </div>
 
@@ -593,7 +751,70 @@
                 {% include 'core/views/onboarding.html' %}
                 {% include 'core/views/telemetry.html' %}
                 {% include 'core/views/reminders.html' %}
+                {% include 'core/views/marketplace.html' %}
+                {% include 'core/views/friends.html' %}
                 {% include 'core/components/modals.html' %}
+
+                <!-- CONFIRM DIALOG -->
+                <div class="app-modal-overlay" id="confirm-dialog-overlay" onclick="cancelConfirmDialog(event)">
+                    <div class="app-modal" onclick="event.stopPropagation()"
+                        style="width:90%;max-width:400px;background:var(--surface-hi);border:1px solid var(--border);border-radius:12px;padding:20px;">
+                        <div class="app-modal-header"
+                            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                            <h3 id="confirm-dialog-title" style="margin:0;font-size:1.1rem;">Confirmar</h3>
+                            <button class="btn-icon" onclick="cancelConfirmDialog()"
+                                style="padding:4px;background:none;border:none;color:var(--text-dim);cursor:pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="app-modal-body" style="margin-bottom:24px;">
+                            <p id="confirm-dialog-msg"
+                                style="font-size:0.95rem;color:var(--text-dim);line-height:1.5;margin:0;"></p>
+                        </div>
+                        <div class="app-modal-footer" style="display:flex;justify-content:flex-end;gap:10px;">
+                            <button onclick="cancelConfirmDialog()"
+                                style="padding:8px 16px;background:var(--bg-main);border:1px solid var(--border);color:var(--text-main);border-radius:8px;cursor:pointer;">Cancelar</button>
+                            <button id="confirm-dialog-ok-btn"
+                                style="padding:8px 16px;background:#ef4444;border:none;color:#fff;border-radius:8px;cursor:pointer;font-weight:600;">Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INPUT DIALOG -->
+                <div class="app-modal-overlay" id="input-dialog-overlay" onclick="cancelInputDialog(event)">
+                    <div class="app-modal" onclick="event.stopPropagation()"
+                        style="width:90%;max-width:420px;background:var(--surface-hi);border:1px solid var(--border);border-radius:12px;padding:20px;">
+                        <div class="app-modal-header"
+                            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                            <h3 id="input-dialog-title" style="margin:0;font-size:1.1rem;">Renombrar</h3>
+                            <button class="btn-icon" onclick="cancelInputDialog()"
+                                style="padding:4px;background:none;border:none;color:var(--text-dim);cursor:pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="app-modal-body"
+                            style="margin-bottom:24px;display:flex;flex-direction:column;gap:8px;">
+                            <label id="input-dialog-label" style="font-size:0.85rem;color:var(--text-dim);">Nuevo
+                                nombre</label>
+                            <input id="input-dialog-field" type="text" autocomplete="off"
+                                style="width:100%;padding:10px;background:var(--bg-main);border:1px solid var(--border);color:var(--text-main);border-radius:8px;outline:none;font-size:0.95rem;">
+                        </div>
+                        <div class="app-modal-footer" style="display:flex;justify-content:flex-end;gap:10px;">
+                            <button onclick="cancelInputDialog()"
+                                style="padding:8px 16px;background:var(--bg-main);border:1px solid var(--border);color:var(--text-main);border-radius:8px;cursor:pointer;">Cancelar</button>
+                            <button id="input-dialog-confirm-btn"
+                                style="padding:8px 16px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-weight:600;">Guardar</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div> <!-- Cerrar layout-wrapper -->
         <script>
@@ -612,8 +833,90 @@
         <script type="module" src="{{ url_for('static', filename='js/dashboard/ui.js') }}"></script>
         <script src="{{ url_for('static', filename='js/lib/chart.js') }}"></script>
         <script type="module" src="{{ url_for('static', filename='js/telemetry/main.js') }}"></script>
+        <script type="module" src="{{ url_for('static', filename='js/marketplace/main.js') }}"></script>
+        <script type="module" src="{{ url_for('static', filename='js/core/dashboard_notes.js') }}"></script>
         <script type="module" src="{{ url_for('static', filename='js/dashboard/main.js') }}"></script>
         <script src="{{ url_for('static', filename='js/dashboard/legacy_inline.js') }}"></script>
+
+        <!-- App Shell Integration -->
+        <script>
+            window.NV_SHELL_CONFIG = {
+                launcherUrl: 'file:///android_asset/www/index.html'
+            };
+
+            window.onFcmTokenReceived = async function(token) {
+                console.log("[FCM] Token recibido del móvil:", token);
+                // Guardamos el token en local siempre, por si el usuario activa el switch más tarde
+                localStorage.setItem('fcm_token', token);
+                
+                // Si el usuario desactivó las notificaciones, no lo enviamos al servidor
+                if (localStorage.getItem('push_enabled') === 'false') {
+                    console.log("[FCM] Push desactivado por el usuario. Omitiendo registro en servidor.");
+                    return;
+                }
+                
+                try {
+                    await fetch('/api/system/fcm/subscribe', {
+                        method: 'POST',
+                        headers: window.HEADERS || {
+                            'Content-Type': 'application/json',
+                            'X-Token': window.TOKEN
+                        },
+                        body: JSON.stringify({ token: token })
+                    });
+                    console.log("[FCM] Token guardado en el servidor");
+                } catch (e) {
+                    console.error("[FCM] Error al enviar token al servidor:", e);
+                }
+            };
+            
+            window.togglePushNotifications = async function(enabled) {
+                localStorage.setItem('push_enabled', enabled ? 'true' : 'false');
+                const token = localStorage.getItem('fcm_token');
+                
+                if (enabled) {
+                    if (window.Android && window.Android.getFcmToken) {
+                        window.Android.getFcmToken();
+                    } else if (token) {
+                        window.onFcmTokenReceived(token);
+                    } else {
+                        // Intentar activar WebPush para navegadores de PC
+                        if (window.PushNotifications) {
+                            const success = await window.PushNotifications.init();
+                            if (!success) console.warn("No se pudo activar Web Push.");
+                        } else {
+                            console.warn("Este dispositivo no soporta Push nativo ni Web Push.");
+                        }
+                    }
+                } else {
+                    // Desactivar WebPush si estamos en PC
+                    if (!window.Android && window.PushNotifications) {
+                        await window.PushNotifications.unsubscribe();
+                    }
+                    
+                    if (!token) return;
+                    try {
+                        await fetch('/api/system/fcm/unsubscribe', {
+                            method: 'POST',
+                            headers: window.HEADERS || {
+                                'Content-Type': 'application/json',
+                                'X-Token': window.TOKEN
+                            },
+                            body: JSON.stringify({ token: token })
+                        });
+                        console.log("[FCM] Dispositivo dado de baja de push.");
+                    } catch (e) {
+                        console.error("[FCM] Error al cancelar suscripción:", e);
+                    }
+                }
+            };
+            
+            // Solicitar el token a la app nativa si estamos en Android
+            if (window.Android && typeof window.Android.getFcmToken === 'function') {
+                window.Android.getFcmToken();
+            }
+        </script>
+        <script src="{{ url_for('static', filename='js/nv-app-shell.js') }}"></script>
 </body>
 
 </html>

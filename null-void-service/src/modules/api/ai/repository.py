@@ -407,8 +407,8 @@ def save_note(note_data: dict):
             note_data.get("user_id", note_data.get("author")), # Provide fallback
             note_data.get("title", ""),
             note_data.get("content", ""),
-            note_data.get("created", 0),
-            note_data.get("updated", 0),
+            note_data.get("createdAt", note_data.get("created", 0)),
+            note_data.get("updatedAt", note_data.get("updated", 0)),
             1 if note_data.get("pinned") else 0,
             1 if note_data.get("is_shared") else 0,
             note_data.get("author", ""),

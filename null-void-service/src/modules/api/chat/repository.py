@@ -128,6 +128,18 @@ def delete_message_for_user(msg_id: str, viewer_id: str) -> bool:
             return False
 
 
+def delete_message_for_everyone(msg_id: str, sender_id: str) -> bool:
+    with get_db() as conn:
+        try:
+            conn.execute("""
+                DELETE FROM chat_messages WHERE id = ? AND sender_id = ?
+            """, (msg_id, sender_id))
+            conn.commit()
+            return conn.total_changes > 0
+        except Exception:
+            return False
+
+
 def delete_conversation(viewer_id: str, contact_id: str) -> bool:
     """Oculta la conversación completa para el usuario actual."""
     with get_db() as conn:
@@ -191,3 +203,21 @@ def create_connections(user_id: str, contact_id: str):
         conn.execute("INSERT OR IGNORE INTO user_connections (user_id, contact_id) VALUES (?, ?)", (user_id, contact_id))
         conn.execute("INSERT OR IGNORE INTO user_connections (user_id, contact_id) VALUES (?, ?)", (contact_id, user_id))
         conn.commit()
+
+
+def is_muted(user_id: str, contact_id: str) -> bool:
+    with get_db() as conn:
+        res = conn.execute("SELECT 1 FROM muted_conversations WHERE user_id = ? AND contact_id = ?", (user_id, contact_id)).fetchone()
+        return res is not None
+
+def mute_conversation(user_id: str, contact_id: str) -> bool:
+    with get_db() as conn:
+        conn.execute("INSERT OR IGNORE INTO muted_conversations (user_id, contact_id) VALUES (?, ?)", (user_id, contact_id))
+        conn.commit()
+        return True
+
+def unmute_conversation(user_id: str, contact_id: str) -> bool:
+    with get_db() as conn:
+        conn.execute("DELETE FROM muted_conversations WHERE user_id = ? AND contact_id = ?", (user_id, contact_id))
+        conn.commit()
+        return True

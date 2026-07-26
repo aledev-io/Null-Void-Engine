@@ -16,12 +16,10 @@ def get_or_create_vapid_keys():
     private_key = ec.generate_private_key(ec.SECP256R1())
     public_key = private_key.public_key()
     
-    # Export private key in PEM
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
-    ).decode('utf-8')
+    # Export private key as url-safe base64 for pywebpush
+    private_numbers = private_key.private_numbers()
+    private_bytes = private_numbers.private_value.to_bytes(32, 'big')
+    private_b64 = base64.urlsafe_b64encode(private_bytes).decode('utf-8').rstrip('=')
     
     # Export public key
     # For VAPID we need the uncompressed point (0x04) format encoded in url-safe base64
@@ -33,7 +31,7 @@ def get_or_create_vapid_keys():
     public_b64 = base64.urlsafe_b64encode(public_bytes).decode('utf-8').rstrip('=')
     
     keys = {
-        'private_key': private_pem,
+        'private_key': private_b64,
         'public_key': public_b64
     }
     

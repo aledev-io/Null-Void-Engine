@@ -1,6 +1,5 @@
 import { Storage } from './storage.js';
 import { Events } from './events.js';
-import { Notifications } from './notifications.js';
 import { Calendar } from './calendar.js';
 import { UI } from './ui.js';
 
@@ -13,12 +12,10 @@ export const App = {
 
   init() {
     UI.applyTheme(Storage.getTheme());
-    Notifications.init();
-
     const todayNumEl = document.getElementById('mobile-today-num');
     if (todayNumEl) todayNumEl.textContent = new Date().getDate();
 
-    setInterval(() => Notifications.checkUpcomingEvents(), 60000);
+
 
     window.addEventListener('storage', (e) => {
       if (e.key === 'theme' && e.newValue) {
@@ -49,18 +46,6 @@ export const App = {
     if (dateParam || eventParam) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-
-    this.updateNotificationButtonState();
-  },
-
-  updateNotificationButtonState() {
-    const btnNotif = document.getElementById('btn-notifications');
-    if (!btnNotif) return;
-    if (Notifications.enabled) {
-      btnNotif.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; opacity: 0.8;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg> ${window.currentLang === "en" ? "Disable notifications" : "Desactivar notificaciones"}`;
-    } else {
-      btnNotif.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; opacity: 0.8;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg> ${window.currentLang === "en" ? "Enable notifications" : "Activar notificaciones"}`;
-    }
   },
 
   render() {
@@ -81,7 +66,7 @@ export const App = {
         input.style.width = '0';
         input.style.height = '0';
         document.body.appendChild(input);
-        
+
         input.addEventListener('change', (e) => {
           if (e.target.value) {
             const [y, m] = e.target.value.split('-');
@@ -90,14 +75,14 @@ export const App = {
           }
           document.body.removeChild(input);
         });
-        
+
         input.addEventListener('blur', () => {
-          if(document.body.contains(input)) document.body.removeChild(input);
+          if (document.body.contains(input)) document.body.removeChild(input);
         });
 
         try {
           input.showPicker();
-        } catch(err) {
+        } catch (err) {
           // Fallback if showPicker is not supported
           input.style.opacity = '1';
           input.style.width = 'auto';
@@ -145,9 +130,8 @@ export const App = {
     UI.renderTodayPanel();
   },
 
-  refresh() { 
-    this.render(); 
-    this.updateNotificationButtonState();
+  refresh() {
+    this.render();
   },
 
   navigate(dir) {
@@ -213,10 +197,10 @@ export const App = {
 
     if (editId) {
       Events.update(editId, data);
-      UI.toast(window.currentLang === 'en' ? '✏️ Event updated' : '✏️ Evento actualizado');
+      UI.toast(window.currentLang === 'en' ? 'Event updated' : 'Evento actualizado');
     } else {
       Events.create(data);
-      UI.toast(window.currentLang === 'en' ? '✅ Event created' : '✅ Evento creado');
+      UI.toast(window.currentLang === 'en' ? 'Event created' : 'Evento creado');
     }
     UI.closeModal();
     this.render();
@@ -240,7 +224,7 @@ export const App = {
     newOkBtn.addEventListener('click', () => {
       modal.style.display = 'none';
       Events.delete(id);
-      UI.toast(isEn ? '🗑️ Event deleted' : '🗑️ Evento eliminado');
+      UI.toast(isEn ? 'Event deleted' : 'Evento eliminado');
       UI.closeModal();
       this.render();
     });
@@ -320,28 +304,6 @@ export const App = {
 
     document.getElementById('btn-toggle-theme').addEventListener('click', () => UI.toggleTheme());
 
-    const btnNotif = document.getElementById('btn-notifications');
-    if (btnNotif) {
-      btnNotif.addEventListener('click', async () => {
-        const isCurrentlyEnabled = Notifications.enabled;
-        if (!isCurrentlyEnabled) {
-          const granted = await Notifications.requestPermission();
-          if (granted) {
-            Notifications.toggle();
-            const bellSVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>';
-            UI.toast(`${bellSVG} ${window.currentLang === "en" ? "Notifications enabled" : "Notificaciones activadas"}`);
-            Notifications.checkUpcomingEvents();
-            this.updateNotificationButtonState();
-          }
-        } else {
-          Notifications.toggle();
-          const offSVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle; opacity: 0.6;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
-          UI.toast(`${offSVG} ${window.currentLang === "en" ? "Notifications disabled" : "Notificaciones desactivadas"}`);
-          this.updateNotificationButtonState();
-        }
-      });
-    }
-
     document.getElementById('reminder-select').addEventListener('change', (e) => {
       const val = parseInt(e.target.value);
       if (!isNaN(val)) {
@@ -350,95 +312,9 @@ export const App = {
       }
     });
 
-    const notifBtn = document.getElementById('btn-notifications-history');
-    if (notifBtn) {
-      const notifModal = document.getElementById('notif-modal');
-      const notifClose = document.getElementById('close-notif-modal');
-      const notifList = document.getElementById('notif-history-list');
-
-      notifBtn.addEventListener('click', async () => {
-        notifModal.style.display = 'flex';
-        notifList.innerHTML = `<p style="text-align: center; color: var(--text-muted); font-weight: 500; padding: 40px;">${window.currentLang === "en" ? "Loading history..." : "Cargando historial..."}</p>`;
-
-        try {
-          const res = await fetch('/api/system/notifications/history');
-          const data = await res.json();
-
-          if (!data || data.length === 0) {
-            notifList.innerHTML = `<p style="text-align: center; color: var(--text-muted); font-weight: 500; padding: 40px;">${window.currentLang === "en" ? "No recent notifications." : "No hay notificaciones recientes."}</p>`;
-            return;
-          }
-
-          notifList.innerHTML = data.map(n => {
-            let displayDate = n.date;
-            let displayTime = n.time;
-            
-            if (n.timestamp) {
-                let ts = n.timestamp;
-                if (typeof ts === 'number') {
-                    if (ts < 10000000000) ts *= 1000;
-                } else if (typeof ts === 'string' && !isNaN(Number(ts))) {
-                    ts = Number(ts);
-                    if (ts < 10000000000) ts *= 1000;
-                }
-                const d = new Date(ts);
-                if (!isNaN(d.getTime())) {
-                    const loc = window.currentLang === 'en' ? 'en-US' : 'es-ES';
-                    displayDate = d.toLocaleDateString(loc, { day: '2-digit', month: '2-digit', year: 'numeric' });
-                    displayTime = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
-                }
-            }
-
-            return `
-            <div class="notif-item" style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="flex: 1;">
-                <div class="notif-title">${n.title}</div>
-                <div class="notif-time">
-                  <span>${displayDate} a las ${displayTime}</span>
-                  <span class="notif-badge" style="background: rgba(99,102,241,0.1); color: var(--primary);">${n.category}</span>
-                </div>
-              </div>
-              <button class="btn-delete-notif" data-id="${n.id}" style="background: none; border: none; color: var(--text-muted); font-weight: 500; cursor: pointer; font-size: 1.2rem; padding: 4px 8px;">&times;</button>
-            </div>
-          `}).join('');
-
-          notifList.querySelectorAll('.btn-delete-notif').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-              const id = e.target.dataset.id;
-              await fetch('/api/system/notifications/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: id })
-              });
-              notifBtn.click();
-            });
-          });
-        } catch (e) {
-          notifList.innerHTML = `<p style="text-align: center; color: #f87171; padding: 40px;">${window.currentLang === "en" ? "Error loading history." : "Error al cargar el historial."}</p>`;
-        }
-      });
-
-      if (notifClose) {
-        notifClose.addEventListener('click', () => {
-          notifModal.style.display = 'none';
-        });
-      }
-
-      document.getElementById('clear-all-notifs').addEventListener('click', async () => {
-        if (confirm(window.currentLang === 'en' ? 'Clear all notification history?' : '¿Borrar todo el historial de notificaciones?')) {
-          await fetch('/api/system/notifications/clear', { method: 'POST' });
-          notifBtn.click();
-        }
-      });
-
-      window.addEventListener('click', (e) => {
-        if (e.target === notifModal) notifModal.style.display = 'none';
-      });
-    }
-
     document.getElementById('btn-export').addEventListener('click', () => {
       Storage.exportJSON();
-      UI.toast(window.currentLang === 'en' ? '📥 Calendar exported' : '📥 Calendario exportado');
+      UI.toast(window.currentLang === 'en' ? 'Calendar exported' : 'Calendario exportado');
     });
     document.getElementById('import-input').addEventListener('change', function () {
       if (!this.files[0]) return;
@@ -446,7 +322,7 @@ export const App = {
       reader.onload = e => {
         const added = Storage.importJSON(e.target.result);
         if (added === false) { UI.toast(window.currentLang === 'en' ? '❌ Invalid file' : '❌ Archivo no válido'); }
-        else { UI.toast(window.currentLang === 'en' ? `📤 ${added} event(s) imported` : `📤 ${added} evento(s) importados`); App.render(); }
+        else { UI.toast(window.currentLang === 'en' ? `${added} event(s) imported` : `${added} evento(s) importados`); App.render(); }
       };
       reader.readAsText(this.files[0]);
       this.value = '';

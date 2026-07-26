@@ -43,7 +43,7 @@ def _get_from_cache(key):
 def _set_in_cache(key, data):
     _imap_cache[key] = (time.time(), data)
 
-def get_folders(user_id, mode, force_refresh=False):
+def get_folders(user_id, mode, force_refresh=False, google_email=None):
     if mode == 'internal':
         unread_map = repository.get_internal_folders_with_unread(user_id)
         all_custom = repository.get_internal_all_folders(user_id)
@@ -63,17 +63,13 @@ def get_folders(user_id, mode, force_refresh=False):
                 })
         return result
 
-    cache_key = f"folders_{user_id}"
+    cache_key = f"folders_{user_id}_{google_email}"
     if not force_refresh:
         cached_data = _get_from_cache(cache_key)
         if cached_data is not None:
             return cached_data
 
-    gmail_user, gmail_pass = connector.get_google_credentials(user_id)
-    if not gmail_user or not gmail_pass:
-        raise Exception("Credenciales de correo no configuradas.")
-
-    mail = connector.connect_imap(user_id)
+    mail = connector.connect_imap(user_id, google_email)
     folder_map = connector.discover_folders(mail)
     folders_data = []
 
@@ -105,9 +101,9 @@ def get_folders(user_id, mode, force_refresh=False):
     return folders_data
 
 
-def get_emails(user_id, folder, mode, force_refresh=False):
+def get_emails(user_id, folder, mode, force_refresh=False, google_email=None, page=1, limit=50):
     if mode == 'internal':
-        rows = repository.get_internal_emails(user_id, folder)
+        rows, has_more = repository.get_internal_emails(user_id, folder, page, limit)
         threads = {}
         for r in rows:
             s = str(r['subject'] or '').lower()
@@ -130,31 +126,53 @@ def get_emails(user_id, folder, mode, force_refresh=False):
                 
         for t in threads.values():
             t["id"] = ",".join(t["id"])
-        return list(threads.values())
+        return {"emails": list(threads.values()), "has_more": has_more}
 
     if folder == 'scheduled':
-        rows = repository.get_internal_emails(user_id, 'scheduled')
-        return [{
+        rows, has_more = repository.get_internal_emails(user_id, 'scheduled', page, limit)
+        return {"emails": [{
             "id": str(r["id"]), "subject": r["subject"], "from": r["from_email"],
             "to": r["to_email"], "date": r["created_at"], "read": True, "starred": False, "thread_count": 1
-        } for r in rows]
+        } for r in rows], "has_more": has_more}
 
-    cache_key = f"emails_{user_id}_{folder}"
+    cache_key = f"emails_{user_id}_{google_email}_{folder}"
     if not force_refresh:
         cached_data = _get_from_cache(cache_key)
         if cached_data is not None:
             return cached_data
 
-    mail = connector.connect_imap(user_id)
+    mail = connector.connect_imap(user_id, google_email)
     status, folder_map = connector.select_folder(mail, folder)
     if status != 'OK':
         mail.logout()
         return []
 
-    status, messages = mail.search(None, "ALL")
+    try:
+        status, messages = mail.sort('REVERSE DATE', 'UTF-8', 'ALL')
+        is_sorted = status == 'OK'
+        if not is_sorted:
+            status, messages = mail.search(None, "ALL")
+    except:
+        status, messages = mail.search(None, "ALL")
+        is_sorted = False
+
     email_ids = messages[0].split() if messages[0] else []
-    latest_ids = email_ids[-50:]
-    latest_ids.reverse()
+    total = len(email_ids)
+    
+    if is_sorted:
+        start = (page - 1) * limit
+        end = page * limit
+        latest_ids = email_ids[start:end]
+        has_more = end < total
+    else:
+        start = max(0, total - page * limit)
+        end = total - (page - 1) * limit
+        if end <= 0:
+            latest_ids = []
+        else:
+            latest_ids = email_ids[start:end]
+            latest_ids.reverse()
+        has_more = start > 0
 
     parsed_msgs = {}
     if latest_ids:
@@ -210,11 +228,15 @@ def get_emails(user_id, folder, mode, force_refresh=False):
     emails_data = list(threads.values())
     mail.close()
     mail.logout()
-    _set_in_cache(cache_key, emails_data)
-    return emails_data
+    
+    result = {"emails": emails_data, "has_more": has_more, "total_raw": total}
+    if page == 1:
+        _set_in_cache(cache_key, result)
+        
+    return result
 
 
-def send_email(user_id, username, to_email, subject, body, files, mode, is_scheduled, scheduled_at):
+def send_email(user_id, username, to_email, subject, body, files, mode, is_scheduled, scheduled_at, google_email=None):
     if is_scheduled and scheduled_at:
         try:
             dt = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
@@ -240,7 +262,7 @@ def send_email(user_id, username, to_email, subject, body, files, mode, is_sched
             repository.save_sent_and_inbox(user_id, subject, from_email, to_email, body, recipient_id, files)
         return
 
-    gmail_user, gmail_pass = connector.get_google_credentials(user_id)
+    gmail_user, gmail_pass = connector.get_google_credentials(user_id, google_email)
     if not gmail_user or not gmail_pass:
         raise Exception("Credenciales no configuradas para Modo Google.")
 
@@ -251,7 +273,7 @@ def send_email(user_id, username, to_email, subject, body, files, mode, is_sched
     connector.send_via_smtp(gmail_user, gmail_pass, to_email, subject, body, files)
 
 
-def read_email(user_id, folder, msg_id, mode):
+def read_email(user_id, folder, msg_id, mode, google_email=None):
     if mode == 'internal' or folder == 'scheduled':
         row = repository.get_internal_email_by_id(user_id, msg_id)
         if not row:
@@ -276,7 +298,7 @@ def read_email(user_id, folder, msg_id, mode):
             "security": "Encriptación local (AES)",
         }
 
-    mail = connector.connect_imap(user_id)
+    mail = connector.connect_imap(user_id, google_email)
     status, folder_map = connector.select_folder(mail, folder, readonly=False)
     if status != 'OK':
         mail.logout()
@@ -427,12 +449,12 @@ def clear_user_cache(user_id):
         del _imap_cache[k]
 
 
-def toggle_star(user_id, folder, msg_id, star, mode):
+def toggle_star(user_id, folder, msg_id, star, mode, google_email=None):
     if mode == 'internal' or folder == 'scheduled':
         repository.toggle_star_internal(msg_id, user_id, star)
         return
 
-    mail = connector.connect_imap(user_id)
+    mail = connector.connect_imap(user_id, google_email)
     status, folder_map = connector.select_folder(mail, folder, readonly=False)
     if status != 'OK':
         mail.logout()
@@ -448,7 +470,7 @@ def toggle_star(user_id, folder, msg_id, star, mode):
     clear_user_cache(user_id)
 
 
-def bulk_action(user_id, folder, action, msg_ids, mode):
+def bulk_action(user_id, folder, action, msg_ids, mode, google_email=None):
     actual_ids = []
     for m in msg_ids:
         if isinstance(m, str) and ',' in m:
@@ -460,7 +482,7 @@ def bulk_action(user_id, folder, action, msg_ids, mode):
         repository.bulk_action_internal(action, actual_ids, user_id)
         return
 
-    mail = connector.connect_imap(user_id)
+    mail = connector.connect_imap(user_id, google_email)
     status, folder_map = connector.select_folder(mail, folder, readonly=False)
     if status != 'OK':
         mail.logout()
@@ -502,12 +524,12 @@ def bulk_action(user_id, folder, action, msg_ids, mode):
     mail.logout()
     clear_user_cache(user_id)
 
-def empty_trash(user_id, mode):
+def empty_trash(user_id, mode, google_email=None):
     if mode == 'internal':
         repository.empty_trash_internal(user_id)
         return
 
-    mail = connector.connect_imap(user_id)
+    mail = connector.connect_imap(user_id, google_email)
     status, folder_map = connector.select_folder(mail, 'trash', readonly=False)
     if status != 'OK':
         mail.logout()
@@ -531,20 +553,38 @@ def verify_credentials(email_addr, app_password):
 
 def save_credentials(user_id, email_addr, app_password):
     with get_db() as db:
-        db.execute(
-            "UPDATE users SET gmail_address = ?, gmail_app_password = ? WHERE user_id = ?",
-            (email_addr, app_password, user_id)
-        )
+        # Check if exists
+        row = db.execute("SELECT id FROM user_google_accounts WHERE user_id = ? AND email = ?", (user_id, email_addr)).fetchone()
+        if row:
+            db.execute("UPDATE user_google_accounts SET app_password = ? WHERE id = ?", (app_password, row['id']))
+        else:
+            db.execute("INSERT INTO user_google_accounts (user_id, email, app_password) VALUES (?, ?, ?)", (user_id, email_addr, app_password))
         db.commit()
 
+def remove_credentials(user_id, email_addr):
+    with get_db() as db:
+        db.execute("DELETE FROM user_google_accounts WHERE user_id = ? AND email = ?", (user_id, email_addr))
+        db.commit()
 
 def get_config(user_id, username):
-    gmail_user, _ = connector.get_google_credentials(user_id)
+    accounts = []
+    with get_db() as db:
+        rows = db.execute("SELECT email FROM user_google_accounts WHERE user_id = ?", (user_id,)).fetchall()
+        for row in rows:
+            accounts.append({"email": row["email"]})
+            
+        if not accounts:
+            # Fallback legacy
+            row = db.execute("SELECT gmail_address FROM users WHERE user_id = ?", (user_id,)).fetchone()
+            if row and row['gmail_address']:
+                accounts.append({"email": row["gmail_address"]})
+
     internal_email = f"{username}@nullvoid"
     return {
         "ok": True,
-        "configured": bool(gmail_user),
-        "email": gmail_user,
+        "configured": len(accounts) > 0,
+        "accounts": accounts,
+        "email": accounts[0]["email"] if accounts else None,  # For backward compatibility
         "internal_email": internal_email,
         "username": username,
     }

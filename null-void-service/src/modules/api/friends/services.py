@@ -26,10 +26,22 @@ def get_sent_requests(user_id):
 def send_friend_request(requester_id, addressee_id):
     if requester_id == addressee_id:
         return None, "No puedes enviarte solicitud a ti mismo"
-    if repository.has_pending_request(requester_id, addressee_id):
-        return None, "Ya enviaste una solicitud a este usuario"
     if repository.are_friends(requester_id, addressee_id):
         return None, "Ya sois amigos"
+        
+    # Check if the other user already sent a request to this user
+    pending_id = repository.get_pending_request_id(addressee_id, requester_id)
+    if pending_id:
+        # Auto-accept the reciprocal request
+        ok = repository.respond_request(pending_id, requester_id, 'accepted')
+        if ok:
+            return {"ok": True, "auto_accepted": True}, None
+        else:
+            return None, "Error al aceptar automáticamente la solicitud"
+
+    if repository.has_pending_request(requester_id, addressee_id):
+        return None, "Ya enviaste una solicitud a este usuario"
+        
     ok = repository.send_request(requester_id, addressee_id)
     if ok:
         return {"ok": True}, None

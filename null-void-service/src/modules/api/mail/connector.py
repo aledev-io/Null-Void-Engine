@@ -67,21 +67,38 @@ def decode_mime_words(s):
     return "".join(result)
 
 
-def get_google_credentials(user_id):
+def get_google_credentials(user_id, email=None):
     with get_db() as db:
+        if email:
+            row = db.execute(
+                "SELECT email, app_password FROM user_google_accounts WHERE user_id = ? AND email = ?",
+                (user_id, email)
+            ).fetchone()
+        else:
+            row = db.execute(
+                "SELECT email, app_password FROM user_google_accounts WHERE user_id = ? LIMIT 1",
+                (user_id,)
+            ).fetchone()
+            
+        if row and row['email'] and row['app_password']:
+            return row['email'], row['app_password']
+            
+        # Fallback to users table just in case migration hasn't run
         row = db.execute(
             "SELECT gmail_address, gmail_app_password FROM users WHERE user_id = ?",
             (user_id,)
         ).fetchone()
         if row and row['gmail_address'] and row['gmail_app_password']:
-            return row['gmail_address'], row['gmail_app_password']
+            if not email or row['gmail_address'] == email:
+                return row['gmail_address'], row['gmail_app_password']
+                
     return None, None
 
 
-def connect_imap(user_id):
-    gmail_user, gmail_pass = get_google_credentials(user_id)
+def connect_imap(user_id, email=None):
+    gmail_user, gmail_pass = get_google_credentials(user_id, email)
     if not gmail_user or not gmail_pass:
-        raise Exception("Credenciales de Google no configuradas para este usuario.")
+        raise Exception("Credenciales de Google no configuradas para este usuario o cuenta.")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
     mail.login(gmail_user, gmail_pass)
     return mail

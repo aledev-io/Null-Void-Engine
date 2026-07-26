@@ -9,7 +9,7 @@
 
 html,
 body {
-    height: 100%;
+    min-height: 100dvh;
     background: var(--bg);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     overflow: hidden;
@@ -19,7 +19,7 @@ body {
 /* ─── ROOT LAYOUT ─────────────────────────────────────────── */
 #root {
     display: flex;
-    height: 100vh;
+    height: 100dvh;
     width: 100vw;
 }
 
@@ -475,7 +475,7 @@ html[data-theme="light"] .btn-theme-float:hover {
         background-size: cover;
         background-position: center;
         height: auto;
-        min-height: 100svh;
+        min-height: 100dvh;
         justify-content: center;
         align-items: center;
     }

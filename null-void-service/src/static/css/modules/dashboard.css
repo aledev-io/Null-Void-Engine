@@ -8,7 +8,7 @@
 
         html,
         body {
-            height: 100%;
+            height: 100dvh;
             background: var(--bg);
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             color: var(--text-main);
@@ -28,7 +28,7 @@
         #shell {
             position: relative;
             z-index: 1;
-            min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
         }
@@ -266,6 +266,14 @@
             letter-spacing: 0.02em;
             position: relative;
             cursor: pointer;
+        }
+
+        .tb-user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            width: 100%;
         }
 
         .tb-avatar {
@@ -3111,6 +3119,7 @@
             .dashboard-grid {
                 grid-template-columns: 1fr;
             }
+
             .dash-card.card-span-2 {
                 grid-column: span 1;
             }
@@ -3156,14 +3165,16 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            height: 200px; /* Fijo para 3 items aprox en móvil */
+            height: 200px;
+            /* Fijo para 3 items aprox en móvil */
             overflow-y: auto;
             padding-right: 8px;
         }
 
         @media (min-width: 901px) {
             .dash-list {
-                height: 260px; /* Fijo para 4 items en escritorio */
+                height: 260px;
+                /* Fijo para 4 items en escritorio */
             }
         }
 
@@ -3302,11 +3313,13 @@
         }
 
         .cal-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            grid-template-rows: repeat(7, 34px);
-            gap: 4px;
-            text-align: center;
+            display: grid !important;
+            grid-template-columns: repeat(7, 1fr) !important;
+            grid-auto-rows: 34px !important;
+            gap: 4px !important;
+            text-align: center !important;
+            width: 100% !important;
+            min-width: 200px;
         }
 
         .cal-day {
@@ -3442,4 +3455,16 @@
         .act-time {
             font-size: 0.7rem;
             color: var(--text-dim);
+        }
+
+        @media screen and (min-width: 1536px) {
+            #shell { zoom: 0.9; width: 111.11vw; height: 111.11dvh; }
+        }
+
+        @media screen and (min-width: 1920px) {
+            #shell { zoom: 0.8; width: 125vw; height: 125dvh; }
+        }
+
+        @media screen and (min-width: 1024px) and (-webkit-min-device-pixel-ratio: 1.25) {
+            #shell { zoom: 0.85; width: 117.64vw; height: 117.64dvh; }
         }

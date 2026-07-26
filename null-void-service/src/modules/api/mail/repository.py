@@ -27,24 +27,30 @@ def get_internal_all_folders(user_id):
     return [r['folder'] for r in rows]
 
 
-def get_internal_emails(user_id, folder):
+def get_internal_emails(user_id, folder, page=1, limit=50):
+    offset = (page - 1) * limit
     with get_db() as db:
         if folder == 'all':
+            total = db.execute("SELECT COUNT(*) as c FROM internal_mail WHERE user_id = ?", (user_id,)).fetchone()['c']
             rows = db.execute(
-                "SELECT * FROM internal_mail WHERE user_id = ? ORDER BY created_at DESC",
-                (user_id,)
+                "SELECT * FROM internal_mail WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset)
             ).fetchall()
         elif folder == 'starred':
+            total = db.execute("SELECT COUNT(*) as c FROM internal_mail WHERE user_id = ? AND is_starred = 1", (user_id,)).fetchone()['c']
             rows = db.execute(
-                "SELECT * FROM internal_mail WHERE user_id = ? AND is_starred = 1 ORDER BY created_at DESC",
-                (user_id,)
+                "SELECT * FROM internal_mail WHERE user_id = ? AND is_starred = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset)
             ).fetchall()
         else:
+            total = db.execute("SELECT COUNT(*) as c FROM internal_mail WHERE user_id = ? AND folder = ?", (user_id, folder)).fetchone()['c']
             rows = db.execute(
-                "SELECT * FROM internal_mail WHERE user_id = ? AND folder = ? ORDER BY created_at DESC",
-                (user_id, folder)
+                "SELECT * FROM internal_mail WHERE user_id = ? AND folder = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (user_id, folder, limit, offset)
             ).fetchall()
-    return [dict(r) for r in rows]
+            
+    has_more = (offset + limit) < total
+    return [dict(r) for r in rows], has_more
 
 
 def get_internal_email_by_id(user_id, msg_id):

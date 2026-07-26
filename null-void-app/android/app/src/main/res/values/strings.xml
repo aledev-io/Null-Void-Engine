@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NullVoid</string>
+    <string name="title_activity_main">NullVoid</string>
+    <string name="package_name">com.nullvoid.app</string>
+    <string name="custom_url_scheme">com.nullvoid.app</string>
+    <string name="title_activity_settings">Configuración del Servidor</string>
+
+    <!-- Menu Nativo -->
+    <string name="menu_edit">Editar Conexión</string>
+    <string name="menu_new">Nueva Conexión</string>
+    <string name="menu_close">Cerrar Conexión</string>
+    <string name="menu_exit">Salir</string>
+    <string name="menu_refresh">Recargar</string>
+</resources>

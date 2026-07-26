@@ -89,6 +89,9 @@
                             </span>
                         </div>
                     </div>
+                    
+
+
                     <div id="error-msg" class="msg-area"></div>
                     <button id="btn-submit" class="form-btn">
                         <span class="btn-text">Iniciar sesión</span>
@@ -148,6 +151,14 @@
     <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/auth/main.js') }}"></script>
+
+    <!-- App Shell Integration -->
+    <script>
+        window.NV_SHELL_CONFIG = {
+            launcherUrl: 'file:///android_asset/www/index.html'
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/nv-app-shell.js') }}"></script>
 </body>
 
 </html>

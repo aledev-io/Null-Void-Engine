@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f8f6">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1d1c1a">
+<title>Null-Void Engine</title>
+<style>
+    :root {
+        --bg: #1d1c1a;
+        --surface: #262522;
+        --surface-2: #2d2c28;
+        --primary: #d9d7d2;
+        --accent: #c97552;
+        --accent-dim: #c9755233;
+        --text-primary: #f5f2ed;
+        --text-secondary: #a8a6a1;
+        --border: #3d3c38;
+        --error: #e57373;
+        --success: #7fae8e;
+        --safe-top: env(safe-area-inset-top);
+        --safe-bottom: env(safe-area-inset-bottom);
+    }
+
+    @media (prefers-color-scheme: light) {
+        body:not(.dark-forced) {
+            --bg: #f9f8f6;
+            --surface: #ffffff;
+            --surface-2: #f2f1ee;
+            --primary: #1d1c1a;
+            --accent: #c97552;
+            --accent-dim: #c9755222;
+            --text-primary: #1d1c1a;
+            --text-secondary: #6e6d6a;
+            --border: #e2e1de;
+            --error: #d32f2f;
+            --success: #4a8062;
+        }
+    }
+
+    * {
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    input, textarea { -webkit-user-select: text; user-select: text; }
+
+    html, body {
+        margin: 0; padding: 0;
+        background: var(--bg); color: var(--text-primary);
+        height: 100%; width: 100%;
+        overscroll-behavior: none;
+        letter-spacing: -0.01em;
+    }
+
+    body {
+        display: flex; flex-direction: column;
+        min-height: 100vh;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .view {
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%; height: 100%;
+        position: absolute; inset: 0;
+        background: var(--bg);
+        overflow: hidden;
+    }
+
+    .view.active { display: flex; }
+    .view.enter-fade { animation: enterFade 0.4s ease-out both; }
+    @keyframes enterFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .view-body {
+        flex: 1;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        padding: 24px;
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        overflow-y: auto;
+    }
+
+    /* HEADER (centrado real) */
+    .view-header {
+        display: flex; align-items: center; justify-content: center;
+        padding: calc(14px + var(--safe-top)) 24px 14px 24px;
+        width: 100%; min-height: 24px;
+        text-align: center; position: relative;
+    }
+    .view-header h2 {
+        margin: 0 auto; font-size: 1.15rem; font-weight: 500;
+        text-align: center; width: 100%;
+    }
+    .back-btn {
+        position: absolute; left: 16px;
+        background: transparent; border: none; color: var(--text-primary);
+        display: flex; align-items: center; justify-content: center;
+        width: 44px; height: 44px; border-radius: 12px; cursor: pointer;
+    }
+    .back-btn:active { background: var(--surface); }
+
+    #view-splash h1 {
+        font-size: 2.2rem; font-weight: 300; margin-bottom: 64px;
+        color: var(--text-primary); text-align: center;
+    }
+
+    .conn-list {
+        width: 100%; max-width: 480px;
+        display: flex; flex-direction: column; gap: 12px;
+        margin: 0 auto;
+    }
+
+    .conn-card {
+        background: var(--surface); padding: 18px 24px 18px 56px;
+        border-radius: 16px; border: 1px solid var(--border);
+        display: flex; justify-content: space-between; align-items: center;
+        cursor: pointer; transition: all 0.2s; width: 100%;
+    }
+    .conn-card:active { background: var(--surface-2); transform: scale(0.985); }
+
+    .conn-info { display: flex; align-items: center; gap: 18px; min-width: 0; flex: 1; margin-right: 16px; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--text-secondary); opacity: 0.4; }
+    .status-dot.ok { background: var(--success); opacity: 1; box-shadow: 0 0 8px var(--success); }
+    .status-dot.fail { background: var(--error); opacity: 1; }
+    .status-dot.checking { background: var(--accent); opacity: 0.9; animation: pulseDot 1s ease-in-out infinite; }
+    @keyframes pulseDot { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+    .conn-text { min-width: 0; flex: 1; }
+    .conn-text h3 { margin: 0; font-size: 1.05rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conn-text p { margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary); font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .conn-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .icon-btn-small {
+        background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
+        width: 42px; height: 42px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .icon-btn-small:active { background: var(--bg); color: var(--error); }
+    .icon-btn-small.edit:active { color: var(--accent); }
+
+    .empty-state { text-align: center; padding: 60px 20px; width: 100%; }
+    .empty-state svg { width: 56px; height: 56px; color: var(--text-secondary); opacity: 0.3; margin-bottom: 24px; }
+    .empty-state p { margin: 0; font-size: 1rem; color: var(--text-secondary); }
+
+    .fab {
+        position: fixed; right: 24px; bottom: calc(32px + var(--safe-bottom));
+        width: 64px; height: 64px; border-radius: 50%;
+        background: var(--text-primary); color: var(--bg);
+        border: none; display: flex; align-items: center; justify-content: center;
+        cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 100;
+    }
+    .fab:active { transform: scale(0.92); }
+
+    .card {
+        background: var(--surface); padding: 40px 32px; border-radius: 20px;
+        width: 100%; max-width: 440px; border: 1px solid var(--border);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.25); margin: 0 auto;
+    }
+
+    .form-group { margin-bottom: 24px; }
+    label { display: block; margin-bottom: 10px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
+
+    input {
+        width: 100%; padding: 16px; background: var(--bg); color: var(--text-primary);
+        border: 1px solid var(--border); border-radius: 12px; font-size: 1rem; outline: none; transition: all 0.2s;
+    }
+    input:focus { border-color: var(--accent); background: var(--surface-2); }
+    input.invalid { border-color: var(--error); border-width: 1.5px; }
+    .field-error { color: var(--error); font-size: 0.8rem; margin-top: 8px; display: none; }
+    .field-error.show { display: block; }
+
+    .segmented { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 4px; gap: 4px; }
+    .segmented button {
+        flex: 1; padding: 12px; border: none; background: transparent;
+        color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; border-radius: 10px; cursor: pointer; transition: all 0.2s;
+    }
+    .segmented button.selected { background: var(--surface); color: var(--text-primary); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+    .row-gap { display: flex; gap: 16px; margin-top: 12px; }
+
+    button.main-btn {
+        width: 100%; padding: 16px 24px; background: transparent; color: var(--text-primary);
+        border: 1px solid var(--text-primary); border-radius: 12px; font-size: 1rem; font-weight: 600;
+        cursor: pointer; transition: all 0.2s ease; min-height: 52px;
+    }
+    button.main-btn:active { background: var(--text-primary); color: var(--bg); transform: scale(0.98); }
+    button.main-btn.accent { border-color: var(--accent); color: var(--accent); }
+    button.main-btn.accent:active { background: var(--accent); color: var(--bg); }
+    button.main-btn:disabled { opacity: 0.25; pointer-events: none; }
+
+    button.secondary-btn {
+        background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+        padding: 12px 24px; border-radius: 12px; font-size: 0.9rem; font-weight: 500; cursor: pointer; min-height: 52px;
+    }
+    button.secondary-btn:active { border-color: var(--text-primary); color: var(--text-primary); }
+    button.secondary-btn:disabled { opacity: 0.25; pointer-events: none; }
+
+    .test-row { display: flex; align-items: center; gap: 12px; margin: -8px 0 24px 0; font-size: 0.85rem; color: var(--text-secondary); min-height: 20px; }
+    .test-row .status-dot { width: 7px; height: 7px; }
+
+    #toast-stack {
+        position: fixed; left: 0; right: 0; bottom: calc(24px + var(--safe-bottom));
+        display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; z-index: 1200; padding: 0 24px;
+    }
+    .toast {
+        background: var(--surface); border: 1px solid var(--border); color: var(--text-primary); padding: 14px 20px; border-radius: 14px;
+        font-size: 0.9rem; display: flex; align-items: center; gap: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        animation: toastIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; pointer-events: auto; max-width: 440px; width: 100%;
+    }
+    .toast.error { border-color: var(--error); }
+    .toast button { background: transparent; border: none; color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    #loading-overlay {
+        position: fixed; inset: 0; background: var(--bg); display: flex; justify-content: center; align-items: center; z-index: 1000;
+        transition: opacity 0.4s ease;
+    }
+    .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top: 3px solid var(--text-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+    <div class="spinner"></div>
+</div>
+
+<div id="toast-stack"></div>
+
+<div id="view-splash" class="view active enter-fade">
+    <div class="view-body">
+        <h1>Null-Void Engine</h1>
+        <button class="main-btn" style="width: auto; min-width: 180px;" onclick="onStartClick()" data-i18n="btn-start">Iniciar</button>
+    </div>
+</div>
+
+<div id="view-list" class="view">
+    <div class="view-header">
+        <h2 data-i18n="list-title">Tus Instancias</h2>
+    </div>
+    <div class="view-body" style="justify-content: flex-start; padding-top: 16px;">
+        <div id="conn-container" class="conn-list"></div>
+    </div>
+    <button class="fab" onclick="showForm()" aria-label="Nueva conexión">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+</div>
+
+<div id="view-form" class="view">
+    <div class="view-header">
+        <button class="back-btn" onclick="showList()" aria-label="Volver">
+            <svg width="22" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <h2 data-i18n="form-title" id="form-title-text">Añadir Instancia</h2>
+    </div>
+    <div class="view-body">
+        <div class="card">
+            <div class="form-group">
+                <label for="conn-name" data-i18n="label-name">Nombre de la conexión</label>
+                <input type="text" id="conn-name" maxlength="40" spellcheck="false" oninput="validateAll()">
+                <div class="field-error" id="name-error"></div>
+            </div>
+            <div class="form-group">
+                <label data-i18n="label-protocol">Protocolo de red</label>
+                <div class="segmented" role="tablist">
+                    <button type="button" class="selected" data-protocol="http://" onclick="selectProtocol('http://')">HTTP</button>
+                    <button type="button" data-protocol="https://" onclick="selectProtocol('https://')">HTTPS</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="address" data-i18n="label-address">Dirección IP o Dominio</label>
+                <input type="text" id="address" placeholder="100.x.x.x" autocapitalize="none" spellcheck="false" oninput="validateAll()">
+                <div class="field-error" id="address-error"></div>
+            </div>
+            <div class="form-group">
+                <label for="port" data-i18n="label-port">Puerto de acceso</label>
+                <input type="number" id="port" placeholder="5000" min="1" max="65535" inputmode="numeric" oninput="validateAll()">
+                <div class="field-error" id="port-error"></div>
+            </div>
+
+            <div class="test-row" id="test-row" style="visibility: hidden;">
+                <span class="status-dot" id="test-dot"></span>
+                <span id="test-label"></span>
+            </div>
+
+            <div class="row-gap">
+                <button id="btn-test-conn" class="secondary-btn" style="flex: 1;" onclick="testConnection()" data-i18n="btn-test">Probar</button>
+                <button id="btn-save-conn" class="main-btn accent" style="flex: 2;" onclick="saveNewConnection()" data-i18n="btn-save">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const i18n = {
+        es: {
+            "btn-start": "Iniciar", "list-title": "Tus Instancias", "form-title": "Añadir Instancia", "form-title-edit": "Editar Instancia",
+            "label-name": "Nombre de la conexión", "label-protocol": "Protocolo de red", "label-address": "Dirección IP o Dominio", "label-port": "Puerto de acceso",
+            "placeholder-name": "Servidor Principal", "btn-save": "Guardar", "btn-save-edit": "Guardar Cambios", "btn-test": "Probar",
+            "err-empty": "Campo requerido", "err-address": "Introduce una dirección válida", "err-port": "Puerto entre 1 y 65535", "err-duplicate": "Ya registrada",
+            "test-checking": "Comprobando...", "test-ok": "Instancia accesible", "test-fail": "No se pudo alcanzar", "test-timeout": "Timeout (4s)", "test-dns": "Error de red",
+            "empty-title": "No hay instancias", "toast-deleted": "Eliminada", "toast-undo": "Deshacer"
+        },
+        en: {
+            "btn-start": "Enter", "list-title": "Your Instances", "form-title": "Add Instance", "form-title-edit": "Edit Instance",
+            "label-name": "Connection name", "label-protocol": "Network protocol", "label-address": "IP or Domain", "label-port": "Access port",
+            "placeholder-name": "Main Server", "btn-save": "Save", "btn-save-edit": "Save Changes", "btn-test": "Test",
+            "err-empty": "Required field", "err-address": "Enter a valid address", "err-port": "Port between 1 and 65535", "err-duplicate": "Already registered",
+            "test-checking": "Checking...", "test-ok": "Instance reachable", "test-fail": "Could not reach", "test-timeout": "Timeout (4s)", "test-dns": "Network error",
+            "empty-title": "No instances", "toast-deleted": "Deleted", "toast-undo": "Undo"
+        }
+    };
+
+    let currentLang = navigator.language.startsWith('es') ? 'es' : 'en';
+    let connections = loadSafeConnections();
+    let selectedProtocol = 'http://';
+    let editingIndex = null;
+    let pingInterval = null;
+
+    function t(key) { return i18n[currentLang][key] || key; }
+
+    function applyI18n() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            el.innerText = (key === 'btn-save' && editingIndex !== null) ? t('btn-save-edit') : t(key);
+        });
+        document.getElementById('conn-name').placeholder = t('placeholder-name');
+    }
+
+    function loadSafeConnections() {
+        try {
+            const raw = JSON.parse(localStorage.getItem('nv_connections') || '[]');
+            return raw.filter(item => item && typeof item.url === 'string');
+        } catch { return []; }
+    }
+
+    function validateAll() {
+        const nameEl = document.getElementById('conn-name'), addrEl = document.getElementById('address'), portEl = document.getElementById('port');
+        const btnSave = document.getElementById('btn-save-conn'), btnTest = document.getElementById('btn-test-conn');
+        const name = nameEl.value.trim(), address = (addrEl.value || "").trim(), port = portEl.value.trim();
+        let valid = true;
+
+        [nameEl, addrEl, portEl].forEach(el => {
+            el.classList.remove('invalid');
+            const err = document.getElementById(el.id + '-error') || document.getElementById('name-error');
+            if (err) err.classList.remove('show');
+        });
+
+        if (!name) { markInvalid('conn-name', 'name-error', t('err-empty')); valid = false; }
+        if (!address) { markInvalid('address', 'address-error', t('err-empty')); valid = false; }
+        else if (!isValidHost(address)) { markInvalid('address', 'address-error', t('err-address')); valid = false; }
+
+        if (!port) { markInvalid('port', 'port-error', t('err-empty')); valid = false; }
+        else if (!isValidPort(port)) { markInvalid('port', 'port-error', t('err-port')); valid = false; }
+
+        if (valid) {
+            const fullUrl = buildSafeUrl(selectedProtocol, address, port).replace(/\/$/, '');
+            if (connections.some((c, i) => i !== editingIndex && c.url.replace(/\/$/, '') === fullUrl)) {
+                markInvalid('address', 'address-error', t('err-duplicate')); valid = false;
+            }
+        }
+        btnSave.disabled = btnTest.disabled = !valid;
+        return valid;
+    }
+
+    function markInvalid(id, errId, msg) {
+        document.getElementById(id).classList.add('invalid');
+        const el = document.getElementById(errId); if (el && msg) { el.innerText = msg; el.classList.add('show'); }
+    }
+
+    function isValidHost(h) { return /^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))*$/.test(h) || /^(\d{1,3}\.){3}\d{1,3}$/.test(h); }
+    function isValidPort(p) { const n = Number(p); return n >= 1 && n <= 65535; }
+    function buildSafeUrl(proto, host, port) { return `${proto}${host.replace(/^https?:\/\//i, '')}:${port}`; }
+    function buildUrl() { return buildSafeUrl(selectedProtocol, document.getElementById('address').value, document.getElementById('port').value.trim()); }
+
+    function showView(viewId, direction) {
+        if (pingInterval) clearInterval(pingInterval);
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active', 'enter-fade'));
+        document.getElementById(viewId).classList.add('active', 'enter-fade');
+        if (viewId === 'view-list') { pingInterval = setInterval(refreshPings, 3000); refreshPings(); }
+    }
+
+    function refreshPings() {
+        if (document.getElementById('view-list').classList.contains('active')) {
+            connections.forEach((conn, index) => pingServer(conn.url, `dot-${index}`));
+        }
+    }
+
+    function pingServer(url, dotId) {
+        const dot = document.getElementById(dotId); if (!dot) return;
+        const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 3000);
+        fetch(url, { mode: 'no-cors', signal: controller.signal }).then(() => { clearTimeout(timeout); dot.className = 'status-dot ok'; }).catch(() => { clearTimeout(timeout); dot.className = 'status-dot fail'; });
+    }
+
+    function renderList() {
+        const container = document.getElementById('conn-container'); container.innerHTML = '';
+        if (connections.length === 0) {
+            container.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="12" r="7"/><circle cx="15" cy="12" r="7"/></svg><p>${t('empty-title')}</p></div>`;
+            return;
+        }
+        connections.forEach((conn, index) => {
+            const card = document.createElement('div'); card.className = 'conn-card';
+            card.innerHTML = `<div class="conn-info" onclick="connectTo(${index})"><span class="status-dot" id="dot-${index}"></span><div class="conn-text"><h3>${escapeHtml(conn.name || 'Servidor')}</h3><p>${escapeHtml(conn.url.replace(/https?:\/\//i,''))}</p></div></div><div class="conn-actions"><button class="icon-btn-small edit" onclick="event.stopPropagation(); editConn(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="icon-btn-small" onclick="event.stopPropagation(); deleteConn(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button></div>`;
+            container.appendChild(card);
+            pingServer(conn.url, `dot-${index}`);
+        });
+    }
+
+    function onStartClick() { if (connections.length > 0) showList(); else showForm(); }
+    function showList() { renderList(); showView('view-list'); }
+    function showForm() { editingIndex = null; applyI18n(); document.getElementById('conn-name').value = ''; document.getElementById('address').value = ''; document.getElementById('port').value = ''; selectProtocol('http://'); validateAll(); showView('view-form'); }
+
+    function editConn(index) {
+        editingIndex = index; const conn = connections[index]; applyI18n();
+        const match = conn.url.match(/^(https?:\/\/)([^:]+):(\d+)$/i);
+        document.getElementById('conn-name').value = conn.name || '';
+        if (match) { selectProtocol(match[1].toLowerCase()); document.getElementById('address').value = match[2]; document.getElementById('port').value = match[3]; }
+        validateAll(); showView('view-form');
+    }
+
+    function selectProtocol(p) { selectedProtocol = p; document.querySelectorAll('.segmented button').forEach(b => b.classList.toggle('selected', b.dataset.protocol === p)); validateAll(); }
+    function testConnection() {
+        if (!validateAll()) return;
+        const row = document.getElementById('test-row'), dot = document.getElementById('test-dot'), label = document.getElementById('test-label');
+        row.style.visibility = 'visible'; dot.className = 'status-dot checking'; label.innerText = t('test-checking');
+        const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 4000);
+        fetch(buildUrl(), { mode: 'no-cors', signal: controller.signal }).then(() => { clearTimeout(timeout); dot.className = 'status-dot ok'; label.innerText = t('test-ok'); }).catch(e => { clearTimeout(timeout); dot.className = 'status-dot fail'; label.innerText = e.name==='AbortError'?t('test-timeout'):t('test-dns'); });
+    }
+
+    function saveNewConnection() {
+        if (!validateAll()) return;
+        const name = document.getElementById('conn-name').value.trim(), url = buildUrl();
+        if (editingIndex !== null) connections[editingIndex] = { name, url }; else connections.push({ name, url });
+        localStorage.setItem('nv_connections', JSON.stringify(connections)); showList();
+    }
+
+    function connectTo(i) {
+        // Al conectar, pedimos el token para asegurarnos de tenerlo actualizado
+        try { if(window.Android && window.Android.getFcmToken) window.Android.getFcmToken(); } catch(e) {}
+
+        const urlObj = new URL(connections[i].url);
+        urlObj.searchParams.set('nv_name', connections[i].name || 'Null-Void');
+        window.location.href = urlObj.toString();
+    }
+
+    // Función global llamada desde Android
+    window.onFcmTokenReceived = function(token) {
+        console.log("FCM Token recibido:", token);
+        localStorage.setItem('nv_fcm_token', token);
+        // Aquí podrías enviar el token al servidor si hay una sesión activa
+        // fetch('/api/register-device', { method: 'POST', body: JSON.stringify({token}) });
+    };
+
+    function deleteConn(i) {
+        const r = connections[i]; connections.splice(i, 1); localStorage.setItem('nv_connections', JSON.stringify(connections)); renderList();
+        showToast(t('toast-deleted'), { actionLabel: t('toast-undo'), onAction: () => { connections.splice(i, 0, r); localStorage.setItem('nv_connections', JSON.stringify(connections)); renderList(); } });
+    }
+
+    function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
+    function escapeHtml(s) { const d = document.createElement('div'); d.innerText = String(s); return d.innerHTML; }
+
+    window.onload = () => {
+        applyI18n();
+        const p = new URLSearchParams(window.location.search), a = p.get('action'), e = p.get('error');
+        if (e) { showList(); showToast(decodeURIComponent(e), { error: true, duration: 4500 }); }
+        else if (a === 'edit') { const u = p.get('url'), idx = connections.findIndex(c => c.url.startsWith(u)); if (idx >= 0) editConn(idx); else showForm(); }
+        else if (a === 'new') showForm();
+        else if (a === 'list') showList();
+        setTimeout(() => { document.getElementById('loading-overlay').style.opacity = '0'; setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400); }, 500);
+    };
+</script>
+</body></html>

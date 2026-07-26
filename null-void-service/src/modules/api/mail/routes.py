@@ -24,8 +24,9 @@ def get_folders():
 
     mode = request.args.get('mode', 'google')
     force_refresh = request.args.get('refresh') == 'true'
+    google_email = request.args.get('google_email')
     try:
-        folders = services.get_folders(user_id, mode, force_refresh)
+        folders = services.get_folders(user_id, mode, force_refresh, google_email=google_email)
         return jsonify(folders=folders)
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -40,10 +41,12 @@ def get_folder_emails():
     folder = request.args.get('folder', 'inbox')
     mode = request.args.get('mode', 'google')
     force_refresh = request.args.get('refresh') == 'true'
+    google_email = request.args.get('google_email')
 
+    page = int(request.args.get('page', 1))
     try:
-        emails = services.get_emails(user_id, folder, mode, force_refresh)
-        resp = {"emails": emails, "folder": folder, "folder_name": FOLDER_NAMES.get(folder, folder)}
+        data = services.get_emails(user_id, folder, mode, force_refresh, google_email=google_email, page=page)
+        resp = {"emails": data["emails"], "has_more": data.get("has_more", False), "folder": folder, "folder_name": FOLDER_NAMES.get(folder, folder)}
         return jsonify(resp)
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -58,12 +61,13 @@ def read_email_in_folder():
     folder = request.args.get('folder')
     msg_id = request.args.get('id')
     mode = request.args.get('mode', 'google')
+    google_email = request.args.get('google_email')
 
     if not folder or not msg_id:
         return jsonify(error="Faltan parámetros."), 400
 
     try:
-        result = services.read_email(user_id, folder, msg_id, mode)
+        result = services.read_email(user_id, folder, msg_id, mode, google_email=google_email)
         if result is None:
             return jsonify(error="Correo no encontrado."), 404
         return jsonify(result)
@@ -88,6 +92,7 @@ def send_email():
         mode = request.form.get('mode', 'google')
         is_scheduled = request.form.get('is_scheduled') == 'true'
         scheduled_at = request.form.get('scheduled_at')
+        google_email = request.form.get('google_email')
         files = request.files.getlist('attachments')
     else:
         data = request.get_json() or {}
@@ -97,13 +102,14 @@ def send_email():
         mode = data.get('mode', 'google')
         is_scheduled = data.get('is_scheduled', False)
         scheduled_at = data.get('scheduled_at')
+        google_email = data.get('google_email')
         files = []
 
     if not to_email:
         return jsonify(error="Destinatario (to) es requerido."), 400
 
     try:
-        services.send_email(user_id, username, to_email, subject, body, files, mode, is_scheduled, scheduled_at)
+        services.send_email(user_id, username, to_email, subject, body, files, mode, is_scheduled, scheduled_at, google_email=google_email)
         
         # Real-time update for internal mail
         if mode == 'internal':
@@ -128,12 +134,13 @@ def toggle_star():
     msg_id = data.get('id')
     star = data.get('star')
     mode = data.get('mode', 'google')
+    google_email = data.get('google_email')
 
     if not folder or not msg_id:
         return jsonify(error="Faltan parámetros."), 400
 
     try:
-        services.toggle_star(user_id, folder, msg_id, star, mode)
+        services.toggle_star(user_id, folder, msg_id, star, mode, google_email=google_email)
         return jsonify(ok=True)
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -150,12 +157,13 @@ def bulk_action():
     folder = data.get('folder')
     msg_ids = data.get('ids', [])
     mode = data.get('mode', 'google')
+    google_email = data.get('google_email')
 
     if not action or not folder or not msg_ids:
         return jsonify(error="Faltan parámetros."), 400
 
     try:
-        services.bulk_action(user_id, folder, action, msg_ids, mode)
+        services.bulk_action(user_id, folder, action, msg_ids, mode, google_email=google_email)
         return jsonify(ok=True)
     except Exception as e:
         return jsonify(error=str(e)), 500
@@ -169,15 +177,16 @@ def empty_trash():
 
     data = request.get_json()
     mode = data.get('mode', 'google')
+    google_email = data.get('google_email')
 
     try:
-        services.empty_trash(user_id, mode)
+        services.empty_trash(user_id, mode, google_email=google_email)
         return jsonify(ok=True)
     except Exception as e:
         return jsonify(error=str(e)), 500
 
 
-@mail_bp.route('/config', methods=['GET', 'POST'])
+@mail_bp.route('/config', methods=['GET', 'POST', 'DELETE'])
 def manage_config():
     user_id = _get_uid()
     if not user_id:
@@ -190,6 +199,13 @@ def manage_config():
 
     data = request.get_json()
     email_addr = data.get('email', '').strip()
+    
+    if request.method == 'DELETE':
+        if not email_addr:
+            return jsonify(error="Debes proporcionar el correo a borrar."), 400
+        services.remove_credentials(user_id, email_addr)
+        return jsonify(ok=True)
+
     app_password = data.get('password', '').strip().replace(' ', '')
 
     if not email_addr or not app_password:

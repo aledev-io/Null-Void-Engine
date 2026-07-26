@@ -1,0 +1,11 @@
+{
+  "appId": "com.nullvoid.app",
+  "appName": "NullVoid",
+  "webDir": "www",
+  "server": {
+    "cleartext": true,
+    "allowNavigation": [
+      "*"
+    ]
+  }
+}

@@ -74,12 +74,24 @@ def get_friends(user_id):
 def respond_request(request_id, user_id, new_status):
     ensure_table()
     with get_db() as conn:
+        req = conn.execute("SELECT requester, addressee FROM friendships WHERE id = ?", (request_id,)).fetchone()
+        
         conn.execute("""
             UPDATE friendships SET status = ?, updated_at = ?
             WHERE id = ? AND addressee = ? AND status = 'pending'
         """, (new_status, __import__('time').time(), request_id, user_id))
+        
+        changed = conn.total_changes > 0
+        
+        if changed and new_status == 'accepted' and req:
+            conn.execute("""
+                DELETE FROM friendships
+                WHERE ((requester = ? AND addressee = ?) OR (requester = ? AND addressee = ?))
+                  AND status = 'pending'
+            """, (req['requester'], req['addressee'], req['addressee'], req['requester']))
+            
         conn.commit()
-        return conn.total_changes > 0
+        return changed
 
 
 def delete_request(request_id, user_id):
@@ -143,6 +155,15 @@ def has_pending_request(from_uid, to_uid):
             LIMIT 1
         """, (from_uid, to_uid)).fetchone()
         return r is not None
+
+def get_pending_request_id(from_uid, to_uid):
+    with get_db() as conn:
+        r = conn.execute("""
+            SELECT id FROM friendships
+            WHERE requester = ? AND addressee = ? AND status = 'pending'
+            LIMIT 1
+        """, (from_uid, to_uid)).fetchone()
+        return r['id'] if r else None
 
 
 def remove_friendship(uid1, uid2):

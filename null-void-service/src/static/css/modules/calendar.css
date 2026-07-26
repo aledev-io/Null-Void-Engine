@@ -8,7 +8,6 @@
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   gap: 16px;
-  transition: background var(--t-normal);
 }
 
 .cal-nav-group {
@@ -90,14 +89,12 @@
   flex: 1;
   overflow: auto;
   background: var(--bg-base);
-  transition: background var(--t-normal);
 }
 
 .month-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
 }
 
 .month-weekdays {
@@ -125,7 +122,7 @@
   flex: 1;
   border-left: 1px solid var(--border);
   border-top: 1px solid var(--border);
-  overflow: hidden;
+  background: var(--bg-base);
 }
 
 .month-cell {
@@ -133,7 +130,7 @@
   border-bottom: 1px solid var(--border);
   padding: 6px;
   cursor: pointer;
-  transition: background var(--t-fast);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -145,8 +142,12 @@
   background: var(--bg-surface);
 }
 
-.month-cell.other-month {
-  opacity: .38;
+.month-cell.other-month .cell-day-num {
+  color: rgba(94, 90, 112, 0.45);
+}
+
+.month-cell.other-month .event-chip {
+  visibility: hidden;
 }
 
 .month-cell.is-today {
@@ -169,7 +170,6 @@
   border-radius: 50%;
   flex-shrink: 0;
   align-self: flex-start;
-  transition: all var(--t-fast);
 }
 
 .is-today .cell-day-num {
@@ -190,7 +190,6 @@
   cursor: pointer;
   max-width: 100%;
   overflow: hidden;
-  transition: filter var(--t-fast), opacity var(--t-fast);
 }
 
 .event-chip:hover {
@@ -226,7 +225,6 @@
   background: var(--bg-hover);
   border: 1px solid var(--border);
   display: inline-block;
-  transition: all var(--t-fast);
   align-self: flex-start;
   margin-top: 1px;
 }
@@ -282,7 +280,6 @@
   justify-content: center;
   border-radius: 50%;
   margin: 2px auto 0;
-  transition: all var(--t-fast);
 }
 
 .week-day-header.is-today .week-day-num {
@@ -641,4 +638,13 @@
   background: var(--primary-hover);
   box-shadow: 0 4px 14px var(--primary-glow);
   transform: translateY(-1px);
+}
+
+@media (hover: hover) {
+  .month-cell {
+    transition: background var(--t-fast);
+  }
+  .event-chip {
+    transition: filter var(--t-fast), opacity var(--t-fast);
+  }
 }

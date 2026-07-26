@@ -221,10 +221,16 @@ export function saveCurrentNote() {
             if (!currentNoteId) return;
             const note = notes.find(n => n.id === currentNoteId);
             if (!note) return;
-            note.title = document.getElementById('note-title-input').value;
-            note.content = document.getElementById('note-content-input').value;
-            note.updatedAt = Date.now();
-            syncNote(currentNoteId);
+
+            const newTitle = document.getElementById('note-title-input').value;
+            const newContent = document.getElementById('note-content-input').value;
+
+            if (note.title !== newTitle || note.content !== newContent) {
+                note.title = newTitle;
+                note.content = newContent;
+                note.updatedAt = Date.now();
+                syncNote(currentNoteId);
+            }
         }
 
 export function filterNotes(query) { renderNotesList(query.toLowerCase()); }

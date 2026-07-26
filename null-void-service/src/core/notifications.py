@@ -169,14 +169,33 @@ class SystemNotifier:
         except Exception as e:
             print(f"[Notifier] Error guardando historial para {user_id}: {e}")
 
-    def _send_system_notification(self, title, start_time, diff, description, category):
+    def _send_system_notification(self, title, start_time, diff, description, category, user_id=None):
         # Local system notifications
         self._send_local_notification(title, start_time, diff, description, category)
         
         # Web Push notifications
-        self._send_web_push(title, description, category)
+        self._send_web_push(title, description, category, user_id)
         
-    def _send_web_push(self, title, body, category):
+        # FCM Push Notifications (E2EE for Android App)
+        self._send_fcm_push(title, description, category, user_id)
+        
+    def _send_fcm_push(self, title, body, category, user_id=None):
+        from core.fcm_utils import send_fcm_notification
+        from config.config import CONFIG
+        
+        with get_db() as conn:
+            if user_id:
+                subs = conn.execute("SELECT token FROM fcm_subs WHERE user_id = ?", (user_id,)).fetchall()
+            else:
+                subs = conn.execute("SELECT token FROM fcm_subs").fetchall()
+                
+        tokens = [sub['token'] for sub in subs]
+        if tokens:
+            full_title = f"[{CONFIG.SERVER_NAME}] {title}"
+            full_body = f"[{category.upper()}] {body}" if body else f"[{category.upper()}]"
+            send_fcm_notification(tokens, full_title, full_body)
+            
+    def _send_web_push(self, title, body, category, user_id=None):
         if not webpush:
             print("[Notifier] pywebpush not installed. Skipping web push.")
             return
@@ -186,7 +205,10 @@ class SystemNotifier:
             claims = get_vapid_claims()
             
             with get_db() as conn:
-                subs = conn.execute("SELECT * FROM webpush_subs").fetchall()
+                if user_id:
+                    subs = conn.execute("SELECT * FROM webpush_subs WHERE user_id = ?", (user_id,)).fetchall()
+                else:
+                    subs = conn.execute("SELECT * FROM webpush_subs").fetchall()
                 
             for sub in subs:
                 try:
@@ -207,7 +229,8 @@ class SystemNotifier:
                         subscription_info=sub_info,
                         data=payload,
                         vapid_private_key=vapid_keys['private_key'],
-                        vapid_claims=claims
+                        vapid_claims=claims,
+                        ttl=259200 # 3 días en segundos
                     )
                 except WebPushException as ex:
                     print(f"[Notifier] Error enviando web push a {sub['endpoint']}: {ex}")
@@ -329,6 +352,6 @@ class SystemNotifier:
         self._add_to_history(title, date_str, time_str, body, category, receiver_id)
         
         # 2. Lanzar la notificación nativa de escritorio
-        self._send_system_notification(title, time_str, 0, body, category)
+        self._send_system_notification(title, time_str, 0, body, category, user_id=receiver_id)
 
 notifier = SystemNotifier()

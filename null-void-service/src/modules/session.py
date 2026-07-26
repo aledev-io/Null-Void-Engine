@@ -148,7 +148,7 @@ class SessionManager:
     Al crear una nueva sesión, la anterior queda invalidada automáticamente.
     Las sesiones expiran tras 2 horas de inactividad.
     """
-    SESSION_TIMEOUT = 86400  # 24 horas
+    SESSION_TIMEOUT = 86400  # 24 horas (en segundos)
 
     def __init__(self):
         # token -> {username, created_at}
@@ -184,7 +184,8 @@ class SessionManager:
                         continue
                 # Sesiones inactivas
                 last_act = datetime.fromisoformat(data["last_activity"])
-                if (now - last_act).total_seconds() > self.SESSION_TIMEOUT:
+                timeout = self.SESSION_TIMEOUT
+                if (now - last_act).total_seconds() > timeout:
                     to_delete.append(token)
             except:
                 to_delete.append(token)

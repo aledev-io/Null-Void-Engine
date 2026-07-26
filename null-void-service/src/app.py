@@ -177,7 +177,7 @@ def create_app():
         user = sess.get_user(token) if token else None
         if not user:
             return redirect(url_for('auth.index'))
-        return render_template('modules/marketplace.html', user=user, token=token)
+        return redirect(url_for('system.app'))
 
     @app.route('/cloud')
     def cloud():
@@ -227,14 +227,6 @@ def create_app():
             return redirect(url_for('auth.index'))
         return render_template('modules/mail.html', user=user, token=token)
     
-    @app.route('/friends')
-    def friends():
-        token = request.cookies.get('token')
-        user = sess.get_user(token) if token else None
-        if not user:
-            return redirect(url_for('auth.index'))
-        return render_template('modules/friends.html', user=user, token=token)
-
     @app.route('/api/client_log', methods=['POST'])
     def client_log():
         try:
@@ -270,7 +262,7 @@ def create_app():
 
         if CONFIG.USE_HTTPS:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; font-src 'self' data: https: http:; connect-src 'self' https: http: ws: wss:;"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http: blob:; font-src 'self' data: https: http:; media-src 'self' blob:; connect-src 'self' https: http: ws: wss:;"
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'

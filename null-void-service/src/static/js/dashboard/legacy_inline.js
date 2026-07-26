@@ -222,6 +222,39 @@ window.addEventListener('storage', function(e) {
 
 // Notification Badge Polling & Socket
 (function () {
+    let lastNotifCount = -1;
+
+    function playNotifSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+        } catch (e) {}
+    }
+
+    function showCachedBadge() {
+        const badge = document.getElementById('notif-badge-count');
+        if (!badge) return;
+        try {
+            const cached = localStorage.getItem('nv_notif_unread_cache');
+            if (cached && parseInt(cached) > 0) {
+                const count = parseInt(cached);
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.style.display = 'flex';
+            }
+        } catch(e){}
+    }
+
     async function updateNotificationBadge() {
         try {
             const res = await fetch('/api/system/notifications/history?token=' + window.TOKEN + '&_t=' + Date.now(), { cache: 'no-store' });
@@ -230,15 +263,34 @@ window.addEventListener('storage', function(e) {
             const badge = document.getElementById('notif-badge-count');
             if (badge) {
                 if (data && data.length > 0) {
-                    badge.textContent = data.length > 99 ? '99+' : data.length;
-                    badge.style.display = 'flex';
+                    let seenIds = [];
+                    try { seenIds = JSON.parse(localStorage.getItem('nv_notif_seen_ids') || '[]'); } catch(e){}
+                    const unreadCount = data.filter(n => !seenIds.includes(n.id || n.timestamp)).length;
+                    
+                    try { localStorage.setItem('nv_notif_unread_cache', unreadCount.toString()); } catch(e){}
+
+                    if (unreadCount > 0) {
+                        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+
+                    if (lastNotifCount !== -1 && data.length > lastNotifCount) {
+                        playNotifSound();
+                    }
+                    lastNotifCount = data.length;
                 } else {
+                    try { localStorage.setItem('nv_notif_unread_cache', '0'); } catch(e){}
                     badge.style.display = 'none';
+                    lastNotifCount = 0;
                 }
             }
         } catch (e) { }
     }
-    setTimeout(updateNotificationBadge, 1000);
+    window.updateNotificationBadge = updateNotificationBadge;
+    showCachedBadge();
+    updateNotificationBadge();
     setInterval(updateNotificationBadge, 30000);
 
     if (typeof io !== 'undefined') {

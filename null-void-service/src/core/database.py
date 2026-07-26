@@ -143,6 +143,14 @@ def init_db() -> None:
                 FOREIGN KEY (contact_id) REFERENCES users(user_id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS muted_conversations (
+                user_id     TEXT NOT NULL,
+                contact_id  TEXT NOT NULL,
+                PRIMARY KEY (user_id, contact_id),
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (contact_id) REFERENCES users(user_id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS internal_mail (
                 id          TEXT PRIMARY KEY,
                 user_id     TEXT NOT NULL,
@@ -201,9 +209,36 @@ def init_db() -> None:
                 auth         TEXT NOT NULL,
                 created_at   REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS fcm_subs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      TEXT NOT NULL,
+                token        TEXT NOT NULL UNIQUE,
+                created_at   REAL NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS user_google_accounts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      TEXT NOT NULL,
+                email        TEXT NOT NULL,
+                app_password TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                UNIQUE(user_id, email)
+            );
         """)
 
         # ─── Migraciones post-creación ───
+
+        # Migrar credenciales legacy de Gmail a la nueva tabla
+        conn.execute("""
+            INSERT OR IGNORE INTO user_google_accounts (user_id, email, app_password)
+            SELECT user_id, gmail_address, gmail_app_password
+            FROM users
+            WHERE gmail_address IS NOT NULL AND gmail_address != '' 
+              AND gmail_app_password IS NOT NULL AND gmail_app_password != ''
+        """)
+        conn.commit()
 
         # Migrar columna 'user' a 'user_id' en tablas legacy
         for table in ["events", "transactions", "spreadsheets", "invoices"]:

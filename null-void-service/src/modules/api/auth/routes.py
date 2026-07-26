@@ -52,8 +52,8 @@ def api_login():
         "ok": True, "user": result["username"],
         "user_id": result["user_id"], "token": token,
     })
-    response.set_cookie("token", token, httponly=True, secure=True, samesite='Strict', max_age=86400)
-    response.set_cookie("user", result["username"], httponly=False, secure=True, samesite='Strict', max_age=86400)
+    response.set_cookie("token", token, httponly=True, secure=False, samesite='Lax', max_age=86400)
+    response.set_cookie("user", result["username"], httponly=False, secure=False, samesite='Lax', max_age=86400)
     return response
 
 
@@ -77,6 +77,13 @@ def api_logout():
             if user:
                 audit.log("LOGOUT", user, ip, "Cierre de sesión")
             session.destroy(token)
+            
+            fcm_token = data.get("fcm_token")
+            if fcm_token:
+                from core.database import get_db
+                with get_db() as conn:
+                    conn.execute("DELETE FROM fcm_subs WHERE token = ?", (fcm_token,))
+            
             if user:
                 socketio.emit('user_offline', {'username': user})
 

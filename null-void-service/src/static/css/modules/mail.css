@@ -38,7 +38,7 @@
 }
 
 body {
-    height: 100vh;
+    height: 100dvh;
     background: var(--bg);
     font-family: 'Inter', system-ui, sans-serif;
     color: var(--text-main);
@@ -260,7 +260,8 @@ body {
     background: var(--nav-active, rgba(148, 163, 184, 0.15));
     color: var(--indigo, var(--accent, #6366f1)) !important;
     border-left: 3px solid var(--indigo, var(--accent, #6366f1));
-    padding-left: 11px; /* Adjust for border */
+    padding-left: 11px;
+    /* Adjust for border */
 }
 
 .nav-link .badge-count {
@@ -572,12 +573,14 @@ body {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: transparent; /* Dinámico por JS */
+    background: transparent;
+    /* Dinámico por JS */
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.2rem;
-    font-weight: 500; /* Flat look sin sombras */
+    font-weight: 500;
+    /* Flat look sin sombras */
     color: #fff;
     flex-shrink: 0;
 }
@@ -643,7 +646,7 @@ body {
 
 .to-me-btn:hover {
     color: var(--text-main);
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .reader-sender-name {
@@ -706,7 +709,7 @@ body {
     background: var(--bg-tertiary);
     border-color: var(--border-hi);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .reader-body {
@@ -1104,7 +1107,9 @@ input:-webkit-autofill:active {
     display: none;
 }
 
-@media (max-width: 768px), (max-height: 500px) and (orientation: landscape) {
+@media (max-width: 768px),
+(max-height: 500px) and (orientation: landscape) {
+
     /* Prevent scroll on body - topbar stays fixed */
     body {
         height: 100dvh;
@@ -1132,8 +1137,9 @@ input:-webkit-autofill:active {
     .hide-on-mobile {
         display: none !important;
     }
-    
-    #btn-google-account, #btn-toggle-mode {
+
+    #btn-google-account,
+    #btn-toggle-mode {
         padding: 6px !important;
     }
 
@@ -1178,7 +1184,8 @@ input:-webkit-autofill:active {
     }
 
     /* Panels: full width, no margin, no radius */
-    #inbox-panel, #reader-panel {
+    #inbox-panel,
+    #reader-panel {
         margin: 0;
         border: none;
         border-radius: 0;
@@ -1245,9 +1252,10 @@ input:-webkit-autofill:active {
         border-radius: 0 !important;
         max-width: none !important;
         height: 100dvh !important;
-        z-index: 9999 !important; /* above topbar */
+        z-index: 9999 !important;
+        /* above topbar */
     }
-    
+
     .compose-window.expanded {
         width: 100% !important;
         right: 0 !important;
@@ -1264,8 +1272,20 @@ input:-webkit-autofill:active {
         height: 48px !important;
         border-radius: 12px 12px 0 0 !important;
     }
-    
+
     .compose-header-actions .btn-expand {
         display: none !important;
     }
+}
+
+@media screen and (min-width: 1536px) {
+    .app-layout { zoom: 0.9; width: 111.11vw; height: 111.11dvh; }
+}
+
+@media screen and (min-width: 1920px) {
+    .app-layout { zoom: 0.8; width: 125vw; height: 125dvh; }
+}
+
+@media screen and (min-width: 1024px) and (-webkit-min-device-pixel-ratio: 1.25) {
+    .app-layout { zoom: 0.85; width: 117.64vw; height: 117.64dvh; }
 }

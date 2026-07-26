@@ -24,3 +24,4 @@ pycryptodome==3.23.0
 Flask-Limiter==3.10.1
 pywebpush
 cryptography
+firebase-admin

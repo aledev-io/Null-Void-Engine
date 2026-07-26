@@ -72,17 +72,16 @@ ALL_MODULES = [
     {"id": "monitor", "name": "Telemetria", "icon": "📊", "desc": "Monitorizacion en tiempo real.", "core": True},
     {"id": "calendar", "name": "Calendario", "icon": "📅", "desc": "Eventos y tareas.", "url": "/calendar", "core": True},
     {"id": "admin", "name": "Recordatorios", "icon": "🛡️", "desc": "Recordatorios del sistema.", "core": True},
-    {"id": "marketplace",  "name": "Tienda Apps",       "icon": "🏪", "desc": "Instala nuevos módulos.","url": "/marketplace", "core": True},
+    {"id": "marketplace",  "name": "Tienda Apps",       "icon": "🏪", "desc": "Instala nuevos módulos.", "core": True},
     {"id": "invoices", "name": "ERP Facturación", "icon": "📑", "desc": "Facturas y OCR.", "url": "/invoices"},
     {"id": "transactions", "name": "Contabilidad", "icon": "💰", "desc": "Control de gastos."},
     {"id": "cloud", "name": "Null-Void Cloud", "icon": "📂", "desc": "Almacenamiento personal.", "url": "/cloud", "core": True},
     {"id": "backups", "name": "Backups", "icon": "💾", "desc": "Respaldos del sistema.","url": "/backups", "core": True},
     {"id": "ai", "name": "AI", "icon": "🤖", "desc": "Asistente Inteligente.", "url": "/ai", "core": True},
-    {"id": "docs", "name": "Documentación", "icon": "📖", "desc": "Guías y tutoriales.", "url": "/docs", "core": True},
 ]
 ALL_MODULES.insert(3, {"id": "budgets", "name": "Excel", "icon": "🧮", "desc": "Excel con Python.", "url": "/excel"})
 ALL_MODULES.append({"id": "chat", "name": "Mensajes", "icon": "💬", "desc": "Chat entre usuarios.", "url": "/chat", "badge": "chat-badge"})
-ALL_MODULES.append({"id": "friends", "name": "Amigos", "icon": "👥", "desc": "Gestiona tus amigos y solicitudes.", "url": "/friends"})
+ALL_MODULES.append({"id": "friends", "name": "Amigos", "icon": "👥", "desc": "Gestiona tus amigos y solicitudes.", "core": True})
 ALL_MODULES.append({"id": "mail", "name": "Correo", "icon": "📧", "desc": "Bandeja de entrada SMTP/IMAP.", "url": "/mail", "core": True})
 ALL_MODULES.append({"id": "scraper_pcc", "name": "Scraper BD", "icon": "🛒", "desc": "Base de datos de PcComponentes", "url": "/scraper", "core": True})
 ALL_MODULES.append({"id": "vault", "name": "Vault", "icon": "🔐", "desc": "Gestor de Contraseñas", "url": "/vault", "core": True})

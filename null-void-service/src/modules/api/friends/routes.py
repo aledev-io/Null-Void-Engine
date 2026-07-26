@@ -2,8 +2,10 @@ from flask import Blueprint, jsonify, request
 from modules.session import session as sess
 from core.socket_ext import socketio
 from . import services
+from core.limiter import limiter
 
 friends_bp = Blueprint('friends', __name__, url_prefix='/api/friends')
+limiter.exempt(friends_bp)
 
 
 def _get_user():

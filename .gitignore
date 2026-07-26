@@ -2,15 +2,25 @@
 venv/
 ENV/
 env/
+__pycache__/
 **/__pycache__/
 *.py[cod]
 *$py.class
+
+# Configs y secretos
 .env
+.secrets/
+
+# Bases de datos y datos
 data/
 *.db
 *.csv
 notifications_*.json
+
+# Certificados
 certs/
+
+# IDEs
 .vscode/
 .idea/
 *.suo
@@ -18,13 +28,24 @@ certs/
 *.njsproj
 *.sln
 *.swp
+*.iml
+
+# Binarios y Builds Python
 *.bin
 dist/
 build/
 *.spec
 *.exe
-*.bin
 null-void-service/client_agent/dist/
 null-void-service/client_agent/build/
 agent_release.py
 *_release.py
+
+# Android & Gradle
+null-void-app/android/.gradle/
+null-void-app/android/build/
+null-void-app/android/app/build/
+null-void-app/android/local.properties
+null-void-app/android/app/google-services.json
+.cxx/
+.externalNativeBuild/

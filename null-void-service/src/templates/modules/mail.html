@@ -75,16 +75,22 @@
 
                 <div class="sidebar-section-title" style="margin: 16px 16px 8px; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="mail_settings">Ajustes</div>
                 <div style="padding: 0 12px; display: flex; flex-direction: column; gap: 2px;">
-                    <div class="nav-link active" id="btn-toggle-mode" onclick="setMailMode('internal')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;background:var(--surface-hi);">
+                    <div class="nav-link active" id="btn-toggle-mode" onclick="setMailMode('internal')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                         <span id="text-toggle-mode" data-i18n="mail_mode_internal" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ user }}@nullvoid</span>
                     </div>
-                    <div class="nav-link" id="btn-google-account" onclick="setMailMode('google')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;">
+                </div>
+
+                <div class="sidebar-section-title" style="margin: 16px 16px 8px; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Google</div>
+                <div style="padding: 0 12px; display: flex; flex-direction: column; gap: 2px;" id="google-accounts-container">
+                    <!-- Dynamic google accounts will be injected here -->
+                </div>
+                <div style="padding: 0 12px; display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+                    <div class="nav-link" onclick="openGoogleConfigModal()" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-muted);font-weight:500;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.color='var(--text-main)'; this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.color='var(--text-muted)'; this.style.background='transparent'">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 20h9"></path>
-                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
-                        <span id="google-account-text" data-i18n="mail_link_google">Vincular Google</span>
+                        <span data-i18n="mail_add_google_account">Añadir cuenta</span>
                     </div>
                 </div>
             </div>
@@ -166,7 +172,8 @@
                         </div>
                     </div>
 
-                    <div id="bulk-actions" style="display:none;gap:8px;">
+                    <div id="bulk-actions" style="display:none;gap:8px;align-items:center;">
+                        <span id="bulk-selected-count" style="font-size: 0.85rem; color: var(--text-muted); margin-right: 8px;"></span>
                         <button class="btn-icon" id="btn-bulk-archive" title="Archivar" data-i18n-title="mail_tt_archive" onclick="bulkAction('archive')">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
                         </button>

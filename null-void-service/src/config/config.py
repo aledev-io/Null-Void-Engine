@@ -21,6 +21,7 @@ _load_env_into_environ(_ENV_PATH)
 
 class CONFIG:
     """Clase de configuración centralizada — Edición Búnker."""
+    SERVER_NAME = os.environ.get("SERVER_NAME", "NullVoid")
     HOST        = os.environ.get("HOST", "0.0.0.0")
     FLASK_PORT  = int(os.environ.get("FLASK_PORT", "5000"))
     DEBUG       = os.environ.get("DEBUG", "false").lower() == "true"
@@ -47,3 +48,6 @@ class CONFIG:
     _raw_data_dir = os.environ.get("DATA_DIR", os.path.join(PROJECT_ROOT, "data", "app"))
     DATA_DIR = _raw_data_dir if os.path.isabs(_raw_data_dir) else os.path.join(PROJECT_ROOT, _raw_data_dir)
     DB_PATH  = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "manager.db"))
+    
+    FCM_SECRET_KEY = os.environ.get("FCM_SECRET_KEY")
+    FCM_CREDENTIALS_PATH = os.environ.get("FCM_CREDENTIALS_PATH", os.path.join(PROJECT_ROOT, "src", "firebase_key.json"))

@@ -88,9 +88,8 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
   line-height: 1.5;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
-  transition: background var(--t-normal), color var(--t-normal);
 }
 
 button {
@@ -125,7 +124,7 @@ textarea {
 
 .app-container {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -276,4 +275,15 @@ textarea {
 
 .anim-scale {
   animation: scaleIn var(--t-normal) both;
+}
+
+/* --- Global Responsive Scaling (Option 3) --- */
+@media screen and (min-width: 1536px) {
+    .app-container { zoom: 0.9; width: 111.11vw; height: 111.11dvh; }
+}
+@media screen and (min-width: 1920px) {
+    .app-container { zoom: 0.8; width: 125vw; height: 125dvh; }
+}
+@media screen and (min-width: 1024px) and (-webkit-min-device-pixel-ratio: 1.25) {
+    .app-container { zoom: 0.85; width: 117.64vw; height: 117.64dvh; }
 }

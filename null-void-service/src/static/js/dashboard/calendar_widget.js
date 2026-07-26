@@ -233,8 +233,32 @@ export function initCalendarWidget() {
         });
     }
 
+    async function fetchEventsImmediately() {
+        try {
+            const tokenValue = `; ${document.cookie}`;
+            const parts = tokenValue.split('; token=');
+            let token = '';
+            if (parts.length === 2) token = parts.pop().split(';').shift();
+
+            const res = await fetch('/api/events', {
+                headers: { 'Content-Type': 'application/json', 'X-Token': token }
+            });
+            if (res.ok) {
+                const events = await res.json();
+                const user = _getUser();
+                const key = `calendar_events_v1_${user}`;
+                localStorage.setItem(key, JSON.stringify(events));
+                renderCalendar();
+                renderPendingTasks();
+            }
+        } catch (err) {
+            console.warn('[Calendar Widget] Fetch failed:', err);
+        }
+    }
+
     renderCalendar();
     renderPendingTasks();
+    fetchEventsImmediately();
 
     // Pill Filters Logic
     const filterPills = document.querySelectorAll('.filter-pill');

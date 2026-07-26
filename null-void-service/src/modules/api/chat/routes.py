@@ -1,6 +1,8 @@
 import os
 import uuid
+import shutil
 import sys
+import mimetypes
 from functools import wraps
 from flask import Blueprint, jsonify, request, send_from_directory
 from werkzeug.utils import secure_filename
@@ -9,10 +11,11 @@ from core.socket_ext import socketio
 from core.notifications import notifier
 from config.config import CONFIG
 from . import services, repository
+from core.limiter import limiter
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/api/chat')
+limiter.exempt(chat_bp)
 
-MAX_FILE_SIZE = 50 * 1024 * 1024 
 
 def _get_upload_dir() -> str:
     return os.path.join(CONFIG.DATA_DIR, 'chat_uploads')
@@ -76,8 +79,14 @@ def send_message():
             size = file.tell()
             file.seek(0)
             
-            if size > MAX_FILE_SIZE:
-                return jsonify(error="El archivo supera el límite máximo de 50MB"), 400
+            mime_type, _ = mimetypes.guess_type(file.filename)
+            mime_type = mime_type or file.content_type or ''
+            is_media = mime_type.startswith(('image/', 'video/', 'audio/'))
+            
+            if is_media and size > 16 * 1024 * 1024:
+                return jsonify(error="El archivo multimedia supera el límite de 16MB"), 400
+            elif not is_media and size > 2 * 1024 * 1024 * 1024:
+                return jsonify(error="El archivo supera el límite de 2GB"), 400
                 
             file_name = secure_filename(file.filename)
             file_path = f"{str(uuid.uuid4())}_{file_name}"
@@ -87,6 +96,36 @@ def send_message():
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 file.save(save_path)
                 file_size = os.path.getsize(save_path)
+                
+                # Integración con Cloud: Mensajeria
+                try:
+                    sender_data = sess.get_user(request.user_token)
+                    receiver_data = repository.get_contact_by_id(receiver_id)
+                    if sender_data and receiver_data:
+                        sender_username = sender_data['username']
+                        receiver_username = receiver_data['username']
+                        
+                        from modules.api.cloud.services import BASE_CLOUD_ROOT
+                        def sanitize_uid(uid):
+                            return "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip() or "unknown"
+                        
+                        sender_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(user_id), "Mensajeria", receiver_username)
+                        receiver_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(receiver_id), "Mensajeria", sender_username)
+                        
+                        os.makedirs(sender_cloud_dir, exist_ok=True)
+                        os.makedirs(receiver_cloud_dir, exist_ok=True)
+                        
+                        def link_or_copy(src, dst):
+                            try:
+                                os.link(src, dst)
+                            except OSError:
+                                shutil.copy2(src, dst)
+                                
+                        link_or_copy(save_path, os.path.join(sender_cloud_dir, file_name))
+                        link_or_copy(save_path, os.path.join(receiver_cloud_dir, file_name))
+                except Exception as ex:
+                    sys.stderr.write(f"[CHAT][CLOUD_SYNC_ERROR] {ex}\n")
+                    
             except (IOError, OSError) as e:
                 sys.stderr.write(f"[CHAT][ERROR] Error al guardar adjunto: {e}\n")
                 return jsonify(error="Error interno al procesar el archivo"), 500
@@ -100,8 +139,11 @@ def send_message():
     socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{result['receiver_id']}")
     socketio.emit('new_message', result, room=f"user_{user_id}")
     
-    sender_name = sess.get_user(request.user_token) or user_id
-    notifier.notify_chat_message(sender_name, receiver_id, message, file_name)
+    # Only notify if the receiver hasn't muted the sender
+    if not repository.is_muted(receiver_id, user_id):
+        sender = sess.get_user(request.user_token)
+        if sender:
+            notifier.notify_chat_message(sender['username'], receiver_id, message, file_name)
     
     return jsonify(ok=True, message=result)
 
@@ -213,10 +255,13 @@ def delete_message():
     if not r or (r['sender_id'] != user_id and r['receiver_id'] != user_id):
         return jsonify(error="Mensaje no encontrado o acceso denegado"), 403
 
-    ok, msg = services.delete_message(user_id, msg_id)
+    delete_type = data.get('delete_type', 'for_me')
+    delete_files = data.get('delete_files', False)
+
+    ok, msg = services.delete_message(user_id, msg_id, delete_type, delete_files)
     if ok:
         socketio.emit('message_deleted', {'msg_id': msg_id}, room=f"user_{user_id}")
-        if r['receiver_id'] != user_id:
+        if delete_type == 'for_everyone' and r['receiver_id'] != user_id:
             socketio.emit('message_deleted', {'msg_id': msg_id}, room=f"user_{r['receiver_id']}")
     return jsonify(ok=ok, msg=msg)
 
@@ -226,10 +271,23 @@ def delete_message():
 def delete_conversation():
     data = request.get_json() or {}
     contact_id = data.get('contact_id')
+    ok, error = services.delete_conversation(request.user_id, contact_id)
+    if not ok:
+        return jsonify(error=error), 400
+    return jsonify(success=True)
+
+
+@chat_bp.route('/toggle_mute', methods=['POST'])
+@login_required
+def toggle_mute():
+    data = request.get_json() or {}
+    contact_id = data.get('contact_id')
     if not contact_id:
-        return jsonify(error="contact_id requerido"), 400
-    ok, msg = services.delete_conversation(request.user_id, contact_id)
-    return jsonify(ok=ok, msg=msg)
+        return jsonify(error="Falta contact_id"), 400
+    res, error = services.toggle_mute(request.user_id, contact_id)
+    if error and 'No se pudo' in error:
+        return jsonify(error=error), 400
+    return jsonify(res)
 
 
 @chat_bp.route('/forward', methods=['POST'])

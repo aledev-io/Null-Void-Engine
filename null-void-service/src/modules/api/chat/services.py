@@ -21,6 +21,7 @@ def get_conversations(user_id):
             'last_file_name': last_msg['file_name'] if last_msg else '',
             'unread': unread,
             'last_activity': last_activity,
+            'is_muted': repository.is_muted(user_id, cid)
         })
     conversations.sort(key=lambda c: c['last_time'], reverse=True)
     return conversations
@@ -47,8 +48,8 @@ def send_message(user_id, receiver_id, message, file_path=None, file_name=None, 
         return None, "receiver_id requerido"
     if not message and not file_path:
         return None, "Mensaje vacío"
-    if message and len(message) > 5000:
-        return None, "Mensaje demasiado largo (máx 5000 caracteres)"
+    if message and len(message) > 65536:
+        return None, "Mensaje demasiado largo (máx 65536 caracteres)"
 
     receiver = repository.get_user_receiver(receiver_id)
     if not receiver:
@@ -64,7 +65,7 @@ def send_message(user_id, receiver_id, message, file_path=None, file_name=None, 
 
 
 def edit_message(user_id, msg_id, new_text):
-    if not new_text or len(new_text) > 5000:
+    if not new_text or len(new_text) > 65536:
         return None, "Mensaje inválido"
     ok, edited_at = repository.edit_message(msg_id, user_id, new_text)
     if ok:
@@ -72,8 +73,21 @@ def edit_message(user_id, msg_id, new_text):
     return None, "No se pudo editar"
 
 
-def delete_message(user_id, msg_id):
-    ok = repository.delete_message_for_user(msg_id, user_id)
+import os
+
+def delete_message(user_id, msg_id, delete_type='for_me', delete_files=False):
+    if delete_type == 'for_everyone':
+        # Buscamos el mensaje antes de borrarlo por si hay que borrar archivos
+        msg = repository.get_message_by_id(msg_id)
+        ok = repository.delete_message_for_everyone(msg_id, user_id)
+        if ok and delete_files and msg and msg.get('file_path'):
+            try:
+                if os.path.exists(msg['file_path']):
+                    os.remove(msg['file_path'])
+            except Exception:
+                pass
+    else:
+        ok = repository.delete_message_for_user(msg_id, user_id)
     return ok, "Mensaje eliminado" if ok else "No se pudo eliminar"
 
 
@@ -81,6 +95,13 @@ def delete_conversation(user_id, contact_id):
     ok = repository.delete_conversation(user_id, contact_id)
     return ok, "Conversación eliminada" if ok else "No se pudo eliminar"
 
+def toggle_mute(user_id, contact_id):
+    if repository.is_muted(user_id, contact_id):
+        ok = repository.unmute_conversation(user_id, contact_id)
+        return {'muted': False}, "Conversación reactivada" if ok else "No se pudo reactivar"
+    else:
+        ok = repository.mute_conversation(user_id, contact_id)
+        return {'muted': True}, "Conversación silenciada" if ok else "No se pudo silenciar"
 
 def forward_message(user_id, msg_id, target_contact_id):
     msg = repository.get_message_by_id(msg_id)

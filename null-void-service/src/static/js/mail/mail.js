@@ -14,9 +14,10 @@ let FOLDERS = [
 
 let currentFolder = 'inbox';
 let folderUnreads = {};
-export let mailMode = 'internal'; // 'google' | 'internal'
-export let googleEmail = '';
-export let internalEmail = '';
+export let mailMode = 'internal'; // 'internal' or 'google'
+let googleAccounts = [];
+let googleEmail = null;
+let internalEmail = '';
 
 const folderCache = {};
 let currentFolderFetchId = 0;
@@ -25,6 +26,8 @@ let currentEmailFetchId = 0;
 let currentEmailData = null;
 const emailCache = {};
 const knownContacts = new Set();
+let currentPage = 1;
+let currentHasMore = false;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -111,22 +114,32 @@ function updateThemeIcon() {
 
 // ─── Mode toggle ──────────────────────────────────────────────────────────────
 
-export async function setMailMode(targetMode) {
-    if (mailMode === targetMode) return;
+export async function setMailMode(targetMode, targetEmail = null) {
     if (targetMode === 'google') {
-        if (!googleEmail) {
+        if (!targetEmail && googleAccounts.length === 0) {
             const res = await fetch('/api/mail/config');
             const data = await res.json();
             if (!data.configured) { openGoogleConfigModal(); return; }
+        }
+        if (targetEmail) {
+            googleEmail = targetEmail;
+        } else if (!googleEmail && googleAccounts.length > 0) {
+            googleEmail = googleAccounts[0].email;
         }
     }
 
     mailMode = targetMode;
     
+    // Update active state in UI
     const btnInternal = document.getElementById('btn-toggle-mode');
-    const btnGoogle = document.getElementById('btn-google-account');
-    if (btnInternal) btnInternal.style.background = mailMode === 'internal' ? 'var(--surface-hi)' : 'transparent';
-    if (btnGoogle) btnGoogle.style.background = mailMode === 'google' ? 'var(--surface-hi)' : 'transparent';
+    if (btnInternal) {
+        btnInternal.style.background = mailMode === 'internal' ? 'var(--surface-hi)' : 'transparent';
+        mailMode === 'internal' ? btnInternal.classList.add('active') : btnInternal.classList.remove('active');
+    }
+    
+    if (googleAccounts.length > 0) {
+        renderGoogleAccounts();
+    }
 
     const msg = mailMode === 'google' 
         ? (window.t ? window.t('mail_switching_google') : 'Cambiando a modo Google...') 
@@ -148,27 +161,71 @@ export async function checkGoogleConfig() {
     try {
         const res = await fetch('/api/mail/config');
         const data = await res.json();
-        if (data.email) googleEmail = data.email;
-        if (data.internal_email) internalEmail = data.internal_email;
-        if (data.configured && data.email) {
-            const firstLetter = data.email.charAt(0).toUpperCase();
-            document.getElementById('btn-google-account').innerHTML = `
-                <div style="width:18px;height:18px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;flex-shrink:0;">${firstLetter}</div>
-                <span id="google-account-text" style="font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">${data.email}</span>
-                <div onclick="openGoogleConfigModal(); event.stopPropagation();" style="display:flex;align-items:center;justify-content:center;padding:4px;margin:-4px;border-radius:4px;color:var(--text-muted);transition:color 0.2s;" onmouseover="this.style.color='var(--text-main)'" onmouseout="this.style.color='var(--text-muted)'" title="Cambiar cuenta">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                </div>`;
+        
+        if (data.accounts) {
+            googleAccounts = data.accounts;
         }
+        if (data.email && !googleEmail) googleEmail = data.email;
+        if (data.internal_email) internalEmail = data.internal_email;
+        
+        renderGoogleAccounts();
     } catch (err) {
         console.error(err);
     }
 }
 
+function renderGoogleAccounts() {
+    const container = document.getElementById('google-accounts-container');
+    if (!container) return;
+    
+    let html = '';
+    for (const acc of googleAccounts) {
+        const firstLetter = acc.email.charAt(0).toUpperCase();
+        const isActive = mailMode === 'google' && googleEmail === acc.email;
+        const bg = isActive ? 'var(--surface-hi)' : 'transparent';
+        
+        html += `
+            <div class="nav-link" onclick="setMailMode('google', '${acc.email}')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;background:${bg};">
+                <div style="width:18px;height:18px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;flex-shrink:0;">${firstLetter}</div>
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">${escapeHtml(acc.email)}</span>
+                <div onclick="removeGoogleAccount('${acc.email}'); event.stopPropagation();" style="display:flex;align-items:center;justify-content:center;padding:4px;margin:-4px;border-radius:4px;color:var(--text-muted);transition:color 0.2s;" onmouseover="this.style.color='var(--red-400)'" onmouseout="this.style.color='var(--text-muted)'" title="Eliminar cuenta">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+export async function removeGoogleAccount(email) {
+    if (!confirm('¿Estás seguro de que quieres desvincular esta cuenta de Google?')) return;
+    try {
+        const res = await fetch('/api/mail/config', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            if (googleEmail === email) {
+                googleEmail = null;
+                if (mailMode === 'google') setMailMode('internal');
+            }
+            showToast('Cuenta desvinculada correctamente.');
+            await checkGoogleConfig();
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Error de conexión', 'error');
+    }
+}
+
 export function openGoogleConfigModal() {
-    document.getElementById('google-email').value = googleEmail || '';
+    document.getElementById('google-email').value = '';
     document.getElementById('google-app-pass').value = '';
     document.getElementById('google-config-modal').classList.add('show');
 }
@@ -194,7 +251,7 @@ export async function saveGoogleConfig() {
             document.getElementById('google-config-modal').classList.remove('show');
             showToast('Google configurado correctamente.');
             await checkGoogleConfig();
-            if (mailMode === 'internal') setMailMode('google');
+            if (mailMode === 'internal') setMailMode('google', email);
         } else {
             showToast('Error: ' + data.error, 'error');
         }
@@ -210,7 +267,8 @@ export async function saveGoogleConfig() {
 
 export async function loadFolders(forceRefresh = false) {
     try {
-        const url = `/api/mail/folders?mode=${mailMode}${forceRefresh ? '&refresh=true' : ''}`;
+        let url = `/api/mail/folders?mode=${mailMode}${forceRefresh ? '&refresh=true' : ''}`;
+        if (mailMode === 'google' && googleEmail) url += `&google_email=${encodeURIComponent(googleEmail)}`;
         const res = await fetch(url);
         const text = await res.text();
         let data;
@@ -277,6 +335,7 @@ function buildFolderNav() {
 export function switchFolder(folderId) {
     if (folderId === currentFolder) { backToList(); return; }
     currentFolder = folderId;
+    currentPage = 1;
     backToList();
     document.querySelectorAll('#folder-nav .nav-link').forEach(el => {
         el.classList.toggle('active', el.dataset.folder === folderId);
@@ -302,7 +361,10 @@ function setAppLock(locked) {
 
 // ─── Email list ───────────────────────────────────────────────────────────────
 
-export async function loadCurrentFolder(silent = false, forceRefresh = false) {
+export async function loadCurrentFolder(silent = false, forceRefresh = false, loadMore = false) {
+    if (loadMore) currentPage++;
+    else currentPage = 1;
+
     const fetchId = ++currentFolderFetchId;
     let loadingId = 0;
     const list = document.getElementById('email-list');
@@ -315,30 +377,39 @@ export async function loadCurrentFolder(silent = false, forceRefresh = false) {
 
     if (!silent) {
         loadingId = ++activeLoadingId;
-        if (folderCache[currentFolder] && !forceRefresh) {
+        if (folderCache[currentFolder] && !forceRefresh && !loadMore) {
             renderEmailList(folderCache[currentFolder]);
-        } else {
+        } else if (!loadMore) {
             list.innerHTML = `<div style="padding:20px;text-align:center;"><div class="loader"></div><p style="margin-top:10px;color:var(--text-muted);font-size:0.85rem;">Cargando ${folderInfo ? folderInfo.name.toLowerCase() : ''}...</p></div>`;
         }
         setFolderLoading(true);
-        setAppLock(true);
+        if (!loadMore) setAppLock(true);
     }
 
     try {
-        const url = `/api/mail/emails?folder=${currentFolder}&mode=${mailMode}${forceRefresh ? '&refresh=true' : ''}`;
+        let url = `/api/mail/emails?folder=${currentFolder}&mode=${mailMode}&page=${currentPage}${forceRefresh ? '&refresh=true' : ''}`;
+        if (mailMode === 'google' && googleEmail) url += `&google_email=${encodeURIComponent(googleEmail)}`;
         const res = await fetch(url);
         const data = await res.json();
         if (fetchId !== currentFolderFetchId) return;
 
+        if (data.total_raw !== undefined) {
+            console.log(`Debug: Total correos individuales en el servidor IMAP para esta carpeta: ${data.total_raw}`);
+        }
         if (data.error) {
             if (!silent) list.innerHTML = `<div style="padding:20px;color:#f87171;text-align:center;font-size:0.85rem;">${data.error}</div>`;
             return;
         }
 
-        folderCache[currentFolder] = data.emails;
+        if (loadMore) {
+            folderCache[currentFolder] = (folderCache[currentFolder] || []).concat(data.emails);
+        } else {
+            folderCache[currentFolder] = data.emails;
+        }
+        currentHasMore = data.has_more;
         updateContactsFromEmails(data.emails);
 
-        if (silent) {
+        if (silent && !loadMore) {
             if (document.getElementById('inbox-panel').style.display === 'none') return;
             if (document.querySelectorAll('.row-checkbox:checked').length > 0) return;
             const currentTopId = list.querySelector('.email-item')?.dataset.id;
@@ -347,7 +418,7 @@ export async function loadCurrentFolder(silent = false, forceRefresh = false) {
             if (currentTopId === newTopId && !countDiff) return;
         }
 
-        renderEmailList(data.emails);
+        renderEmailList(folderCache[currentFolder]);
     } catch {
         if (fetchId === currentFolderFetchId && !folderCache[currentFolder] && !silent) {
             list.innerHTML = `<div style="padding:20px;color:#f87171;text-align:center;">Error de conexión.</div>`;
@@ -386,7 +457,7 @@ function renderEmailList(emails) {
         return;
     }
 
-    list.innerHTML = html + emails.map(e => {
+    let finalHtml = html + emails.map(e => {
         const unreadClass = e.read === false ? ' unread' : '';
         const displayName = currentFolder === 'sent' || currentFolder === 'drafts'
             ? `Para: ${escapeHtml(e.to || '')}` : escapeHtml(e.from);
@@ -402,6 +473,23 @@ function renderEmailList(emails) {
             <div class="email-date">${formatMailDate(e.date)}</div>
         </div>`;
     }).join('');
+
+    if (currentHasMore) {
+        finalHtml += `<div style="text-align:center; padding: 20px;">
+            <button onclick="loadMoreEmails(this)" class="btn-primary" style="padding: 8px 16px; border-radius: 8px; font-size: 0.9rem;">Cargar más mensajes...</button>
+        </div>`;
+    }
+
+    list.innerHTML = finalHtml;
+}
+
+export function loadMoreEmails(btn) {
+    if (btn) {
+        btn.innerHTML = '<div class="loader" style="width:16px; height:16px; border-width:2px; display:inline-block; margin-right:8px; vertical-align:middle;"></div> Cargando...';
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.7';
+    }
+    loadCurrentFolder(false, false, true);
 }
 
 // ─── Selection / Bulk ─────────────────────────────────────────────────────────
@@ -462,6 +550,11 @@ function updateBulkActions() {
     bulkActions.style.display = someChecked ? 'flex' : 'none';
 
     if (!someChecked) return;
+    
+    const countSpan = document.getElementById('bulk-selected-count');
+    if (countSpan) {
+        countSpan.textContent = checkedRows.length + ' seleccionado' + (checkedRows.length > 1 ? 's' : '');
+    }
 
     if (btnArchive) btnArchive.style.display = currentFolder === 'inbox' ? 'block' : 'none';
     if (btnUnarchive) btnUnarchive.style.display = currentFolder === 'inbox' ? 'none' : 'block';
@@ -487,11 +580,14 @@ export function deleteSingleEmail() {
 export async function emptyTrash() {
     if (!confirm('¿Estás seguro de que quieres vaciar la papelera? Esta acción no se puede deshacer.')) return;
     showToast('Vaciando papelera...');
+    const body = { mode: mailMode };
+    if (mailMode === 'google' && googleEmail) body.google_email = googleEmail;
+    
     try {
         const res = await fetch('/api/mail/empty_trash', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: mailMode })
+            body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error al vaciar la papelera');
@@ -506,11 +602,14 @@ export async function bulkAction(action) {
     const selectedIds = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => cb.closest('.email-item').dataset.id);
     if (!selectedIds.length) return;
     if (mailMode !== 'internal') showToast('Procesando...');
+    const body = { folder: currentFolder, action, ids: selectedIds, mode: mailMode };
+    if (mailMode === 'google' && googleEmail) body.google_email = googleEmail;
+
     try {
         const res = await fetch('/api/mail/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: currentFolder, action, ids: selectedIds, mode: mailMode })
+            body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error al procesar la acción');
@@ -529,11 +628,14 @@ export async function bulkAction(action) {
 export async function singleAction(action) {
     if (!currentEmailData) return;
     if (mailMode !== 'internal') showToast('Procesando...');
+    const body = { folder: currentFolder, action, ids: [currentEmailData.id], mode: mailMode };
+    if (mailMode === 'google' && googleEmail) body.google_email = googleEmail;
+
     try {
         const res = await fetch('/api/mail/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: currentFolder, action, ids: [currentEmailData.id], mode: mailMode })
+            body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error al procesar la acción');
@@ -552,11 +654,15 @@ export async function toggleStar(folder, id, element) {
     element.classList.toggle('starred', newStarred);
     element.querySelector('svg').setAttribute('fill', newStarred ? 'currentColor' : 'none');
     showToast(newStarred ? 'Añadiendo a Destacados...' : 'Eliminando de Destacados...');
+    
+    const body = { folder: currentFolder, id, star: newStarred, mode: mailMode };
+    if (mailMode === 'google' && googleEmail) body.google_email = googleEmail;
+
     try {
         const res = await fetch('/api/mail/star', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: currentFolder, id, star: newStarred, mode: mailMode })
+            body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error de conexión');
@@ -591,7 +697,9 @@ export async function readEmail(folder, id, element) {
 
         setAppLock(true);
         try {
-            const res = await fetch(`/api/mail/read?folder=${folder}&id=${id}&mode=${mailMode}`);
+            let url = `/api/mail/read?folder=${folder}&id=${id}&mode=${mailMode}`;
+            if (mailMode === 'google' && googleEmail) url += `&google_email=${encodeURIComponent(googleEmail)}`;
+            const res = await fetch(url);
             let data;
             try { data = await res.json(); } catch { throw new Error('Respuesta inválida del servidor'); }
 
@@ -882,6 +990,7 @@ export async function sendEmail(isScheduled = false, scheduledAt = null) {
         formData.append('subject', document.getElementById('compose-subject').value);
         formData.append('body', document.getElementById('compose-body').value);
         formData.append('mode', mailMode);
+        if (mailMode === 'google' && googleEmail) formData.append('google_email', googleEmail);
         formData.append('is_scheduled', isScheduled);
         if (scheduledAt) formData.append('scheduled_at', scheduledAt);
         composeSelectedFiles.forEach(file => formData.append('attachments', file));
@@ -963,6 +1072,7 @@ export function init() {
     // Expose functions needed by inline onclick attributes in the HTML
     const expose = {
         toggleTheme, setMailMode, openGoogleConfigModal, saveGoogleConfig,
+        removeGoogleAccount, loadMoreEmails,
         openCompose, closeCompose, toggleMinimize, toggleExpand, toggleCc,
         updateAttachmentsList, openScheduleModal, executeScheduledSend, sendEmail,
         switchFolder, loadCurrentFolder, loadFolders, toggleSelectAll, checkSelectAllState,

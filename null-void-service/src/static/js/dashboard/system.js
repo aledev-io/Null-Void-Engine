@@ -122,6 +122,13 @@ export function renderAppLauncher() {
     }
 
     grid.innerHTML = html;
+
+    const activeView = document.querySelector('.view.active');
+    if (activeView) {
+        const viewId = activeView.id.replace('view-', '');
+        const navItem = document.getElementById('nav-btn-' + viewId);
+        if (navItem) navItem.classList.add('active');
+    }
 }
 
 
@@ -167,3 +174,4 @@ export async function reorderModules(ids) {
 window.APPS = APPS;
 window.handleAppAction = handleAppAction;
 window.uninstallModule = uninstallModule;
+window.fetchApps = fetchApps;
