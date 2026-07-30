@@ -31,8 +31,8 @@ export const Calendar = {
       const evStart = ev.date;
       const evEnd = ev.endDate && ev.endDate !== ev.date ? ev.endDate : ev.date;
       // Iterate all days this event spans (capped to the visible month)
-      let cur = new Date(Math.max(new Date(evStart), new Date(year, month, 1)));
-      const cap = new Date(Math.min(new Date(evEnd), new Date(year, month + 1, 0)));
+      let cur = new Date(Math.max(window.parseDate(evStart), new Date(year, month, 1)));
+      const cap = new Date(Math.min(window.parseDate(evEnd), new Date(year, month + 1, 0)));
       while (cur <= cap) {
         const ds = window.dateToStr(cur);
         if (!evByDate[ds]) evByDate[ds] = [];
@@ -161,28 +161,47 @@ export const Calendar = {
       const evs = weekEvs[ds] || [];
       const isTod = ds === today;
 
-      const evHtml = evs.filter(e => !e.allDay).map(ev => {
-        const start = window.timeToMinutes(ev.startTime || '09:00');
-        let end = window.timeToMinutes(ev.endTime || '10:00');
-        if (ev.inProgress) {
-          const now = new Date();
-          const currentMins = now.getHours() * 60 + now.getMinutes();
-          end = Math.max(start + 30, currentMins);
+      const evHtml = (() => {
+        const nonAllDay = evs.filter(e => !e.allDay).map(ev => {
+          const start = window.timeToMinutes(ev.startTime || '09:00');
+          let end = window.timeToMinutes(ev.endTime || '10:00');
+          if (ev.inProgress) {
+            const now = new Date();
+            const currentMins = now.getHours() * 60 + now.getMinutes();
+            end = Math.max(start + 30, currentMins);
+          }
+          return { ev, start, end };
+        }).sort((a, b) => a.start - b.start || b.end - a.end);
+
+        const cols = [];
+        for (const item of nonAllDay) {
+          let col = 0;
+          while (col < cols.length && cols[col].some(o => item.start < o.end && o.start < item.end)) col++;
+          if (col >= cols.length) cols.push([]);
+          cols[col].push(item);
+          item.col = col;
+          item.totalCols = 0;
         }
-        const top = Math.max(0, (start - VIEW_START_HOUR * 60)) * (HOUR_PX / 60);
-        const height = Math.max(22, (end - start) * (HOUR_PX / 60));
-        const color = Events.color(ev);
-        const bg = Events.bgColor(ev);
-        const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
-        const timeDisplay = ev.inProgress ? `${ev.startTime}–${window.t('indefinido')}` : `${ev.startTime}–${ev.endTime}`;
-        return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
-                     data-id="${ev.id}"
-                     style="top:${top}px;height:${height}px;background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
-                     title="${ev.title}">
-                  <div class="time-event-title">${icon} ${ev.title}</div>
-                  ${height > 36 ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
-                </div>`;
-      }).join('');
+        nonAllDay.forEach(item => { item.totalCols = cols.length; });
+
+        return nonAllDay.map(({ ev, start, end, col, totalCols }) => {
+          const top = Math.max(0, (start - VIEW_START_HOUR * 60)) * (HOUR_PX / 60);
+          const height = Math.max(22, (end - start) * (HOUR_PX / 60));
+          const color = Events.color(ev);
+          const bg = Events.bgColor(ev);
+          const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
+          const timeDisplay = ev.inProgress ? `${ev.startTime}–${window.t('indefinido')}` : `${ev.startTime}–${ev.endTime}`;
+          const w = 100 / totalCols;
+          const l = col * w;
+          return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
+                       data-id="${ev.id}"
+                       style="top:${top}px;height:${height}px;width:calc(${w}% - 6px);left:calc(${l}% + 3px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
+                       title="${ev.title}">
+                    <div class="time-event-title">${icon} ${ev.title}</div>
+                    ${height > 36 ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
+                  </div>`;
+        }).join('');
+      })();
       let nowHtml = '';
       if (isTod) {
         const now = new Date();
@@ -277,28 +296,47 @@ export const Calendar = {
       gridLinesHtml += `<div class="week-half-line" style="top:${topH}px"></div>`;
     }
 
-    const evHtml = evs.filter(e => !e.allDay).map(ev => {
-      const start = window.timeToMinutes(ev.startTime || '09:00');
-      let end = window.timeToMinutes(ev.endTime || '10:00');
-      if (ev.inProgress) {
-        const now = new Date();
-        const currentMins = now.getHours() * 60 + now.getMinutes();
-        end = Math.max(start + 30, currentMins);
+    const evHtml = (() => {
+      const nonAllDay = evs.filter(e => !e.allDay).map(ev => {
+        const start = window.timeToMinutes(ev.startTime || '09:00');
+        let end = window.timeToMinutes(ev.endTime || '10:00');
+        if (ev.inProgress) {
+          const now = new Date();
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          end = Math.max(start + 30, currentMins);
+        }
+        return { ev, start, end };
+      }).sort((a, b) => a.start - b.start || b.end - a.end);
+
+      const cols = [];
+      for (const item of nonAllDay) {
+        let col = 0;
+        while (col < cols.length && cols[col].some(o => item.start < o.end && o.start < item.end)) col++;
+        if (col >= cols.length) cols.push([]);
+        cols[col].push(item);
+        item.col = col;
+        item.totalCols = 0;
       }
-      const top = Math.max(0, (start - VIEW_START_HOUR * 60)) * (HOUR_PX / 60);
-      const height = Math.max(22, (end - start) * (HOUR_PX / 60));
-      const color = Events.color(ev);
-      const bg = Events.bgColor(ev);
-      const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
-      const timeDisplay = ev.inProgress ? `${ev.startTime || ''} – ${window.t('indefinido')}` : `${ev.startTime || ''} – ${ev.endTime || ''}`;
-      return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
-                   data-id="${ev.id}" 
-                   style="top:${top}px;height:${height}px;background:${bg};color:${color};border-left-color:${color};left:6px;right:6px;${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
-                   title="${ev.title}">
-                <div class="time-event-title" style="font-size:13px;">${icon} ${ev.title}</div>
-                ${height > 36 ? `<div class="time-event-time">${timeDisplay}${ev.description ? ' · ' + ev.description.slice(0, 40) : ''}</div>` : ''}
-              </div>`;
-    }).join('');
+      nonAllDay.forEach(item => { item.totalCols = cols.length; });
+
+      return nonAllDay.map(({ ev, start, end, col, totalCols }) => {
+        const top = Math.max(0, (start - VIEW_START_HOUR * 60)) * (HOUR_PX / 60);
+        const height = Math.max(22, (end - start) * (HOUR_PX / 60));
+        const color = Events.color(ev);
+        const bg = Events.bgColor(ev);
+        const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
+        const timeDisplay = ev.inProgress ? `${ev.startTime || ''} – ${window.t('indefinido')}` : `${ev.startTime || ''} – ${ev.endTime || ''}`;
+        const w = 100 / totalCols;
+        const l = col * w;
+        return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
+                     data-id="${ev.id}" 
+                     style="top:${top}px;height:${height}px;width:calc(${w}% - 12px);left:calc(${l}% + 6px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
+                     title="${ev.title}">
+                  <div class="time-event-title" style="font-size:13px;">${icon} ${ev.title}</div>
+                  ${height > 36 ? `<div class="time-event-time">${timeDisplay}${ev.description ? ' · ' + ev.description.slice(0, 40) : ''}</div>` : ''}
+                </div>`;
+      }).join('');
+    })();
 
     let nowHtml = '';
     if (ds === today) {
