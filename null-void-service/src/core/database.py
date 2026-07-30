@@ -123,8 +123,7 @@ def init_db() -> None:
                 file_name   TEXT,
                 file_size   INTEGER,
                 edited_at   REAL,
-                FOREIGN KEY (sender_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (receiver_id) REFERENCES users(user_id) ON DELETE CASCADE
+                FOREIGN KEY (sender_id) REFERENCES users(user_id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS deleted_messages (
@@ -132,6 +131,26 @@ def init_db() -> None:
                 user_id    TEXT NOT NULL,
                 PRIMARY KEY (message_id, user_id),
                 FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_groups (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                description TEXT,
+                avatar      TEXT,
+                created_by  TEXT NOT NULL,
+                created_at  REAL NOT NULL,
+                FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_group_members (
+                group_id    TEXT NOT NULL,
+                user_id     TEXT NOT NULL,
+                role        TEXT DEFAULT 'member',
+                joined_at   REAL NOT NULL,
+                PRIMARY KEY (group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             );
 
@@ -147,8 +166,7 @@ def init_db() -> None:
                 user_id     TEXT NOT NULL,
                 contact_id  TEXT NOT NULL,
                 PRIMARY KEY (user_id, contact_id),
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (contact_id) REFERENCES users(user_id) ON DELETE CASCADE
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS internal_mail (
@@ -255,7 +273,7 @@ def init_db() -> None:
 
         # Columnas opcionales en events
         events_cols = {c[1] for c in conn.execute("PRAGMA table_info(events)").fetchall()}
-        for col, default in [("reminders", "DEFAULT '[]'"), ("is_important", "DEFAULT 0"), ("type", "DEFAULT 'event'")]:
+        for col, default in [("reminders", "DEFAULT '[]'"), ("is_important", "DEFAULT 0"), ("type", "DEFAULT 'event'"), ("location", "DEFAULT ''"), ("guests", "DEFAULT '[]'")]:
             if col not in events_cols:
                 conn.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT {default}")
 
@@ -347,6 +365,11 @@ def migrate_users_to_db(credentials_dict: dict):
 def row_to_dict(row: sqlite3.Row) -> dict:
     """Convierte una fila de eventos al formato del frontend."""
     d = dict(row)
+    guests_raw = d.get('guests')
+    try:
+        guests = json.loads(guests_raw) if guests_raw else []
+    except (json.JSONDecodeError, TypeError):
+        guests = []
     return {
         'id':          d['id'],
         'title':       d['title'],
@@ -361,7 +384,9 @@ def row_to_dict(row: sqlite3.Row) -> dict:
         'updatedAt':   d.get('updated_at'),
         'reminders':   json.loads(d.get('reminders', '[]')) if d.get('reminders') else [],
         'isImportant': bool(d.get('is_important', 0)),
-        'type':        d.get('type', 'event')
+        'type':        d.get('type', 'event'),
+        'location':    d.get('location') or '',
+        'guests':      guests,
     }
 
 

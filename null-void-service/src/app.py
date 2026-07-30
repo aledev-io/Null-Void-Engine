@@ -8,7 +8,7 @@ try:
     from gevent.hub import Hub
     _orig_handle_error = Hub.handle_error
     def _custom_handle_error(self, context, type, value, tb):
-        if type is not None and issubclass(type, ssl.SSLError):
+        if type is not None and (issubclass(type, ssl.SSLError) or issubclass(type, ConnectionResetError)):
             sys.stderr.write(f"[-] SSL Handshake Warning: {value}\n")
             sys.stderr.flush()
             return
@@ -144,7 +144,18 @@ def create_app():
         user = sess.get_user(token) if token else None
         if not user:
             return redirect(url_for('auth.index'))
-        return render_template('modules/calendar.html', user=user, token=token)
+        user_id = sess.get_user_id(token)
+        notes = []
+        friends = []
+        try:
+            from modules.api.ai.repository import get_user_notes
+            from modules.api.friends.services import get_friends_list
+            if user_id:
+                notes = get_user_notes(user_id)
+                friends = get_friends_list(user_id)
+        except Exception as err:
+            print(f"Error loading user data for calendar: {err}")
+        return render_template('modules/calendar.html', user=user, token=token, notes_json=json.dumps(notes), contacts_json=json.dumps(friends))
 
     @app.route('/docs')
     def docs():
@@ -161,7 +172,8 @@ def create_app():
         user = sess.get_user(token) if token else None
         if not user:
             return redirect(url_for('auth.index'))
-        return render_template('modules/chat.html', user=user, token=token)
+        user_id = sess.get_user_id(token) if token else None
+        return render_template('modules/chat.html', user=user, token=token, user_id=user_id)
 
     @app.route('/telemetry')
     def telemetry():

@@ -112,10 +112,19 @@ def upload_avatar(token, file_storage):
     return {"url": f"/api/system/user/avatar/{user_id}?v={int(os.path.getmtime(save_path))}"}
 
 
+GROUPS_AVATAR_DIR = os.path.join(CONFIG.DATA_DIR, 'chat', 'groups')
+os.makedirs(GROUPS_AVATAR_DIR, exist_ok=True)
+
 def get_avatar_path(identifier):
     for f in os.listdir(AVATARS_DIR):
         if f.startswith(f"{identifier}."):
             return os.path.join(AVATARS_DIR, f)
+            
+    if os.path.exists(GROUPS_AVATAR_DIR):
+        for f in os.listdir(GROUPS_AVATAR_DIR):
+            if f.startswith(f"{identifier}."):
+                return os.path.join(GROUPS_AVATAR_DIR, f)
+                
     return None
 
 

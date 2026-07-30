@@ -14,7 +14,7 @@ export const Notifications = {
 
   async requestPermission() {
     if (!('Notification' in window)) {
-      alert(window.currentLang === 'en' ? 'This browser does not support desktop notifications.' : 'Este navegador no soporta notificaciones de escritorio.');
+      alert(window.t('push_not_supported'));
       return false;
     }
     const permission = await Notification.requestPermission();

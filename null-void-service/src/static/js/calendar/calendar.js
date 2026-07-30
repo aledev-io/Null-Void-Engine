@@ -24,10 +24,21 @@ export const Calendar = {
     const daysInPrevMonth = new Date(year, month, 0).getDate();
 
     const monthEvents = Events.forMonth(year, month);
+
+    // Build a map: dateStr -> [events that appear on that day]
     const evByDate = {};
     for (const ev of monthEvents) {
-      if (!evByDate[ev.date]) evByDate[ev.date] = [];
-      evByDate[ev.date].push(ev);
+      const evStart = ev.date;
+      const evEnd = ev.endDate && ev.endDate !== ev.date ? ev.endDate : ev.date;
+      // Iterate all days this event spans (capped to the visible month)
+      let cur = new Date(Math.max(new Date(evStart), new Date(year, month, 1)));
+      const cap = new Date(Math.min(new Date(evEnd), new Date(year, month + 1, 0)));
+      while (cur <= cap) {
+        const ds = window.dateToStr(cur);
+        if (!evByDate[ds]) evByDate[ds] = [];
+        evByDate[ds].push({ ev, isStart: ds === evStart, isEnd: ds === window.dateToStr(cap) || ds === evEnd });
+        cur.setDate(cur.getDate() + 1);
+      }
     }
 
     const s = window.DAYS_SHORT;
@@ -49,7 +60,7 @@ export const Calendar = {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const isToday = dateStr === today;
       const isSel = dateStr === selectedDate;
-      const dayEvs = evByDate[dateStr] || [];
+      const dayEntries = evByDate[dateStr] || [];
 
       let cls = 'month-cell';
       if (isToday) cls += ' is-today';
@@ -59,22 +70,25 @@ export const Calendar = {
       const screenH = window.innerHeight;
       const MAX_SHOW = screenH <= 420 ? 1 : screenH <= 600 ? 2 : 3;
 
-      const chipsHtml = dayEvs.slice(0, MAX_SHOW).map(ev => {
+      const chipsHtml = dayEntries.slice(0, MAX_SHOW).map(({ ev, isStart, isEnd }) => {
         const color = Events.color(ev);
         const bg = Events.bgColor(ev);
+        const isMultiDay = ev.endDate && ev.endDate !== ev.date;
         const icon = ev.type === 'task' ? (ev.completed ? '' : SVG_TASK_PENDING) : (ev.allDay ? SVG_EVENT : '');
-        const timeHtml = ev.allDay || !ev.startTime ? '' : `<span class="event-time">${ev.startTime} </span>`;
+        const timeHtml = ev.inProgress ? `<span class="event-time" style="color:#38bdf8;font-weight:bold;">${window.t('indefinido')} </span>` : (ev.allDay || !ev.startTime || isMultiDay ? '' : `<span class="event-time">${ev.startTime} </span>`);
         const label = `${icon ? icon + ' ' : ''}${timeHtml}${ev.title}`.trim();
-        return `<div class="event-chip${ev.completed ? ' completed' : ''}" 
+        const contStart = isMultiDay && !isStart ? '▶ ' : '';
+        const contEnd = isMultiDay && !isEnd ? ' ▶' : '';
+        return `<div class="event-chip${ev.completed ? ' completed' : ''}${isMultiDay ? ' multi-day-chip' : ''}" 
                      data-id="${ev.id}" 
-                     style="background:${bg};color:${color};"
+                     style="background:${bg};color:${color};${isMultiDay && !isStart ? 'border-top-left-radius:0;border-bottom-left-radius:0;' : ''}${isMultiDay && !isEnd ? 'border-top-right-radius:0;border-bottom-right-radius:0;' : ''}"
                      title="${ev.title.replace(/"/g, '&quot;')}">
                   <span class="event-chip-dot" style="background:${color}"></span>
-                  <span class="event-chip-label">${label}</span>
+                  <span class="event-chip-label">${contStart}${label}${contEnd}</span>
                 </div>`;
       }).join('');
 
-      const remaining = dayEvs.length - MAX_SHOW;
+      const remaining = dayEntries.length - MAX_SHOW;
       const more = remaining > 0
         ? `<div class="more-events" data-date="${dateStr}">+${remaining} más</div>`
         : '';
@@ -149,18 +163,24 @@ export const Calendar = {
 
       const evHtml = evs.filter(e => !e.allDay).map(ev => {
         const start = window.timeToMinutes(ev.startTime || '09:00');
-        const end = window.timeToMinutes(ev.endTime || '10:00');
+        let end = window.timeToMinutes(ev.endTime || '10:00');
+        if (ev.inProgress) {
+          const now = new Date();
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          end = Math.max(start + 30, currentMins);
+        }
         const top = Math.max(0, (start - VIEW_START_HOUR * 60)) * (HOUR_PX / 60);
         const height = Math.max(22, (end - start) * (HOUR_PX / 60));
         const color = Events.color(ev);
         const bg = Events.bgColor(ev);
         const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
-        return `<div class="time-event${ev.completed ? ' completed' : ''}" 
+        const timeDisplay = ev.inProgress ? `${ev.startTime}–${window.t('indefinido')}` : `${ev.startTime}–${ev.endTime}`;
+        return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
                      data-id="${ev.id}"
-                     style="top:${top}px;height:${height}px;background:${bg};color:${color};border-left-color:${color};"
+                     style="top:${top}px;height:${height}px;background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
                      title="${ev.title}">
                   <div class="time-event-title">${icon} ${ev.title}</div>
-                  ${height > 36 ? `<div class="time-event-time">${ev.startTime}–${ev.endTime}</div>` : ''}
+                  ${height > 36 ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
                 </div>`;
       }).join('');
       let nowHtml = '';
@@ -259,18 +279,24 @@ export const Calendar = {
 
     const evHtml = evs.filter(e => !e.allDay).map(ev => {
       const start = window.timeToMinutes(ev.startTime || '09:00');
-      const end = window.timeToMinutes(ev.endTime || '10:00');
+      let end = window.timeToMinutes(ev.endTime || '10:00');
+      if (ev.inProgress) {
+        const now = new Date();
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        end = Math.max(start + 30, currentMins);
+      }
       const top = Math.max(0, (start - VIEW_START_HOUR * 60)) * (HOUR_PX / 60);
       const height = Math.max(22, (end - start) * (HOUR_PX / 60));
       const color = Events.color(ev);
       const bg = Events.bgColor(ev);
       const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
-      return `<div class="time-event${ev.completed ? ' completed' : ''}" 
-                   data-id="${ev.id}"
-                   style="top:${top}px;height:${height}px;background:${bg};color:${color};border-left-color:${color};left:6px;right:6px;"
+      const timeDisplay = ev.inProgress ? `${ev.startTime || ''} – ${window.t('indefinido')}` : `${ev.startTime || ''} – ${ev.endTime || ''}`;
+      return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
+                   data-id="${ev.id}" 
+                   style="top:${top}px;height:${height}px;background:${bg};color:${color};border-left-color:${color};left:6px;right:6px;${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
                    title="${ev.title}">
                 <div class="time-event-title" style="font-size:13px;">${icon} ${ev.title}</div>
-                ${height > 36 ? `<div class="time-event-time">${ev.startTime} – ${ev.endTime}${ev.description ? ' · ' + ev.description.slice(0, 40) : ''}</div>` : ''}
+                ${height > 36 ? `<div class="time-event-time">${timeDisplay}${ev.description ? ' · ' + ev.description.slice(0, 40) : ''}</div>` : ''}
               </div>`;
     }).join('');
 
@@ -302,11 +328,12 @@ export const Calendar = {
       ? `<div style="padding:8px 16px;background:var(--bg-elevated);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <span style="font-size: 12px; color: var(--text-dim); font-weight: bold;">Notas vinculadas:</span>
           ${notesForDay.map(note => {
-            return `<div class="note-chip" data-note-id="${note.id}" title="Ver nota en Dashboard"
+        const noteSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+        return `<div class="note-chip" data-note-id="${note.id}" title="Ver nota en Dashboard"
                          style="background:var(--bg-hover);color:var(--text-main);cursor:pointer;padding:4px 10px;font-size:12px;border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;gap:4px;">
-                      📝 ${note.title || 'Sin título'}
+                      ${noteSvg} ${note.title || 'Sin título'}
                     </div>`;
-          }).join('')}
+      }).join('')}
         </div>`
       : '';
 
@@ -341,8 +368,8 @@ export const Calendar = {
       el.addEventListener('click', e => { e.stopPropagation(); onEventClick(el.dataset.id); });
     });
     container.querySelectorAll('.note-chip').forEach(el => {
-      el.addEventListener('click', e => { 
-        e.stopPropagation(); 
+      el.addEventListener('click', e => {
+        e.stopPropagation();
         // Redirect to dashboard where the note can be viewed
         window.location.href = '/app?view=dashboard#nota-' + el.dataset.noteId;
       });

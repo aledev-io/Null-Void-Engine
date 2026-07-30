@@ -18,7 +18,7 @@ limiter.exempt(chat_bp)
 
 
 def _get_upload_dir() -> str:
-    return os.path.join(CONFIG.DATA_DIR, 'chat_uploads')
+    return os.path.join(CONFIG.DATA_DIR, 'chat', 'uploads')
 
 def login_required(f):
     @wraps(f)
@@ -63,6 +63,15 @@ def get_messages():
 @chat_bp.route('/send', methods=['POST'])
 @login_required
 def send_message():
+    try:
+        return _send_message_impl()
+    except Exception:
+        import traceback
+        tb = traceback.format_exc()
+        sys.stderr.write(f"[CHAT][SEND_UNHANDLED] {tb}\n")
+        return jsonify(error=f"Error interno: {tb.splitlines()[-1]}"), 500
+
+def _send_message_impl():
     user_id = request.user_id
     if request.is_json:
         data = request.get_json() or {}
@@ -99,30 +108,31 @@ def send_message():
                 
                 # Integración con Cloud: Mensajeria
                 try:
-                    sender_data = sess.get_user(request.user_token)
-                    receiver_data = repository.get_contact_by_id(receiver_id)
-                    if sender_data and receiver_data:
-                        sender_username = sender_data['username']
-                        receiver_username = receiver_data['username']
-                        
-                        from modules.api.cloud.services import BASE_CLOUD_ROOT
-                        def sanitize_uid(uid):
-                            return "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip() or "unknown"
-                        
-                        sender_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(user_id), "Mensajeria", receiver_username)
-                        receiver_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(receiver_id), "Mensajeria", sender_username)
-                        
-                        os.makedirs(sender_cloud_dir, exist_ok=True)
-                        os.makedirs(receiver_cloud_dir, exist_ok=True)
-                        
-                        def link_or_copy(src, dst):
-                            try:
-                                os.link(src, dst)
-                            except OSError:
-                                shutil.copy2(src, dst)
-                                
-                        link_or_copy(save_path, os.path.join(sender_cloud_dir, file_name))
-                        link_or_copy(save_path, os.path.join(receiver_cloud_dir, file_name))
+                    if not receiver_id.startswith('group_'):
+                        sender_data = sess.get_user(request.user_token)
+                        receiver_data = repository.get_contact_by_id(receiver_id)
+                        if sender_data and receiver_data:
+                            sender_username = sender_data['username']
+                            receiver_username = receiver_data['username']
+                            
+                            from modules.api.cloud.services import BASE_CLOUD_ROOT
+                            def sanitize_uid(uid):
+                                return "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip() or "unknown"
+                            
+                            sender_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(user_id), "Mensajeria", receiver_username)
+                            receiver_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(receiver_id), "Mensajeria", sender_username)
+                            
+                            os.makedirs(sender_cloud_dir, exist_ok=True)
+                            os.makedirs(receiver_cloud_dir, exist_ok=True)
+                            
+                            def link_or_copy(src, dst):
+                                try:
+                                    os.link(src, dst)
+                                except OSError:
+                                    shutil.copy2(src, dst)
+                                    
+                            link_or_copy(save_path, os.path.join(sender_cloud_dir, file_name))
+                            link_or_copy(save_path, os.path.join(receiver_cloud_dir, file_name))
                 except Exception as ex:
                     sys.stderr.write(f"[CHAT][CLOUD_SYNC_ERROR] {ex}\n")
                     
@@ -136,16 +146,33 @@ def send_message():
     if error:
         return jsonify(error=error), 404 if "encontrado" in error else 400
 
-    socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{result['receiver_id']}")
-    socketio.emit('new_message', result, room=f"user_{user_id}")
-    
-    # Only notify if the receiver hasn't muted the sender
-    if not repository.is_muted(receiver_id, user_id):
-        sender = sess.get_user(request.user_token)
-        if sender:
-            notifier.notify_chat_message(sender['username'], receiver_id, message, file_name)
+    try:
+        sender_row = repository.get_user_receiver(user_id)
+        sender_name = sender_row['username'] if sender_row else 'Unknown'
+
+        if receiver_id.startswith('group_'):
+            members = repository.get_group_members(receiver_id)
+            for member_id in members:
+                socketio.emit('new_message', {**result, 'mine': member_id == user_id}, room=f"user_{member_id}")
+                
+            group_info = repository.get_contact_info(receiver_id)
+            if group_info:
+                for member_id in members:
+                    if member_id != user_id and not repository.is_muted(member_id, receiver_id):
+                        notifier.notify_chat_message(f"{sender_name} @ {group_info['username']}", member_id, message, file_name)
+        else:
+            socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{result['receiver_id']}")
+            socketio.emit('new_message', result, room=f"user_{user_id}")
+            
+            # Only notify if the receiver hasn't muted the sender
+            if not repository.is_muted(receiver_id, user_id):
+                notifier.notify_chat_message(sender_name, receiver_id, message, file_name)
+    except Exception as ex:
+        import traceback
+        sys.stderr.write(f"[CHAT][SEND_ERROR] {traceback.format_exc()}\n")
     
     return jsonify(ok=True, message=result)
+
 
 
 @chat_bp.route('/download/<string:msg_id>')
@@ -178,6 +205,146 @@ def mark_as_read():
 @login_required
 def unread_count():
     return jsonify(count=services.get_unread_count(request.user_id))
+
+
+@chat_bp.route('/hide_recent', methods=['POST'])
+@login_required
+def hide_recent_conversation():
+    data = request.get_json() or {}
+    contact_id = data.get('contact_id')
+    if not contact_id:
+        return jsonify(error="Falta contact_id"), 400
+        
+    if contact_id.startswith('group_'):
+        repository.delete_conversation(request.user_id, contact_id)
+    else:
+        repository.delete_conversation(request.user_id, contact_id)
+    return jsonify(ok=True)
+
+
+# --- GROUPS ENDPOINTS ---
+
+@chat_bp.route('/group/create', methods=['POST'])
+@login_required
+def create_group():
+    if request.is_json:
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        members = data.get('members', [])
+        avatar_file = None
+    else:
+        name = request.form.get('name', '').strip()
+        import json
+        try:
+            members = json.loads(request.form.get('members', '[]'))
+        except:
+            members = []
+        avatar_file = request.files.get('avatar')
+    
+    if not name:
+        return jsonify(error="Nombre de grupo requerido"), 400
+        
+    if len(name) > 100:
+        return jsonify(error="El nombre del grupo no puede exceder los 100 caracteres"), 400
+        
+    if len(members) > 50:
+        return jsonify(error="Máximo 50 miembros permitidos"), 400
+        
+    group_id = repository.create_group(name, request.user_id)
+    for m in members:
+        repository.add_group_member(group_id, m)
+        
+    if avatar_file:
+        import os
+        from modules.api.system.services import GROUPS_AVATAR_DIR
+        ext = os.path.splitext(avatar_file.filename)[1].lower()
+        if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+            safe_id = "".join(c for c in group_id if c.isalnum() or c in '._-')
+            save_path = os.path.join(GROUPS_AVATAR_DIR, f"{safe_id}{ext}")
+            avatar_file.save(save_path)
+            
+    return jsonify(ok=True, group_id=group_id)
+
+@chat_bp.route('/group/members', methods=['POST'])
+@login_required
+def get_group_members():
+    data = request.get_json() or {}
+    group_id = data.get('group_id')
+    if not group_id:
+        return jsonify(error="Falta group_id"), 400
+        
+    creator = repository.get_group_creator(group_id)
+    member_ids = repository.get_group_members(group_id)
+    members = []
+    for mid in member_ids:
+        info = repository.get_contact_info(mid)
+        if info:
+            members.append({
+                'user_id': mid, 
+                'username': info['username'],
+                'is_owner': (mid == creator)
+            })
+            
+    return jsonify(ok=True, members=members, creator_id=creator)
+
+@chat_bp.route('/group/add_member', methods=['POST'])
+@login_required
+def add_group_member():
+    data = request.get_json() or {}
+    group_id = data.get('group_id')
+    user_id = data.get('user_id')
+    user_ids = data.get('user_ids') or ([user_id] if user_id else [])
+    
+    if not group_id or not user_ids:
+        return jsonify(error="Faltan parámetros"), 400
+        
+    if not repository.is_group_member(group_id, request.user_id):
+        return jsonify(error="No eres miembro de este grupo"), 403
+        
+    members = repository.get_group_members(group_id)
+    if len(members) + len(user_ids) > 50:
+        return jsonify(error="El grupo superaría el límite de 50 miembros"), 400
+        
+    for uid in user_ids:
+        repository.add_group_member(group_id, uid)
+    return jsonify(ok=True)
+
+@chat_bp.route('/group/leave', methods=['POST'])
+@login_required
+def leave_group():
+    data = request.get_json() or {}
+    group_id = data.get('group_id')
+    
+    if not group_id:
+        return jsonify(error="Falta group_id"), 400
+        
+    creator = repository.get_group_creator(group_id)
+    if creator == request.user_id:
+        members = repository.get_group_members(group_id)
+        if len(members) > 1:
+            return jsonify(error="Como creador del grupo, no puedes salirte hasta que seas el único miembro."), 400
+
+    repository.remove_group_member(group_id, request.user_id)
+    return jsonify(ok=True)
+
+
+@chat_bp.route('/group/delete', methods=['POST'])
+@login_required
+def delete_group():
+    data = request.get_json() or {}
+    group_id = data.get('group_id')
+    
+    if not group_id:
+        return jsonify(error="Falta group_id"), 400
+        
+    creator = repository.get_group_creator(group_id)
+    if creator != request.user_id:
+        return jsonify(error="Solo el creador del grupo puede eliminarlo."), 403
+
+    repository.delete_group(group_id)
+    return jsonify(ok=True)
+
+
 
 
 @chat_bp.route('/new', methods=['POST'])
@@ -235,9 +402,15 @@ def edit_message():
         return jsonify(error=error), 400
 
     payload = {'msg_id': msg_id, 'message': new_text, 'edited_at': result['edited_at']}
-    socketio.emit('message_edited', payload, room=f"user_{user_id}")
-    if msg['receiver_id'] != user_id:
-        socketio.emit('message_edited', payload, room=f"user_{msg['receiver_id']}")
+
+    if msg['receiver_id'].startswith('group_'):
+        members = repository.get_group_members(msg['receiver_id'])
+        for member_id in members:
+            socketio.emit('message_edited', payload, room=f"user_{member_id}")
+    else:
+        socketio.emit('message_edited', payload, room=f"user_{user_id}")
+        if msg['receiver_id'] != user_id:
+            socketio.emit('message_edited', payload, room=f"user_{msg['receiver_id']}")
 
     return jsonify(ok=True, edited_at=result['edited_at'])
 
@@ -260,9 +433,26 @@ def delete_message():
 
     ok, msg = services.delete_message(user_id, msg_id, delete_type, delete_files)
     if ok:
-        socketio.emit('message_deleted', {'msg_id': msg_id}, room=f"user_{user_id}")
-        if delete_type == 'for_everyone' and r['receiver_id'] != user_id:
-            socketio.emit('message_deleted', {'msg_id': msg_id}, room=f"user_{r['receiver_id']}")
+        is_group_msg = r['receiver_id'].startswith('group_')
+        payload = {
+            'msg_id': msg_id,
+            'for_everyone': delete_type == 'for_everyone',
+            'sender_id': r['sender_id'],
+            'receiver_id': r['receiver_id'],
+        }
+
+        if delete_type == 'for_everyone':
+            if is_group_msg:
+                members = repository.get_group_members(r['receiver_id'])
+                for member_id in members:
+                    socketio.emit('message_deleted', payload, room=f"user_{member_id}")
+            else:
+                socketio.emit('message_deleted', payload, room=f"user_{user_id}")
+                if r['receiver_id'] != user_id:
+                    socketio.emit('message_deleted', payload, room=f"user_{r['receiver_id']}")
+        else:
+            socketio.emit('message_deleted', payload, room=f"user_{user_id}")
+
     return jsonify(ok=ok, msg=msg)
 
 
@@ -272,6 +462,19 @@ def delete_conversation():
     data = request.get_json() or {}
     contact_id = data.get('contact_id')
     ok, error = services.delete_conversation(request.user_id, contact_id)
+    if not ok:
+        return jsonify(error=error), 400
+    return jsonify(success=True)
+
+@chat_bp.route('/clear_conversation', methods=['POST'])
+@login_required
+def clear_conversation():
+    data = request.get_json() or {}
+    contact_id = data.get('contact_id')
+    delete_files = data.get('delete_files', False)
+    if not contact_id:
+        return jsonify(error="contact_id requerido"), 400
+    ok, error = services.clear_conversation(request.user_id, contact_id, delete_files)
     if not ok:
         return jsonify(error=error), 400
     return jsonify(success=True)

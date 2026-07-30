@@ -126,7 +126,11 @@ def get_emails(user_id, folder, mode, force_refresh=False, google_email=None, pa
                 
         for t in threads.values():
             t["id"] = ",".join(t["id"])
-        return {"emails": list(threads.values()), "has_more": has_more}
+        thread_list = list(threads.values())
+        # Si hay menos threads que el límite pedido, ya no hay más páginas
+        if len(thread_list) < limit:
+            has_more = False
+        return {"emails": thread_list, "has_more": has_more}
 
     if folder == 'scheduled':
         rows, has_more = repository.get_internal_emails(user_id, 'scheduled', page, limit)

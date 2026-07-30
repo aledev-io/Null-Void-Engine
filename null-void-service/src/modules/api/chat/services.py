@@ -15,6 +15,8 @@ def get_conversations(user_id):
         conversations.append({
             'contact_id': cid,
             'contact_name': contact['username'],
+            'is_group': contact['is_group'],
+            'is_owner': (repository.get_group_creator(cid) == user_id) if contact['is_group'] else False,
             'last_message': last_msg['message'] if last_msg else '',
             'last_time': last_msg['created_at'] if last_msg else 0,
             'last_sender': last_msg['sender_id'] if last_msg else '',
@@ -32,13 +34,25 @@ def get_messages(user_id, contact_id, before, limit):
         rows = repository.get_messages_before(user_id, contact_id, before, limit)
     else:
         rows = repository.get_messages_recent(user_id, contact_id, limit)
-    result = [{
-        'id': m['id'], 'sender_id': m['sender_id'],
-        'message': m['message'], 'time': m['created_at'],
-        'read': bool(m['read']), 'mine': m['sender_id'] == user_id,
-        'file_path': m['file_path'], 'file_name': m['file_name'],
-        'file_size': m['file_size'], 'edited_at': m['edited_at']
-    } for m in rows]
+        
+    is_group = contact_id.startswith('group_')
+    creator_id = repository.get_group_creator(contact_id) if is_group else None
+    
+    result = []
+    for m in rows:
+        sender_name = None
+        if is_group:
+            sender_info = repository.get_contact_info(m['sender_id'])
+            sender_name = sender_info['username'] if sender_info else m['sender_id']
+        result.append({
+            'id': m['id'], 'sender_id': m['sender_id'],
+            'sender_name': sender_name,
+            'is_owner': (m['sender_id'] == creator_id) if is_group else False,
+            'message': m['message'], 'time': m['created_at'],
+            'read': bool(m['read']), 'mine': m['sender_id'] == user_id,
+            'file_path': m['file_path'], 'file_name': m['file_name'],
+            'file_size': m['file_size'], 'edited_at': m['edited_at']
+        })
     result.reverse()
     return result
 
@@ -51,13 +65,24 @@ def send_message(user_id, receiver_id, message, file_path=None, file_name=None, 
     if message and len(message) > 65536:
         return None, "Mensaje demasiado largo (máx 65536 caracteres)"
 
-    receiver = repository.get_user_receiver(receiver_id)
-    if not receiver:
-        return None, "Usuario no encontrado"
+    if receiver_id.startswith('group_'):
+        if not repository.is_group_member(receiver_id, user_id):
+            return None, "No eres miembro de este grupo"
+    else:
+        receiver = repository.get_user_receiver(receiver_id)
+        if not receiver:
+            return None, "Usuario no encontrado"
 
     msg_id, now = repository.insert_message(user_id, receiver_id, message or "", file_path, file_name, file_size)
+    
+    sender_name = None
+    if receiver_id.startswith('group_'):
+        sender_info = repository.get_contact_info(user_id)
+        sender_name = sender_info['username'] if sender_info else user_id
+        
     return {
         'id': msg_id, 'sender_id': user_id, 'receiver_id': receiver_id,
+        'sender_name': sender_name,
         'message': message or "", 'time': now, 'read': False, 'mine': True,
         'file_path': file_path, 'file_name': file_name, 'file_size': file_size,
         'edited_at': None
@@ -94,6 +119,26 @@ def delete_message(user_id, msg_id, delete_type='for_me', delete_files=False):
 def delete_conversation(user_id, contact_id):
     ok = repository.delete_conversation(user_id, contact_id)
     return ok, "Conversación eliminada" if ok else "No se pudo eliminar"
+
+import shutil
+import sys
+def clear_conversation(user_id, contact_id, delete_files=False):
+    if delete_files:
+        try:
+            # Eliminar la carpeta del usuario en Cloud -> Mensajeria -> contact_username
+            contact_data = repository.get_contact_by_id(contact_id)
+            if contact_data:
+                from modules.api.cloud.services import BASE_CLOUD_ROOT
+                def sanitize_uid(uid):
+                    return "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip() or "unknown"
+                cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(user_id), "Mensajeria", contact_data['username'])
+                if os.path.exists(cloud_dir):
+                    shutil.rmtree(cloud_dir)
+        except Exception as e:
+            sys.stderr.write(f"[CHAT][ERROR] Error al vaciar archivos en cloud: {e}\n")
+
+    ok = repository.clear_conversation(user_id, contact_id)
+    return ok, "Chat vaciado" if ok else "No se pudo vaciar"
 
 def toggle_mute(user_id, contact_id):
     if repository.is_muted(user_id, contact_id):

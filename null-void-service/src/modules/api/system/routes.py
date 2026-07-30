@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, jsonify, request, send_from_directory
 from modules.session import session as sess
+from core.limiter import limiter
 from . import services
 
 system_bp = Blueprint('system', __name__, url_prefix='/api/system')
@@ -211,6 +212,7 @@ def upload_avatar():
 
 
 @system_bp.route('/user/avatar/<identifier>', methods=['GET'])
+@limiter.exempt
 def get_avatar(identifier):
     path = services.get_avatar_path(identifier)
     
@@ -233,7 +235,7 @@ def get_avatar(identifier):
     return "", 204
 
 
-from core.limiter import limiter
+
 
 @system_bp.route('/notifications/history', methods=['GET'])
 @limiter.exempt

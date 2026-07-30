@@ -4,10 +4,10 @@ let FOLDERS = [
     { id: 'inbox', name: 'Recibidos', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>', section: 'principal' },
     { id: 'starred', name: 'Destacados', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>', section: 'principal' },
     { id: 'important', name: 'Importantes', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>', section: 'principal' },
-    { id: 'sent', name: 'Enviados', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>', section: 'carpetas' },
-    { id: 'drafts', name: 'Borradores', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>', section: 'carpetas' },
-    { id: 'scheduled', name: 'Programados', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><circle cx="12" cy="15" r="1"></circle></svg>', section: 'carpetas' },
-    { id: 'all', name: 'Todos', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>', section: 'carpetas' },
+    { id: 'sent', name: 'Enviados', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>', section: 'principal' },
+    { id: 'drafts', name: 'Borradores', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>', section: 'principal' },
+    { id: 'scheduled', name: 'Programados', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><circle cx="12" cy="15" r="1"></circle></svg>', section: 'principal' },
+    { id: 'all', name: 'Todos', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>', section: 'principal' },
     { id: 'spam', name: 'Spam', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>', section: 'sistema' },
     { id: 'trash', name: 'Papelera', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>', section: 'sistema' },
 ];
@@ -288,7 +288,8 @@ export async function loadFolders(forceRefresh = false) {
         data.folders.forEach(f => {
             folderUnreads[f.id] = f.unread;
             if (!defaultIds.has(f.id) && !ignoreNames.has(f.name)) {
-                newFolders.push({ id: f.id, name: f.name, icon: '🏷️', section: 'carpetas' });
+                const tagSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>';
+                newFolders.push({ id: f.id, name: f.name, icon: tagSvg, section: 'carpetas' });
             }
         });
 
@@ -340,6 +341,12 @@ export function switchFolder(folderId) {
     document.querySelectorAll('#folder-nav .nav-link').forEach(el => {
         el.classList.toggle('active', el.dataset.folder === folderId);
     });
+    const folderTitleEl = document.getElementById('topbar-folder-title');
+    if (folderTitleEl) {
+        const folderInfo = FOLDERS.find(f => f.id === folderId);
+        folderTitleEl.textContent = folderInfo ? folderInfo.name : folderId;
+        folderTitleEl.setAttribute('data-i18n', `mail_folder_${folderId}`);
+    }
     loadCurrentFolder();
 }
 
@@ -402,11 +409,17 @@ export async function loadCurrentFolder(silent = false, forceRefresh = false, lo
         }
 
         if (loadMore) {
-            folderCache[currentFolder] = (folderCache[currentFolder] || []).concat(data.emails);
+            const existing = folderCache[currentFolder] || [];
+            const existingIds = new Set(existing.map(e => e.id));
+            const newEmails = data.emails.filter(e => !existingIds.has(e.id));
+            folderCache[currentFolder] = existing.concat(newEmails);
+            // Si no se añadió ninguno nuevo, no hay más páginas reales
+            if (newEmails.length === 0) currentHasMore = false;
+            else currentHasMore = data.has_more;
         } else {
             folderCache[currentFolder] = data.emails;
+            currentHasMore = data.has_more;
         }
-        currentHasMore = data.has_more;
         updateContactsFromEmails(data.emails);
 
         if (silent && !loadMore) {
@@ -788,41 +801,84 @@ function renderEmailBody(data) {
 
         // Treat identical plain/html as plain text (fixes older internal emails)
         if (data.body_html && data.body_html !== data.body_plain) {
+            const htmlCard = document.createElement('div');
+            htmlCard.className = 'html-mail-card';
+
             const iframe = document.createElement('iframe');
+            iframe.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox');
             iframe.style.width = '100%';
             iframe.style.border = 'none';
-            iframe.style.background = 'transparent';
-            iframe.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox');
+            iframe.style.background = '#ffffff';
+            iframe.style.minHeight = '700px';
             
-            // Inject dark mode styles to make HTML emails blend professionally
-            const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none';style-src 'unsafe-inline';img-src https: http: data: cid: blob:;">
+            const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https: http: data:; font-src https: http: data:; img-src https: http: data: cid: blob:; media-src https: http: data: blob:;">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
             <style>
-                :root { color-scheme: dark; }
-                body {
-                    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-                    padding: 10px 0;
+                html, body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                     margin: 0;
-                    color: #f3f4f6 !important;
-                    background-color: transparent !important;
-                    word-break: break-word;
-                    font-size: 0.95rem;
+                    padding: 16px;
+                    background-color: #ffffff !important;
+                    color: #202124 !important;
+                    font-size: 14px;
                     line-height: 1.5;
+                    word-break: break-word;
+                    box-sizing: border-box;
+                    border-radius: 12px;
+                    width: 100% !important;
+                    overflow-x: hidden !important;
                 }
-                /* Force text colors in common wrappers to be readable in dark mode */
-                div, p, span, td { color: inherit !important; }
-                table { background-color: transparent !important; }
+                @media (max-width: 600px) {
+                    html, body { padding: 8px !important; font-size: 13px !important; }
+                }
+                img { max-width: 100% !important; height: auto !important; }
+                a { color: #1a73e8; }
+                table { max-width: 100% !important; width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 auto !important; }
+                td, tr, tbody, table { max-width: 100% !important; box-sizing: border-box !important; }
+                div, p { max-width: 100% !important; box-sizing: border-box !important; }
             </style>`;
             
             iframe.srcdoc = csp + data.body_html;
             
-            // Auto-resize iframe height
-            iframe.onload = () => {
+            const updateHeight = () => {
                 try {
-                    iframe.style.height = (iframe.contentWindow.document.documentElement.scrollHeight + 30) + 'px';
+                    const win = iframe.contentWindow;
+                    if (win && win.document) {
+                        const body = win.document.body;
+                        const doc = win.document.documentElement;
+                        if (body && doc) {
+                            let maxH = 700;
+                            if (body.children) {
+                                for (let i = 0; i < body.children.length; i++) {
+                                    const c = body.children[i];
+                                    maxH = Math.max(maxH, c.scrollHeight || 0, c.offsetHeight || 0);
+                                }
+                            }
+                            const h = Math.max(
+                                maxH,
+                                body.scrollHeight || 0,
+                                body.offsetHeight || 0,
+                                doc.scrollHeight || 0,
+                                doc.offsetHeight || 0
+                            );
+                            iframe.style.height = (h + 80) + 'px';
+                        }
+                    }
+                } catch(e) {}
+            };
+
+            iframe.onload = () => {
+                updateHeight();
+                const interval = setInterval(updateHeight, 300);
+                setTimeout(() => clearInterval(interval), 4000);
+                try {
+                    const ro = new ResizeObserver(updateHeight);
+                    ro.observe(iframe.contentWindow.document.body);
                 } catch(e) {}
             };
             
-            wrapper.appendChild(iframe);
+            htmlCard.appendChild(iframe);
+            wrapper.appendChild(htmlCard);
         } else if (data.body_plain || data.body_html) {
             const plainDiv = document.createElement('div');
             plainDiv.className = 'plain-text-mail';

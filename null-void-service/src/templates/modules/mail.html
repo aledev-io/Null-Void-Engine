@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Correo - Null-Void Engine</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/mail.css') }}">
@@ -22,7 +22,7 @@
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <div style="font-weight:800;font-size:1.05rem;color:var(--text-main);" data-i18n="app_name_mail">Correo</div>
+            <div id="topbar-folder-title" style="font-weight:800;font-size:1.05rem;color:var(--text-main);" data-i18n="mail_folder_inbox">Recibidos</div>
         </div>
         <div class="tb-center">
             <div class="search-bar">
@@ -209,9 +209,8 @@
             <div class="email-list" id="email-list"></div>
         </div>
 
-        <!-- READER PANEL -->
         <div id="reader-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:var(--surface);">
-            <div class="reader-content" id="reader-content">
+            <div class="reader-content" id="reader-content" style="display:flex;flex-direction:column;flex:1;height:100%;overflow:hidden;">
                 <div class="panel-header" style="gap:8px;">
                     <button class="btn-icon" onclick="backToList()" title="Volver a la lista" data-i18n-title="mail_tt_back">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>

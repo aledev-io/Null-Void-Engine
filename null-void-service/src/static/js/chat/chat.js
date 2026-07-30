@@ -14,11 +14,27 @@ let _forwardDialogData = [];
 let _chatSelectionMode = false;
 let _lastSelectedMsgId = null;
 let _chatReplyToMsg = null;
+let _chatEditMsgId = null;
+let _chatEditReplySnippet = null;
+let _loadConvPending = false;
+let _lastConvLoad = 0;
 
 window.cancelChatReply = function () {
     _chatReplyToMsg = null;
     const prev = document.getElementById('chat-reply-preview');
     if (prev) prev.style.display = 'none';
+};
+
+window.cancelChatEdit = function () {
+    _chatEditMsgId = null;
+    _chatEditReplySnippet = null;
+    const prev = document.getElementById('chat-edit-preview');
+    if (prev) prev.style.display = 'none';
+    const input = document.getElementById('chat-input');
+    if (input) {
+        input.value = '';
+        if (typeof updateChatActionBtn === 'function') updateChatActionBtn();
+    }
 };
 
 /* ─── Helpers ─── */
@@ -238,21 +254,80 @@ function initSocketConnection() {
     });
 
     chatSocket.on('message_edited', (data) => {
-        const msg = chatMessages.find(m => m.id === data.msg_id);
+        // Use == (not ===) to handle int/string ID mismatches from SQLite vs JSON
+        const msg = chatMessages.find(m => m.id == data.msg_id);
         if (msg) {
             msg.message = data.message;
             msg.edited_at = data.edited_at;
             renderChatMessages();
         }
+        // Also update all cached conversations
+        for (const cid in _chatMessageCache) {
+            const cached = _chatMessageCache[cid];
+            if (!Array.isArray(cached)) continue;
+            const cm = cached.find(m => m.id == data.msg_id);
+            if (cm) {
+                cm.message = data.message;
+                cm.edited_at = data.edited_at;
+            }
+        }
+        loadChatConversations(true);
     });
 
     chatSocket.on('message_deleted', (data) => {
-        const idx = chatMessages.findIndex(m => m.id === data.msg_id);
-        if (idx !== -1) {
-            chatMessages.splice(idx, 1);
-            renderChatMessages();
+        // Determine which conversation this belongs to
+        let affectedContactId = null;
+        if (data.receiver_id) {
+            if (data.receiver_id.startsWith('group_')) {
+                affectedContactId = data.receiver_id;
+            } else {
+                const myId = window.CURRENT_USER_ID;
+                affectedContactId = (data.sender_id === myId) ? data.receiver_id : data.sender_id;
+            }
         }
+
+        if (affectedContactId) {
+            delete _chatMessageCache[affectedContactId];
+        }
+
+        // 1. Update active chat if open
+        const idx = chatMessages.findIndex(m => m.id == data.msg_id);
+        if (idx !== -1) {
+            if (data.for_everyone) {
+                chatMessages[idx].message = '[DELETED]';
+                chatMessages[idx].file_name = null;
+                chatMessages[idx].file_path = null;
+            } else {
+                chatMessages.splice(idx, 1);
+            }
+            if (currentChatContact && _chatMessageCache[currentChatContact.contact_id]) {
+                _chatMessageCache[currentChatContact.contact_id] = [...chatMessages];
+            }
+            renderChatMessages();
+        } else if (currentChatContact && affectedContactId && currentChatContact.contact_id === affectedContactId) {
+            loadChatMessages(affectedContactId);
+        }
+
+        // 2. Update all cached conversations
+        for (const cid in _chatMessageCache) {
+            const cached = _chatMessageCache[cid];
+            if (!Array.isArray(cached)) continue;
+            const cidx = cached.findIndex(m => m.id == data.msg_id);
+            if (cidx !== -1) {
+                if (data.for_everyone) {
+                    cached[cidx].message = '[DELETED]';
+                    cached[cidx].file_name = null;
+                    cached[cidx].file_path = null;
+                } else {
+                    cached.splice(cidx, 1);
+                }
+            }
+        }
+
+        // 3. Always force reload conversations list to update sidebar preview in real-time
+        loadChatConversations(true);
     });
+
 
     chatSocket.on('share_removed', () => {
         if (typeof fetchCloudFiles === 'function' && typeof currentCloudView !== 'undefined') {
@@ -264,8 +339,27 @@ function initSocketConnection() {
 }
 
 /* ─── Global Event Listeners ─── */
-document.addEventListener('click', (e) => {
+let _isDraggingSelection = false;
+let _dragSelectAdding = true;
+
+function forceMessageSelectionState(msgId, forceAdd) {
+    const ids = String(msgId).includes(',') ? String(msgId).split(',') : [String(msgId)];
+    if (forceAdd) {
+        ids.forEach(id => _selectedMessages.add(id));
+    } else {
+        ids.forEach(id => _selectedMessages.delete(id));
+    }
+    const row = document.querySelector(`.msg-row[data-msg-id="${msgId}"]`);
+    if (row) {
+        row.classList.toggle('selected', forceAdd);
+    }
+    updateSelectionBar();
+}
+
+document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
     const isShift = e.shiftKey;
+
     if (_chatSelectionMode || isShift) {
         const row = e.target.closest('.msg-row');
         if (row) {
@@ -273,17 +367,49 @@ document.addEventListener('click', (e) => {
             e.stopPropagation();
 
             const clickedId = row.dataset.msgId;
+            const firstId = clickedId.split(',')[0];
+            _dragSelectAdding = !_selectedMessages.has(firstId);
+            _isDraggingSelection = true;
 
             if (!_chatSelectionMode && isShift) {
                 startMessageSelection(clickedId);
                 _lastSelectedMsgId = clickedId;
-            } else if (_chatSelectionMode && isShift && _lastSelectedMsgId) {
-                selectRangeMessages(_lastSelectedMsgId, clickedId);
+            } else if (_chatSelectionMode && isShift && _lastSelectedMsgId && e.altKey) {
+                // If they want range selection, maybe require Alt? Or just do normal add for shift if they asked for shift
+                forceMessageSelectionState(clickedId, _dragSelectAdding);
                 _lastSelectedMsgId = clickedId;
             } else {
-                toggleMessageSelection(clickedId);
+                forceMessageSelectionState(clickedId, _dragSelectAdding);
                 _lastSelectedMsgId = clickedId;
             }
+        }
+    }
+}, true);
+
+document.addEventListener('mouseover', (e) => {
+    if (_isDraggingSelection && _chatSelectionMode) {
+        const row = e.target.closest('.msg-row');
+        if (row) {
+            const hoveredId = row.dataset.msgId;
+            if (hoveredId !== _lastSelectedMsgId) {
+                forceMessageSelectionState(hoveredId, _dragSelectAdding);
+                _lastSelectedMsgId = hoveredId;
+            }
+        }
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    _isDraggingSelection = false;
+});
+
+document.addEventListener('click', (e) => {
+    const isShift = e.shiftKey;
+    if (_chatSelectionMode || isShift) {
+        const row = e.target.closest('.msg-row');
+        if (row) {
+            e.preventDefault();
+            e.stopPropagation();
         }
     }
 }, true);
@@ -320,6 +446,7 @@ function hideChatTyping() {
 /* ─── Polling ─── */
 
 let _chatPollInterval = null;
+let _chatConvInterval = null;
 
 function startChatPolling() {
     if (_chatPollInterval) return;
@@ -327,9 +454,6 @@ function startChatPolling() {
     _chatPollInterval = setInterval(async () => {
         if (!currentChatContact) return;
         try {
-            // Refresh conversation statuses
-            loadChatConversations();
-
             const res = await fetch('/api/chat/poll', {
                 method: 'POST',
                 headers: HEADERS,
@@ -364,6 +488,13 @@ function startChatPolling() {
             console.warn("Chat poll error:", err);
         }
     }, 5000);
+
+    // Refresh conversation list separately, less frequently
+    if (!_chatConvInterval) {
+        _chatConvInterval = setInterval(() => {
+            loadChatConversations();
+        }, 15000);
+    }
 }
 
 function stopChatPolling() {
@@ -371,11 +502,20 @@ function stopChatPolling() {
         clearInterval(_chatPollInterval);
         _chatPollInterval = null;
     }
+    if (_chatConvInterval) {
+        clearInterval(_chatConvInterval);
+        _chatConvInterval = null;
+    }
 }
 
 /* ─── Conversations ─── */
 
-async function loadChatConversations() {
+async function loadChatConversations(force = false) {
+    // Debounce: skip if a load is already in-flight or ran less than 2s ago (unless forced)
+    const now = Date.now();
+    if (!force && (_loadConvPending || (now - _lastConvLoad) < 2000)) return;
+    _loadConvPending = true;
+    _lastConvLoad = now;
     try {
         const [convRes, friendsRes] = await Promise.all([
             fetch('/api/chat/conversations', { headers: HEADERS }),
@@ -392,6 +532,8 @@ async function loadChatConversations() {
         }
     } catch (err) {
         console.error("Error cargando conversaciones:", err);
+    } finally {
+        _loadConvPending = false;
     }
 }
 
@@ -422,7 +564,7 @@ function renderChatConversations(conversations) {
             } else if (isVideoFile(c.last_file_name)) {
                 preview = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg> Video';
             } else if (isImageFile(c.last_file_name)) {
-                preview = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Foto';
+                preview = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Imagen';
             } else {
                 preview = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg> ' + c.last_file_name;
             }
@@ -430,15 +572,28 @@ function renderChatConversations(conversations) {
             preview = preview.replace(/^\[REPLY\|.*?\|.*?\|.*?\]\s*/, '');
         }
         if (!isFile && preview && preview.length > 35) preview = preview.substring(0, 35) + '...';
+        
+        let prefix = (c.last_sender && c.last_sender !== c.contact_id) ? 'Tú: ' : '';
+        if (preview === '[DELETED]') {
+            const svgIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:2px"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>';
+            preview = prefix ? `${svgIcon}Mensaje eliminado por ti` : `${svgIcon}Mensaje eliminado`;
+            prefix = '';
+        }
+
         const isActive = currentChatContact && currentChatContact.contact_id === c.contact_id;
         const unreadBadge = c.unread > 0 ? `<span class="badge">${c.unread}</span>` : '';
         const status = getStatusFromActivity(c.last_activity);
         const onlineDot = status.isOnline ? '<div class="online-dot"></div>' : '';
 
+        const isGroup = c.contact_id.startsWith('group_');
+        const avatarHtml = isGroup 
+            ? `<img src="/api/system/user/avatar/${c.contact_id}" onerror="this.outerHTML='<div style=\\'width:100%; height:100%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--text-dim); border-radius:50%;\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><path d=\\'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2\\' /><circle cx=\\'9\\' cy=\\'7\\' r=\\'4\\' /><path d=\\'M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75\\' /></svg></div>'">`
+            : `<img src="/api/system/user/avatar/${c.contact_name}" onerror="this.outerHTML = '${c.contact_name.charAt(0).toUpperCase()}'">`;
+
         return `
-            <div class="chat-item ${isActive ? 'active' : ''}" onclick="openChatWith('${c.contact_id}', '${c.contact_name}', '${c.last_activity || ''}')" oncontextmenu="event.preventDefault();event.stopPropagation();openChatConvMenu(event,'${c.contact_id}','${c.contact_name.replace(/'/g, "\\'")}', ${!!c.is_muted})">
+            <div class="chat-item ${isActive ? 'active' : ''}" onclick="openChatWith('${c.contact_id}', '${c.contact_name}', '${c.last_activity || ''}', ${isGroup})" oncontextmenu="event.preventDefault();event.stopPropagation();openChatConvMenu(event,'${c.contact_id}','${c.contact_name.replace(/'/g, "\\'")}',${!!c.is_muted},${isGroup},${!!c.is_owner})">
                 <div class="avatar">
-                    <img src="/api/system/user/avatar/${c.contact_name}" onerror="this.outerHTML = '${c.contact_name.charAt(0).toUpperCase()}'">
+                    ${avatarHtml}
                     ${onlineDot}
                 </div>
                 <div class="chat-meta">
@@ -447,7 +602,7 @@ function renderChatConversations(conversations) {
                         <span class="time">${time}</span>
                     </div>
                     <div class="row2">
-                        <span class="preview">${(c.last_sender && c.last_sender !== c.contact_id) ? 'Tú: ' : ''}${preview || 'Sin mensajes'}</span>
+                        <span class="preview">${prefix}${preview || 'Sin mensajes'}</span>
                         ${unreadBadge}
                     </div>
                 </div>
@@ -462,8 +617,8 @@ function renderChatConversations(conversations) {
 
 let _chatMessageCache = {};
 
-async function openChatWith(contactId, contactName, lastActivityIso = '') {
-    currentChatContact = { contact_id: contactId, contact_name: contactName, last_activity: lastActivityIso };
+async function openChatWith(contactId, contactName, lastActivityIso = '', isGroup = false) {
+    currentChatContact = { contact_id: contactId, contact_name: contactName, last_activity: lastActivityIso, is_group: isGroup };
     localStorage.setItem('nv_chat_contact', JSON.stringify(currentChatContact));
     hideChatTyping();
     cancelMessageSelection();
@@ -476,6 +631,9 @@ async function openChatWith(contactId, contactName, lastActivityIso = '') {
     // Activar vista móvil
     const viewChat = document.getElementById('view-chat');
     if (viewChat) viewChat.classList.add('mobile-chat-active');
+    
+    // Cerrar info de contacto si está abierta al cambiar de chat
+    closeChatInfoSidebar();
 
     if (_chatMessageCache[contactId]) {
         chatMessages = _chatMessageCache[contactId];
@@ -603,11 +761,11 @@ function renderChatMessages() {
                 `;
             });
             
-            const isSelected = _selectedMessages.has(msg.id);
+            const isSelected = _selectedMessages.has(group[0].id);
             const selClass = _chatSelectionMode ? (isSelected ? 'selection-mode selected' : 'selection-mode') : '';
 
             html += `
-                <div class="msg-row ${msg.mine ? 'out' : 'in'} ${selClass}" data-msg-id="${msg.id}">
+                <div class="msg-row ${msg.mine ? 'out' : 'in'} ${selClass}" data-msg-id="${joinedIds}">
                     <div class="msg-checkbox"></div>
                     <div class="bubble" style="padding: 4px; background: transparent; box-shadow: none;" oncontextmenu="openChatContextMenu(event,'${joinedIds}',${msg.mine})">
                         <div class="msg-image-grid ${gridClass}">
@@ -627,14 +785,26 @@ function renderChatMessages() {
             `;
         } else {
             const msgText = msg.message || '';
-            let safeMsg = msgText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\\n/g, '<br>');
+            let isDeleted = (msgText === '[DELETED]');
+            let safeMsg = '';
+            
+            if (isDeleted) {
+                const delName = msg.mine ? 'ti' : (currentChatContact ? currentChatContact.contact_name : 'el usuario');
+                safeMsg = `<div style="font-style:italic; opacity:0.6; display:flex; align-items:center; gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                            Este mensaje fue eliminado por ${delName}
+                           </div>`;
+            } else {
+                safeMsg = msgText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\\n/g, '<br>');
+            }
 
             let replyHtml = '';
-            const replyMatch = safeMsg.match(/^\[REPLY\|([^\|]+)\|([^\|]+)\|([^\]]+)\](?:<br>)?/);
+            const replyMatch = isDeleted ? null : safeMsg.match(/^\[REPLY\|([^\|]+)\|([^\|]+)\|([^\]]+)\](?:<br>)?/);
             if (replyMatch) {
                 safeMsg = safeMsg.replace(replyMatch[0], '');
 
                 let replyName = replyMatch[2];
+                let origMsg = chatMessages.find(m => m.id === replyMatch[1]);
                 if (replyMatch[2] === '0' || replyMatch[2] === '1') {
                     const isQuotedMine = replyMatch[2] === '1';
                     if (msg.mine) {
@@ -643,16 +813,42 @@ function renderChatMessages() {
                         replyName = isQuotedMine ? (currentChatContact ? currentChatContact.contact_name : 'Contacto') : 'Tú';
                     }
                 } else {
-                    const origMsg = chatMessages.find(m => m.id === replyMatch[1]);
                     if (origMsg) {
                         replyName = origMsg.mine ? 'Tú' : (currentChatContact ? currentChatContact.contact_name : 'Contacto');
                     }
                 }
 
+                let snippetHtml = replyMatch[3].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\[REPLY\|.*?\|.*?\|.*?\]/g, '').trim() || 'Archivo';
+                
+                let isDeletedMsg = (!origMsg || (origMsg && origMsg.message === '[DELETED]'));
+
+                if (isDeletedMsg) {
+                    snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg> Este mensaje fue eliminado`;
+                } else if (snippetHtml.match(/^\d+ Imágenes$/)) {
+                    snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> ${snippetHtml}`;
+                } else if (origMsg && origMsg.file_name) {
+                    if (isImageFile(origMsg.file_name)) {
+                        snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Imagen`;
+                    } else if (isVideoFile(origMsg.file_name)) {
+                        snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg> Video`;
+                    } else if (isAudioFile(origMsg.file_name)) {
+                        const dur = origMsg.file_name.match(/_(\d+)s\./);
+                        snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg> Audio` + (dur ? ' · ' + formatDuration(parseInt(dur[1])) : '');
+                    } else {
+                        snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> ${origMsg.file_name}`;
+                    }
+                } else if (snippetHtml.startsWith('📎 ')) {
+                    const safeName = snippetHtml.substring(2);
+                    snippetHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> ${safeName}`;
+                }
+
+                const onClickAction = isDeletedMsg ? '' : `onclick="event.stopPropagation(); scrollToMessage('${replyMatch[1]}');"`;
+                const cursorStyle = isDeletedMsg ? 'default' : 'pointer';
+
                 replyHtml = `
-                    <div class="chat-reply-box" style="background: rgba(0,0,0,0.1); border-left: 4px solid var(--indigo, #6366f1); padding: 6px 10px; border-radius: 4px 8px 8px 4px; margin-bottom: 6px; font-size: 0.8rem; cursor: pointer; transition: background 0.2s;" onclick="const b = document.querySelector('.chat-bubble[data-msg-id=\\'${replyMatch[1]}\\']'); if(b) { b.scrollIntoView({behavior: 'smooth', block: 'center'}); b.style.background = 'rgba(99,102,241,0.3)'; setTimeout(() => b.style.background='', 1000); }">
+                    <div class="chat-reply-box" style="background: rgba(0,0,0,0.1); border-left: 4px solid var(--indigo, #6366f1); padding: 6px 10px; border-radius: 4px 8px 8px 4px; margin-bottom: 6px; font-size: 0.8rem; cursor: ${cursorStyle}; transition: background 0.2s;" ${onClickAction}>
                         <div style="font-weight: bold; color: var(--indigo, #6366f1); margin-bottom: 2px;">${replyName === 'undefined' ? 'Contacto' : replyName}</div>
-                        <div style="color: inherit; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${replyMatch[3].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\[REPLY\|.*?\|.*?\|.*?\]/g, '').trim() || '📎 Archivo'}</div>
+                        <div style="color: inherit; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: ${isDeletedMsg ? 'italic' : 'normal'};">${snippetHtml}</div>
                     </div>
                 `;
             }
@@ -667,7 +863,7 @@ function renderChatMessages() {
                 if (isImageFile(name)) {
                     imgHtml = `
                         <div class="msg-image-content" onclick="openChatLightbox('/api/chat/download/${msg.id}')">
-                            <img src="/api/chat/download/${msg.id}" alt="" loading="lazy" style="max-width:100%; border-radius:8px;">
+                            <img src="/api/chat/download/${msg.id}" alt="" loading="lazy" style="max-width:320px; max-height:320px; width:100%; object-fit:cover; display:block; border-radius:8px;">
                         </div>
                     `;
                 } else if (isVideoFile(name)) {
@@ -719,6 +915,7 @@ function renderChatMessages() {
                 <div class="msg-row ${msg.mine ? 'out' : 'in'} ${selClass}" data-msg-id="${msg.id}">
                     <div class="msg-checkbox"></div>
                     <div class="bubble" oncontextmenu="openChatContextMenu(event,'${msg.id}',${msg.mine})">
+                        ${msg.sender_name ? `<div style="font-weight:600; font-size:0.8rem; color:var(--indigo); margin-bottom:4px; display:flex; align-items:center; gap:4px;"><span>${msg.sender_name}</span>${msg.is_owner ? `<svg title="Propietario del grupo" width="13" height="13" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1.5"><path d="M2 4l3 12h14l3-12-6 7-4-8-4 8-6-7z"/><path d="M3 20h18v2H3z"/></svg>` : ''}</div>` : ''}
                         ${replyHtml}
                         ${imgHtml}
                         ${videoHtml}
@@ -727,8 +924,8 @@ function renderChatMessages() {
                         ${fileHtml}
                         <div class="meta-line">
                             <span>${timeStr}</span>
-                            ${msg.edited_at ? '<span>editado</span>' : ''}
-                            ${msg.mine ? `<span class="check">${msg.read ? '✓✓' : '✓'}</span>` : ''}
+                            ${msg.edited_at && !isDeleted ? '<span>editado</span>' : ''}
+                            ${msg.mine && !isDeleted ? `<span class="check">${msg.read ? '✓✓' : '✓'}</span>` : ''}
                         </div>
                         <div class="msg-actions-menu">
                             <button onclick="event.stopPropagation();openChatContextMenu(event,'${msg.id}',${msg.mine})">
@@ -886,17 +1083,21 @@ async function handleMsgAction(action, msgId, msgText) {
 
     switch (action) {
         case 'replyMsg':
+            if (_chatEditMsgId) cancelChatEdit();
             _chatReplyToMsg = msg;
+            _chatReplyToMsg._groupedCount = ids.length;
             document.getElementById('chat-reply-name').textContent = msg.mine ? 'Tú' : (currentChatContact ? currentChatContact.contact_name : 'Contacto');
             let snippet = msg.message || '';
-            if (msg.file_name) {
+            if (ids.length > 1) {
+                snippet = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> ${ids.length} Imágenes`;
+            } else if (msg.file_name) {
                 if (isAudioFile(msg.file_name)) {
                     const dur = msg.file_name.match(/_(\d+)s\./);
                     snippet = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg> Audio' + (dur ? ' · ' + formatDuration(parseInt(dur[1])) : '');
                 } else if (isVideoFile(msg.file_name)) {
                     snippet = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg> Video';
                 } else if (isImageFile(msg.file_name)) {
-                    snippet = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Foto';
+                    snippet = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Imagen';
                 } else {
                     const safeName = msg.file_name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     snippet = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg> ${safeName}`;
@@ -908,6 +1109,7 @@ async function handleMsgAction(action, msgId, msgText) {
             document.getElementById('chat-reply-text').innerHTML = snippet;
             document.getElementById('chat-reply-preview').style.display = 'flex';
             document.getElementById('chat-input').focus();
+            scrollToMessage(ids[0]);
             break;
 
         case 'copyText':
@@ -976,52 +1178,34 @@ async function handleMsgAction(action, msgId, msgText) {
 function editMessageInline(msgId) {
     const msg = chatMessages.find(m => m.id === msgId);
     if (!msg) return;
-    const container = document.getElementById('chat-messages');
-    const bubbles = container.querySelectorAll('.chat-bubble');
-    let idx = -1;
-    chatMessages.forEach((m, i) => { if (m.id === msgId) idx = i; });
-    if (idx === -1 || !bubbles[idx]) return;
 
-    const bubble = bubbles[idx];
-    const textDiv = bubble.querySelector('.chat-bubble-text');
-    if (!textDiv) return;
-
-    const original = msg.message;
-    textDiv.innerHTML = '';
-    const input = document.createElement('textarea');
-    input.value = original;
-    input.style.cssText = 'width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--indigo);border-radius:8px;padding:8px;color:#fff;font-size:0.85rem;resize:none;outline:none;font-family:inherit;';
-    input.rows = 2;
-    textDiv.appendChild(input);
-    input.focus();
-
-    const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:8px;margin-top:6px;';
-    actions.innerHTML = '<button class="fr-btn fr-btn-success" style="height:28px;padding:0 12px;font-size:0.75rem;">Guardar</button>'
-        + '<button class="fr-btn fr-btn-danger" style="height:28px;padding:0 12px;font-size:0.75rem;">Cancelar</button>';
-    textDiv.appendChild(actions);
-
-    actions.querySelector('.fr-btn-success').onclick = async () => {
-        const newText = input.value.trim();
-        if (!newText || newText === original) { textDiv.innerHTML = original; return; }
-        
-        if (newText.length > 65536) {
-            showChatAlert('Mensaje demasiado largo', 'El límite máximo por mensaje es de 65,536 caracteres. Tu mensaje tiene ' + newText.length.toLocaleString() + ' caracteres.');
-            return;
-        }
-        const res = await fetch('/api/chat/edit', {
-            method: 'POST', headers: HEADERS,
-            body: JSON.stringify({ msg_id: msgId, message: newText })
-        });
-        if (res.ok) {
-            msg.message = newText;
-            msg.edited_at = Date.now() / 1000;
-            renderChatMessages();
+    if (_chatReplyToMsg) cancelChatReply();
+    
+    _chatEditMsgId = msgId;
+    const prev = document.getElementById('chat-edit-preview');
+    const textEl = document.getElementById('chat-edit-text');
+    const input = document.getElementById('chat-input');
+    
+    if (prev && textEl && input) {
+        let snippet = msg.message || '';
+        const replyMatch = snippet.match(/^\[REPLY\|.*?\|.*?\|.*?\]\n/);
+        if (replyMatch) {
+            _chatEditReplySnippet = replyMatch[0];
+            snippet = snippet.substring(replyMatch[0].length);
         } else {
-            textDiv.innerHTML = original;
+            _chatEditReplySnippet = null;
         }
-    };
-    actions.querySelector('.fr-btn-danger').onclick = () => { textDiv.innerHTML = original; };
+
+        let displaySnippet = snippet;
+        if (!displaySnippet && msg.file_name) displaySnippet = 'Archivo adjunto';
+        
+        textEl.textContent = displaySnippet;
+        prev.style.display = 'flex';
+        input.value = snippet;
+        input.focus();
+        
+        if (typeof updateChatActionBtn === 'function') updateChatActionBtn();
+    }
 }
 
 /* ─── Forward Dialog ─── */
@@ -1034,7 +1218,7 @@ function showForwardDialog(msgId) {
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
     const box = document.createElement('div');
-    box.style.cssText = 'background:var(--bg-card);border-radius:16px;width:90%;max-width:400px;max-height:70vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4);animation:chatScaleIn 0.2s ease-out;display:flex;flex-direction:column;';
+    box.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:16px;width:90%;max-width:400px;max-height:70vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:chatScaleIn 0.2s ease-out;display:flex;flex-direction:column;';
 
     const count = _chatSelectionMode ? _selectedMessages.size : 1;
     const title = count > 1 ? `Reenviar ${count} mensajes` : 'Reenviar mensaje';
@@ -1046,7 +1230,7 @@ function showForwardDialog(msgId) {
         </div>
         <div style="padding:12px 16px; border-bottom:1px solid var(--border);">
             <input type="text" id="chat-forward-search" placeholder="Buscar contacto..." oninput="filterForwardContacts(this.value)" 
-                style="width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text-main); font-size: 0.85rem; outline: none; transition: border-color 0.15s;" />
+                style="width: 100%; box-sizing: border-box; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text-main); font-size: 0.85rem; outline: none; transition: border-color 0.15s;" />
         </div>
         <div id="frwd-list" style="padding:8px;max-height:40vh;overflow-y:auto;flex:1;">
             <div style="padding:20px;text-align:center;opacity:0.5;font-size:0.85rem;">Cargando...</div>
@@ -1127,7 +1311,7 @@ async function doForward(targetContactId) {
 
 /* ─── Delete Conversation ─── */
 
-function openChatConvMenu(e, contactId, contactName, isMuted) {
+function openChatConvMenu(e, contactId, contactName, isMuted, isGroup = false, isOwner = false) {
     e.preventDefault();
     e.stopPropagation();
     const existing = document.getElementById('chat-conv-menu');
@@ -1140,11 +1324,32 @@ function openChatConvMenu(e, contactId, contactName, isMuted) {
     const muteIcon = isMuted 
         ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path></svg>'
         : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
-    const muteText = isMuted ? 'Dejar de silenciar' : 'Silenciar conversación';
+    const muteText = isMuted 
+        ? (isGroup ? 'Dejar de silenciar grupo' : 'Dejar de silenciar') 
+        : (isGroup ? 'Silenciar grupo' : 'Silenciar conversación');
+
+    const clearItem = `<div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:var(--text-main);display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='rgba(239, 68, 68, 0.08)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();clearChatConversation('${contactId}','${contactName.replace(/'/g, "\\'")}')">${'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>'}<span>Vaciar chat</span></div>`;
+
+    let dangerItem = '';
+    if (isGroup) {
+        dangerItem += `<div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:var(--text-main);display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='rgba(239, 68, 68, 0.08)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();leaveGroup('${contactId}','${contactName.replace(/'/g, "\\'")}')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span>Salir del grupo</span>
+        </div>`;
+        if (isOwner) {
+            dangerItem += `<div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:#f87171;display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='rgba(248,113,113,0.08)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();deleteGroup('${contactId}','${contactName.replace(/'/g, "\\'")}')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <span>Eliminar grupo</span>
+            </div>`;
+        }
+    } else {
+        dangerItem = `<div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:#f87171;display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='rgba(248,113,113,0.08)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();deleteChatConversation('${contactId}','${contactName.replace(/'/g, "\\'")}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>Eliminar conversación</span></div>`;
+    }
 
     menu.innerHTML = `
         <div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:var(--text-main);display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='var(--surface-3)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();toggleChatMute('${contactId}')">${muteIcon}<span>${muteText}</span></div>
-        <div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:#f87171;display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='rgba(248,113,113,0.08)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();deleteChatConversation('${contactId}','${contactName.replace(/'/g, "\\'")}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>Eliminar conversación</span></div>
+        ${clearItem}
+        ${dangerItem}
     `;
     document.body.appendChild(menu);
 
@@ -1156,15 +1361,22 @@ function openChatConvMenu(e, contactId, contactName, isMuted) {
     setTimeout(() => document.addEventListener('click', () => { const m = document.getElementById('chat-conv-menu'); if (m) m.remove(); }, { once: true }), 0);
 }
 
-async function deleteChatConversation(contactId, contactName) {
-    const confirmed = await showChatConfirm('Eliminar conversación', `¿Eliminar conversación con ${contactName}? Los mensajes se eliminarán solo para ti.`);
+async function leaveGroup(groupId, groupName) {
+    const confirmed = await showChatConfirm('Salir del grupo', `¿Salir del grupo "${groupName}"? Perderás acceso a los mensajes del grupo.`);
     if (!confirmed) return;
     try {
-        await fetch('/api/chat/delete_conversation', {
+        const res = await fetch('/api/chat/group/leave', {
             method: 'POST', headers: HEADERS,
-            body: JSON.stringify({ contact_id: contactId })
+            body: JSON.stringify({ group_id: groupId })
         });
-        if (currentChatContact && currentChatContact.contact_id === contactId) {
+        const data = await res.json();
+        if (!data.ok) {
+            showChatAlert('No puedes salir del grupo', data.error || 'No se pudo salir del grupo');
+            return;
+        }
+        delete _chatMessageCache[groupId];
+        if (currentChatContact && currentChatContact.contact_id === groupId) {
+            closeChatInfoSidebar();
             currentChatContact = null;
             localStorage.removeItem('nv_chat_contact');
             chatMessages = [];
@@ -1176,13 +1388,97 @@ async function deleteChatConversation(contactId, contactName) {
     } catch (e) { }
 }
 
-async function toggleChatMute(contactId) {
+async function deleteGroup(groupId, groupName) {
+    const confirmed = await showChatConfirm('Eliminar grupo', `¿Eliminar permanentemente el grupo "${groupName}"? Se borrará para todos los miembros.`);
+    if (!confirmed) return;
     try {
-        await fetch('/api/chat/toggle_mute', {
+        const res = await fetch('/api/chat/group/delete', {
+            method: 'POST', headers: HEADERS,
+            body: JSON.stringify({ group_id: groupId })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            showChatAlert('Error al eliminar grupo', data.error || 'No se pudo eliminar el grupo');
+            return;
+        }
+        delete _chatMessageCache[groupId];
+        if (currentChatContact && currentChatContact.contact_id === groupId) {
+            closeChatInfoSidebar();
+            currentChatContact = null;
+            localStorage.removeItem('nv_chat_contact');
+            chatMessages = [];
+            document.getElementById('chat-header').innerHTML = '';
+            document.getElementById('chat-empty-state').style.display = 'flex';
+            document.getElementById('chat-active-area').style.display = 'none';
+        }
+        await loadChatConversations();
+    } catch (e) { }
+}
+
+async function deleteChatConversation(contactId, contactName) {
+    const confirmed = await showChatConfirm('Eliminar conversación', `¿Eliminar conversación con ${contactName}? Los mensajes se eliminarán solo para ti.`);
+    if (!confirmed) return;
+    try {
+        await fetch('/api/chat/delete_conversation', {
             method: 'POST', headers: HEADERS,
             body: JSON.stringify({ contact_id: contactId })
         });
+        delete _chatMessageCache[contactId];
+        if (currentChatContact && currentChatContact.contact_id === contactId) {
+            closeChatInfoSidebar();
+            currentChatContact = null;
+            localStorage.removeItem('nv_chat_contact');
+            chatMessages = [];
+            document.getElementById('chat-header').innerHTML = '';
+            document.getElementById('chat-empty-state').style.display = 'flex';
+            document.getElementById('chat-active-area').style.display = 'none';
+        }
         await loadChatConversations();
+    } catch (e) { }
+}
+
+async function clearChatConversation(contactId, contactName) {
+    const result = await showChatClearConfirm(contactName);
+    if (!result.confirmed) return;
+    try {
+        await fetch('/api/chat/clear_conversation', {
+            method: 'POST', headers: HEADERS,
+            body: JSON.stringify({ contact_id: contactId, delete_files: result.deleteFiles })
+        });
+        delete _chatMessageCache[contactId];
+        if (currentChatContact && currentChatContact.contact_id === contactId) {
+            chatMessages = [];
+            renderChatMessages();
+        }
+        await loadChatConversations();
+    } catch (e) { console.error("Error vaciando chat", e); }
+}
+
+async function toggleChatMute(contactId) {
+    try {
+        // Optimistic update: flip muted state locally before waiting for server
+        const conv = _chatConversationsList.find(c => c.contact_id === contactId);
+        if (conv) {
+            conv.is_muted = !conv.is_muted;
+            renderChatConversations(_chatConversationsList);
+        }
+
+        const res = await fetch('/api/chat/toggle_mute', {
+            method: 'POST', headers: HEADERS,
+            body: JSON.stringify({ contact_id: contactId })
+        });
+
+        if (!res.ok) {
+            // Revert on error
+            if (conv) {
+                conv.is_muted = !conv.is_muted;
+                renderChatConversations(_chatConversationsList);
+            }
+            return;
+        }
+
+        // Refresh in background to sync server state
+        loadChatConversations(true);
     } catch (e) { }
 }
 
@@ -1199,22 +1495,27 @@ function startMessageSelection(msgId) {
     const rows = document.querySelectorAll('.msg-row');
     rows.forEach(r => {
         r.classList.add('selection-mode');
-        r.classList.toggle('selected', _selectedMessages.has(r.dataset.msgId));
+        const rIds = String(r.dataset.msgId).split(',');
+        r.classList.toggle('selected', _selectedMessages.has(rIds[0]));
     });
 
     updateSelectionBar();
 }
 
 function toggleMessageSelection(msgId) {
-    if (_selectedMessages.has(msgId)) {
-        _selectedMessages.delete(msgId);
+    const ids = String(msgId).includes(',') ? String(msgId).split(',') : [String(msgId)];
+    
+    let allSelected = ids.every(id => _selectedMessages.has(id));
+    
+    if (allSelected) {
+        ids.forEach(id => _selectedMessages.delete(id));
     } else {
-        _selectedMessages.add(msgId);
+        ids.forEach(id => _selectedMessages.add(id));
     }
 
     const row = document.querySelector(`.msg-row[data-msg-id="${msgId}"]`);
     if (row) {
-        row.classList.toggle('selected', _selectedMessages.has(msgId));
+        row.classList.toggle('selected', !allSelected);
     }
 
     updateSelectionBar();
@@ -1229,20 +1530,29 @@ function selectRangeMessages(id1, id2) {
     const end = Math.max(idx1, idx2);
 
     for (let i = start; i <= end; i++) {
-        const msgId = chatMessages[i].id;
-        _selectedMessages.add(msgId);
-        const bubble = document.querySelector(`.chat-bubble[data-msg-id="${msgId}"]`);
-        if (bubble) {
-            bubble.classList.add('selected');
-        }
+        _selectedMessages.add(chatMessages[i].id);
     }
+    
+    const rows = document.querySelectorAll('.msg-row');
+    rows.forEach(r => {
+        const rIds = String(r.dataset.msgId).split(',');
+        if (_selectedMessages.has(rIds[0])) {
+            r.classList.add('selected');
+        }
+    });
     updateSelectionBar();
 }
 
 function updateSelectionBar() {
+    if (_chatSelectionMode && _selectedMessages.size === 0) {
+        cancelMessageSelection();
+        return;
+    }
+
     const bar = document.getElementById('chat-selection-bar');
     const inputArea = document.querySelector('.chat-input-area');
     const countSpan = document.getElementById('chat-selection-count');
+    const copyBtn = document.getElementById('chat-selection-copy-btn');
 
     if (!bar || !countSpan) return;
 
@@ -1250,6 +1560,14 @@ function updateSelectionBar() {
         bar.style.display = 'flex';
         if (inputArea) inputArea.style.display = 'none';
         countSpan.textContent = _selectedMessages.size;
+        
+        if (copyBtn) {
+            const hasNonTextMsg = Array.from(_selectedMessages).some(id => {
+                const msg = chatMessages.find(m => m.id === id);
+                return msg && (!msg.message || msg.message.trim() === '');
+            });
+            copyBtn.style.display = hasNonTextMsg ? 'none' : 'flex';
+        }
     } else {
         bar.style.display = 'none';
         if (inputArea) inputArea.style.display = 'flex';
@@ -1313,8 +1631,8 @@ async function deleteSelectedMessages() {
     for (const msgId of ids) {
         const msg = chatMessages.find(m => m.id == msgId);
         if (msg) {
-            if (!msg.mine) allMine = false;
-            if (msg.file_path) hasFiles = true;
+            if (!msg.mine || msg.message === '[DELETED]') allMine = false;
+            if (msg.file_path && msg.message !== '[DELETED]') hasFiles = true;
         }
     }
 
@@ -1332,7 +1650,18 @@ async function deleteSelectedMessages() {
                 })
             });
             const idx = chatMessages.findIndex(m => m.id == msgId);
-            if (idx !== -1) { chatMessages.splice(idx, 1); }
+            if (idx !== -1) { 
+                if (result.action === 'for_everyone') {
+                    chatMessages[idx].message = '[DELETED]';
+                    chatMessages[idx].file_name = null;
+                    chatMessages[idx].file_path = null;
+                } else {
+                    chatMessages.splice(idx, 1);
+                }
+            }
+        }
+        if (currentChatContact && _chatMessageCache[currentChatContact.contact_id]) {
+            _chatMessageCache[currentChatContact.contact_id] = [...chatMessages];
         }
         renderChatMessages();
     } catch (e) { }
@@ -1774,6 +2103,7 @@ function cleanupVoiceRecording() {
 
 function attachChatFiles() {
     if (selectedChatFiles.length === 0) return;
+    cancelMessageSelection();
 
     document.getElementById('chat-file-preview').style.display = 'flex';
     const listContainer = document.getElementById('chat-file-list');
@@ -1874,11 +2204,46 @@ async function sendChatMessage() {
         return;
     }
 
+    if (_chatEditMsgId) {
+        const msgId = _chatEditMsgId;
+        const msg = chatMessages.find(m => m.id === msgId);
+        
+        let fullMessage = message;
+        if (_chatEditReplySnippet) {
+            fullMessage = _chatEditReplySnippet + message;
+        }
+
+        window.cancelChatEdit();
+        if (!msg || fullMessage === msg.message || !message) return;
+
+        try {
+            const res = await fetch('/api/chat/edit', {
+                method: 'POST', headers: HEADERS,
+                body: JSON.stringify({ msg_id: msgId, message: fullMessage })
+            });
+            if (res.ok) {
+                msg.message = fullMessage;
+                msg.edited_at = Date.now() / 1000;
+                renderChatMessages();
+            }
+        } catch (e) {
+            console.error("Error editing message", e);
+        }
+        return;
+    }
+
     let replySnippet = null;
     if (_chatReplyToMsg) {
         const isQuotedMine = _chatReplyToMsg.mine ? '1' : '0';
         let snippet = _chatReplyToMsg.message || 'Archivo adjunto';
-        if (_chatReplyToMsg.file_name) snippet = '📎 ' + _chatReplyToMsg.file_name;
+        if (_chatReplyToMsg._groupedCount && _chatReplyToMsg._groupedCount > 1) {
+            snippet = `${_chatReplyToMsg._groupedCount} Imágenes`;
+        } else if (_chatReplyToMsg.file_name) {
+            if (isImageFile(_chatReplyToMsg.file_name)) snippet = 'Imagen';
+            else if (isVideoFile(_chatReplyToMsg.file_name)) snippet = 'Video';
+            else if (isAudioFile(_chatReplyToMsg.file_name)) snippet = 'Audio';
+            else snippet = _chatReplyToMsg.file_name;
+        }
         snippet = snippet.replace(/\||\[|\]/g, ' ').replace(/\n/g, ' ').substring(0, 80);
         replySnippet = `[REPLY|${_chatReplyToMsg.id}|${isQuotedMine}|${snippet}]\n`;
         window.cancelChatReply();
@@ -1895,6 +2260,7 @@ async function sendChatMessage() {
     clearChatFile();
 
     try {
+        let res;
         if (filesToSend.length > 0) {
             for (let i = 0; i < filesToSend.length; i++) {
                 const formData = new FormData();
@@ -1908,7 +2274,7 @@ async function sendChatMessage() {
                 formData.append('file', filesToSend[i]);
 
                 const headers = { 'X-Token': TOKEN };
-                await fetch('/api/chat/send', { method: 'POST', headers: headers, body: formData });
+                res = await fetch('/api/chat/send', { method: 'POST', headers: headers, body: formData });
             }
         } else {
             const fetchOptions = {
@@ -1919,7 +2285,7 @@ async function sendChatMessage() {
                     message: (replySnippet ? replySnippet : '') + message
                 })
             };
-            await fetch('/api/chat/send', fetchOptions);
+            res = await fetch('/api/chat/send', fetchOptions);
         }
         const data = await res.json();
         if (data.ok && data.message) {
@@ -1986,31 +2352,22 @@ function closeNewChatDialog() {
 function setNewChatTab(tab) {
     _newChatActiveTab = tab;
 
-    const tabFriends = document.getElementById('chat-new-tab-friends');
-    const tabContacts = document.getElementById('chat-new-tab-contacts');
     const searchInput = document.getElementById('chat-new-search');
     const results = document.getElementById('chat-new-results');
+    const options = document.getElementById('chat-new-options');
 
-    if (!tabFriends || !tabContacts || !searchInput || !results) return;
+    if (!searchInput || !results) return;
 
     searchInput.value = '';
     results.innerHTML = '';
 
     if (tab === 'friends') {
-        tabFriends.style.borderBottomColor = 'var(--indigo)';
-        tabFriends.style.color = 'var(--text-main)';
-        tabContacts.style.borderBottomColor = 'transparent';
-        tabContacts.style.color = 'var(--text-muted)';
-        searchInput.placeholder = 'Buscar en mis amigos...';
-
+        if (options) options.style.display = 'flex';
+        searchInput.placeholder = 'Buscar nombre o correo';
         renderNewChatFriends();
     } else {
-        tabContacts.style.borderBottomColor = 'var(--indigo)';
-        tabContacts.style.color = 'var(--text-main)';
-        tabFriends.style.borderBottomColor = 'transparent';
-        tabFriends.style.color = 'var(--text-muted)';
+        if (options) options.style.display = 'none';
         searchInput.placeholder = 'Buscar nuevos contactos en la app...';
-
         results.innerHTML = '<div style="padding: 20px; text-align: center; opacity: 0.4; font-size: 0.85rem;">Escribe al menos 2 caracteres para buscar</div>';
     }
     searchInput.focus();
@@ -2079,8 +2436,10 @@ function renderNewChatFriends() {
     const results = document.getElementById('chat-new-results');
     const query = document.getElementById('chat-new-search').value.toLowerCase().trim();
 
-    // Filter friends by query if there is one
-    const filtered = _chatFriendsList.filter(f => f.friend_name.toLowerCase().includes(query));
+    // Filter friends by query if there is one and sort alphabetically (case-insensitive)
+    const filtered = _chatFriendsList
+        .filter(f => f.friend_name.toLowerCase().includes(query))
+        .sort((a, b) => a.friend_name.toLowerCase().localeCompare(b.friend_name.toLowerCase()));
 
     if (filtered.length === 0) {
         if (!query && _chatFriendsList.length === 0) {
@@ -2178,18 +2537,25 @@ function updateChatActionBtn() {
     const input = document.getElementById('chat-input');
     const voiceIcon = document.getElementById('chat-voice-icon');
     const sendIcon = document.getElementById('chat-send-icon');
+    const editIcon = document.getElementById('chat-edit-icon');
     
-    if (!input || !voiceIcon || !sendIcon) return;
+    if (!input || !voiceIcon || !sendIcon || !editIcon) return;
 
     const hasText = input.value.trim().length > 0;
     const hasFile = selectedChatFiles.length > 0;
 
-    if (hasText || hasFile) {
+    if (_chatEditMsgId) {
         voiceIcon.style.display = 'none';
+        sendIcon.style.display = 'none';
+        editIcon.style.display = 'block';
+    } else if (hasText || hasFile) {
+        voiceIcon.style.display = 'none';
+        editIcon.style.display = 'none';
         sendIcon.style.display = 'block';
     } else {
         voiceIcon.style.display = 'block';
         sendIcon.style.display = 'none';
+        editIcon.style.display = 'none';
     }
 }
 
@@ -2236,32 +2602,72 @@ function getStatusFromActivity(lastActivityIso) {
 function updateActiveChatHeader() {
     if (!currentChatContact) return;
 
-    // Find latest activity from conversations or friends list
-    let latestActivity = '';
-    const foundConv = _chatConversationsList.find(c => c.contact_id === currentChatContact.contact_id);
-    if (foundConv) {
-        latestActivity = foundConv.last_activity || '';
-    } else {
-        const foundFriend = _chatFriendsList.find(f => f.friend_id === currentChatContact.contact_id);
-        if (foundFriend) {
-            latestActivity = foundFriend.last_activity || '';
-        }
-    }
-    if (latestActivity) {
-        currentChatContact.last_activity = latestActivity;
-    }
-
-    const status = getStatusFromActivity(currentChatContact.last_activity);
+    const isGroup = currentChatContact.contact_id.startsWith('group_');
     const header = document.getElementById('chat-header');
-    if (header) {
+    if (!header) return;
+
+    const avatarHtml = isGroup
+        ? `<img src="/api/system/user/avatar/${currentChatContact.contact_id}" onerror="this.outerHTML='<div style=\\'width:100%; height:100%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--text-dim); border-radius:50%;\\'>  <svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><path d=\\'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2\\' /><circle cx=\\'9\\' cy=\\'7\\' r=\\'4\\' /><path d=\\'M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75\\' /></svg></div>'">`
+        : `<img src="/api/system/user/avatar/${currentChatContact.contact_name}" onerror="this.outerHTML = '${currentChatContact.contact_name.charAt(0).toUpperCase()}'">`;
+
+    if (isGroup) {
+        // Render immediately with cached members if available, then fetch
+        const renderGroupHeader = (membersText) => {
+            if (!header) return;
+            header.innerHTML = `
+                <button class="mobile-back-btn" onclick="document.getElementById('view-chat').classList.remove('mobile-chat-active')" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                </button>
+                <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1; min-width:0; overflow:hidden;" onclick="openChatInfoSidebar()">
+                    <div class="avatar" style="width: 40px; height: 40px; font-size: 14px;">${avatarHtml}</div>
+                    <div class="info">
+                        <span class="name">${currentChatContact.contact_name}</span>
+                        <span class="status" style="font-size:0.75rem; opacity:0.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${membersText}</span>
+                    </div>
+                </div>
+                <div class="conv-actions">
+                    <svg onclick="alert('Llamada')" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
+                    <svg onclick="alert('Videollamada')" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <svg onclick="alert('Opciones')" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </div>
+            `;
+        };
+
+        renderGroupHeader('Cargando miembros...');
+
+        fetch('/api/chat/group/members', {
+            method: 'POST', headers: HEADERS,
+            body: JSON.stringify({ group_id: currentChatContact.contact_id })
+        }).then(r => r.json()).then(data => {
+            const members = data.members || [];
+            const total = members.length;
+            const isMobile = window.innerWidth < 768;
+            const maxVisible = isMobile ? 3 : 10;
+            const visible = members.slice(0, maxVisible).map(m => m.username);
+            const extra = total > maxVisible ? ` y ${total - maxVisible} más` : '';
+            const membersText = `${total} miembro${total !== 1 ? 's' : ''}: ${visible.join(', ')}${extra}`;
+            renderGroupHeader(membersText);
+        }).catch(() => renderGroupHeader('Grupo'));
+
+    } else {
+        // DM: show online status as before
+        let latestActivity = '';
+        const foundConv = _chatConversationsList.find(c => c.contact_id === currentChatContact.contact_id);
+        if (foundConv) {
+            latestActivity = foundConv.last_activity || '';
+        } else {
+            const foundFriend = _chatFriendsList.find(f => f.friend_id === currentChatContact.contact_id);
+            if (foundFriend) latestActivity = foundFriend.last_activity || '';
+        }
+        if (latestActivity) currentChatContact.last_activity = latestActivity;
+
+        const status = getStatusFromActivity(currentChatContact.last_activity);
         header.innerHTML = `
             <button class="mobile-back-btn" onclick="document.getElementById('view-chat').classList.remove('mobile-chat-active')" style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             </button>
-            <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" onclick="openChatInfoSidebar()">
-                <div class="avatar" style="width: 40px; height: 40px; font-size: 14px;">
-                    <img src="/api/system/user/avatar/${currentChatContact.contact_name}" onerror="this.outerHTML = '${currentChatContact.contact_name.charAt(0).toUpperCase()}'">
-                </div>
+            <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1; min-width:0; overflow:hidden;" onclick="openChatInfoSidebar()">
+                <div class="avatar" style="width: 40px; height: 40px; font-size: 14px;">${avatarHtml}</div>
                 <div class="info">
                     <span class="name">${currentChatContact.contact_name}</span>
                     <span class="status ${status.isOnline ? 'online' : ''}">${status.text}</span>
@@ -2659,38 +3065,48 @@ function showChatAlert(title, message) {
 function showChatDeleteConfirm(count, allMine, hasFiles) {
     return new Promise(resolve => {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px);';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px);opacity:0;transition:opacity 0.2s ease;';
         
         const modal = document.createElement('div');
-        modal.style.cssText = 'background:var(--surface-1);padding:24px;border-radius:12px;width:90%;max-width:350px;border:1px solid var(--border);text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.5);';
+        modal.style.cssText = 'background:var(--surface);padding:32px;border-radius:24px;width:90%;max-width:380px;border:1px solid var(--border);text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.4);transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);';
         
-        let html = `<h3 style="margin:0 0 10px;font-size:1.1rem;color:var(--text-main);">Eliminar ${count} mensaje${count>1?'s':''}</h3>`;
+        let html = `<div style="margin-bottom:16px;color:var(--text-main);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.8"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></div>`;
+        html += `<h3 style="margin:0 0 8px;font-size:1.25rem;font-weight:600;color:var(--text-main);">Eliminar ${count} mensaje${count>1?'s':''}</h3>`;
         
         if (hasFiles) {
             html += `
-                <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;text-align:left;font-size:0.85rem;color:var(--text-dim);cursor:pointer;background:var(--surface-2);padding:10px;border-radius:8px;">
-                    <input type="checkbox" id="chat-delete-files-chk" checked style="accent-color:var(--indigo);">
-                    Eliminar también los archivos adjuntos del servidor
+                <label style="display:flex;align-items:center;gap:12px;margin:20px 0;text-align:left;font-size:0.9rem;color:var(--text-dim);cursor:pointer;background:var(--surface-1);padding:14px;border-radius:12px;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-2)'" onmouseleave="this.style.background='var(--surface-1)'">
+                    <input type="checkbox" id="chat-delete-files-chk" checked style="accent-color:var(--indigo);width:18px;height:18px;cursor:pointer;">
+                    <span>Eliminar archivos del servidor</span>
                 </label>
             `;
         } else {
-            html += `<p style="margin:0 0 20px;font-size:0.9rem;color:var(--text-dim);">¿Estás seguro de que deseas eliminar la selección?</p>`;
+            html += `<p style="margin:0 0 24px;font-size:0.95rem;color:var(--text-muted);">¿Estás seguro de que deseas eliminar la selección?</p>`;
         }
 
-        html += `<div style="display:flex;flex-direction:column;gap:8px;">`;
+        html += `<div style="display:flex;flex-direction:column;gap:12px;">`;
 
         if (allMine) {
-            html += `<button id="chat-del-everyone" style="padding:10px;background:var(--indigo);color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Borrar para todos</button>`;
+            html += `<button id="chat-del-everyone" style="padding:14px;background:var(--indigo);color:white;border:none;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(99,102,241,0.3);" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(99,102,241,0.4)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.3)'">Borrar para todos</button>`;
         }
-        html += `<button id="chat-del-me" style="padding:10px;background:#ef4444;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Eliminar para mí</button>`;
-        html += `<button id="chat-del-cancel" style="padding:10px;background:transparent;color:var(--text-dim);border:1px solid var(--border);border-radius:8px;font-weight:bold;cursor:pointer;">Cancelar</button>`;
+        html += `<button id="chat-del-me" style="padding:14px;background:#ef4444;color:white;border:none;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(239,68,68,0.2);" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(239,68,68,0.3)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 12px rgba(239,68,68,0.2)'">Eliminar para mí</button>`;
+        html += `<button id="chat-del-cancel" style="padding:14px;background:transparent;color:var(--text-main);border:1px solid var(--border);border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-1)'" onmouseleave="this.style.background='transparent'">Cancelar</button>`;
         
         html += `</div>`;
         modal.innerHTML = html;
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
-        const clean = () => document.body.removeChild(overlay);
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            modal.style.transform = 'scale(1)';
+        });
+
+        const clean = () => {
+            overlay.style.opacity = '0';
+            modal.style.transform = 'scale(0.95)';
+            setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 200);
+        };
 
         if (allMine) {
             modal.querySelector('#chat-del-everyone').onclick = () => {
@@ -2708,23 +3124,312 @@ function showChatDeleteConfirm(count, allMine, hasFiles) {
     });
 }
 
+function showChatClearConfirm(contactName) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px);opacity:0;transition:opacity 0.2s ease;';
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background:var(--surface);padding:32px;border-radius:24px;width:90%;max-width:380px;border:1px solid var(--border);text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.4);transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);';
+        
+        let html = `<div style="margin-bottom:16px;color:var(--text-main);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.8"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg></div>`;
+        html += `<h3 style="margin:0 0 8px;font-size:1.25rem;font-weight:600;color:var(--text-main);">Vaciar chat</h3>`;
+        html += `<p style="margin:0 0 16px;font-size:0.95rem;color:var(--text-muted);">Se vaciará la conversación con <b>${contactName}</b>. Los mensajes se eliminarán solo para ti.</p>`;
+        
+        html += `
+            <label style="display:flex;align-items:center;gap:12px;margin:20px 0;text-align:left;font-size:0.9rem;color:var(--text-dim);cursor:pointer;background:var(--surface-1);padding:14px;border-radius:12px;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-2)'" onmouseleave="this.style.background='var(--surface-1)'">
+                <input type="checkbox" id="chat-clear-files-chk" checked style="accent-color:var(--indigo);width:18px;height:18px;cursor:pointer;">
+                <span>Eliminar archivos enviados de tu nube</span>
+            </label>
+        `;
+
+        html += `<div style="display:flex;flex-direction:column;gap:12px;">`;
+        html += `<button id="chat-clear-confirm" style="padding:14px;background:#ef4444;color:white;border:none;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(239,68,68,0.2);" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(239,68,68,0.3)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 12px rgba(239,68,68,0.2)'">Vaciar chat</button>`;
+        html += `<button id="chat-clear-cancel" style="padding:14px;background:transparent;color:var(--text-main);border:1px solid var(--border);border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-1)'" onmouseleave="this.style.background='transparent'">Cancelar</button>`;
+        html += `</div>`;
+        
+        modal.innerHTML = html;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            modal.style.transform = 'scale(1)';
+        });
+
+        const clean = () => {
+            overlay.style.opacity = '0';
+            modal.style.transform = 'scale(0.95)';
+            setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 200);
+        };
+
+        modal.querySelector('#chat-clear-confirm').onclick = () => {
+            const df = modal.querySelector('#chat-clear-files-chk').checked;
+            clean(); resolve({ confirmed: true, deleteFiles: df });
+        };
+        modal.querySelector('#chat-clear-cancel').onclick = () => { clean(); resolve({ confirmed: false }); };
+    });
+}
+
 function openChatInfoSidebar() {
     if (!currentChatContact) return;
     
     const nameEl = document.getElementById('chat-info-name');
     const avatarEl = document.getElementById('chat-info-avatar');
     const statusEl = document.getElementById('chat-info-status');
+    const memSection = document.getElementById('chat-info-group-members');
     
     if (nameEl) nameEl.textContent = currentChatContact.contact_name;
-    if (avatarEl) avatarEl.innerHTML = `<img src="/api/system/user/avatar/${currentChatContact.contact_name}" onerror="this.outerHTML = '${currentChatContact.contact_name.charAt(0).toUpperCase()}'">`;
+    if (avatarEl) {
+        if (currentChatContact.is_group) {
+            avatarEl.innerHTML = `<img src="/api/system/user/avatar/${currentChatContact.contact_id}" onerror="this.outerHTML='<div style=\\'width:100%; height:100%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:3rem; color:var(--text-dim); border-radius:50%;\\'><svg width=\\'48\\' height=\\'48\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><path d=\\'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2\\' /><circle cx=\\'9\\' cy=\\'7\\' r=\\'4\\' /><path d=\\'M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75\\' /></svg></div>'">`;
+        } else {
+            avatarEl.innerHTML = `<img src="/api/system/user/avatar/${currentChatContact.contact_name}" onerror="this.outerHTML = '${currentChatContact.contact_name.charAt(0).toUpperCase()}'">`;
+        }
+    }
+    
     if (statusEl) {
-        const status = getStatusFromActivity(currentChatContact.last_activity);
-        statusEl.textContent = status.text;
+        if (currentChatContact.is_group) {
+            statusEl.textContent = 'Grupo';
+        } else {
+            const status = getStatusFromActivity(currentChatContact.last_activity);
+            statusEl.textContent = status.text;
+        }
+    }
+    
+    if (memSection) {
+        if (currentChatContact.is_group) {
+            memSection.style.display = 'block';
+            fetch('/api/chat/group/members', {
+                method: 'POST',
+                headers: window.HEADERS,
+                body: JSON.stringify({ group_id: currentChatContact.contact_id })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok && data.members) {
+                    const countEl = document.getElementById('chat-info-members-count');
+                    const listEl = document.getElementById('chat-info-members-list');
+                    if (countEl) countEl.textContent = data.members.length;
+                    if (listEl) {
+                        listEl.innerHTML = data.members.map(m => `
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <img src="/api/system/user/avatar/${m.username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;" onerror="this.outerHTML='<div style=\\'width:32px; height:32px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:12px;\\'>${m.username.charAt(0).toUpperCase()}</div>'">
+                                <span style="font-weight:500; font-size:0.9rem;">${m.username}</span>
+                                ${m.is_owner ? `<svg title="Propietario del grupo" width="15" height="15" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1.5" style="margin-left:2px; display:inline-block; vertical-align:middle;"><path d="M2 4l3 12h14l3-12-6 7-4-8-4 8-6-7z"/><path d="M3 20h18v2H3z"/></svg>` : ''}
+                            </div>
+                        `).join('');
+                    }
+                }
+            });
+        } else {
+            memSection.style.display = 'none';
+        }
+    }
+    
+    // Update buttons status
+    const addBtn = document.getElementById('chat-info-add-btn');
+    const groupAddBtn = document.getElementById('chat-info-group-add-btn');
+    const delGroupBtn = document.getElementById('chat-info-delete-group-btn');
+    const leaveGroupBtn = document.getElementById('chat-info-leave-group-btn');
+
+    if (groupAddBtn) groupAddBtn.style.display = 'none';
+    if (delGroupBtn) delGroupBtn.style.display = 'none';
+    if (leaveGroupBtn) leaveGroupBtn.style.display = 'none';
+
+    if (currentChatContact.is_group) {
+        if (addBtn) addBtn.style.display = 'none';
+        if (groupAddBtn) {
+            groupAddBtn.style.display = 'flex';
+            groupAddBtn.onclick = openAddGroupMemberModal;
+        }
+        const conv = _chatConversationsList.find(c => c.contact_id === currentChatContact.contact_id);
+        const isOwner = conv ? !!conv.is_owner : !!currentChatContact.is_owner;
+        if (isOwner) {
+            if (delGroupBtn) delGroupBtn.style.display = 'flex';
+        } else {
+            if (leaveGroupBtn) leaveGroupBtn.style.display = 'flex';
+        }
+    } else {
+        if (addBtn) {
+            addBtn.style.display = 'flex';
+            const isFriend = _chatFriendsList.some(f => f.friend_id === currentChatContact.contact_id);
+            if (isFriend) {
+                addBtn.innerHTML = `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                <span>Agregado</span>`;
+                addBtn.style.opacity = '0.5';
+                addBtn.style.cursor = 'default';
+                addBtn.onclick = null;
+            } else {
+                addBtn.innerHTML = `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="8.5" cy="7" r="4"></circle>
+                  <line x1="20" y1="8" x2="20" y2="14"></line>
+                  <line x1="23" y1="11" x2="17" y2="11"></line>
+                </svg>
+                <span>Agregar</span>`;
+                addBtn.style.opacity = '1';
+                addBtn.style.cursor = 'pointer';
+                addBtn.onclick = addContactFromInfo;
+            }
+        }
     }
     
     updateChatInfoSidebarMedia();
     
     document.getElementById('chat-info-sidebar').classList.add('active');
+}
+
+async function addContactFromInfo() {
+    if (!currentChatContact || currentChatContact.is_group) return;
+    try {
+        const res = await fetch('/api/friends/send', {
+            method: 'POST',
+            headers: window.HEADERS,
+            body: JSON.stringify({ user_id: currentChatContact.contact_id })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showChatAlert('Petición de amistad enviada');
+            const addBtn = document.getElementById('chat-info-add-btn');
+            if (addBtn) {
+                addBtn.innerHTML = `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                <span>Pendiente</span>`;
+                addBtn.style.opacity = '0.5';
+                addBtn.style.cursor = 'default';
+                addBtn.onclick = null;
+            }
+        } else {
+            showChatAlert(data.error || 'Error al enviar petición');
+        }
+    } catch (e) {
+        showChatAlert('Error de conexión');
+    }
+}
+
+async function openAddGroupMemberModal() {
+    if (!currentChatContact || !currentChatContact.is_group) return;
+    const existingModal = document.getElementById('chat-add-member-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    // Fetch existing members to exclude them
+    let existingMemberIds = [];
+    try {
+        const r = await fetch('/api/chat/group/members', {
+            method: 'POST', headers: HEADERS,
+            body: JSON.stringify({ group_id: currentChatContact.contact_id })
+        });
+        const d = await r.json();
+        if (d.ok && d.members) existingMemberIds = d.members.map(m => m.user_id);
+    } catch(e) {}
+
+    const availableFriends = _chatFriendsList.filter(f => !existingMemberIds.includes(f.friend_id));
+
+    const selectedUserIds = new Set();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'chat-add-member-modal-overlay';
+    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:100000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s ease;`;
+
+    const box = document.createElement('div');
+    box.style.cssText = `background:var(--surface-2,#1e1e26);border:1px solid var(--border,#2a2a33);border-radius:16px;width:420px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 16px 40px rgba(0,0,0,0.6);overflow:hidden;transform:scale(0.95);transition:transform 0.2s ease;`;
+
+    const renderList = (filter = '') => {
+        const listEl = box.querySelector('#add-member-list');
+        if (!listEl) return;
+        const q = filter.toLowerCase().trim();
+        const filtered = availableFriends.filter(f => f.username.toLowerCase().includes(q));
+        if (filtered.length === 0) {
+            listEl.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-dim);font-size:0.9rem;">${availableFriends.length === 0 ? 'Todos tus contactos ya están en este grupo' : 'No se encontraron contactos'}</div>`;
+            return;
+        }
+        listEl.innerHTML = filtered.map(f => `
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;cursor:pointer;border-radius:10px;transition:background 0.15s;" onmouseenter="this.style.background='var(--surface-3,rgba(255,255,255,0.05))'" onmouseleave="this.style.background=''" onclick="_toggleGroupMemberSelect('${f.friend_id}')">
+                <input type="checkbox" id="cb-addmember-${f.friend_id}" ${selectedUserIds.has(f.friend_id) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--indigo,#6d5bff);cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation(); _toggleGroupMemberSelect('${f.friend_id}')">
+                <img src="/api/system/user/avatar/${f.username}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.outerHTML='<div style=\\'width:36px;height:36px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;\\'>${f.username.charAt(0).toUpperCase()}</div>'">
+                <span style="font-weight:500;font-size:0.95rem;color:var(--text-main);">${f.username}</span>
+            </div>
+        `).join('');
+    };
+
+    window._toggleGroupMemberSelect = (uid) => {
+        if (selectedUserIds.has(uid)) selectedUserIds.delete(uid);
+        else selectedUserIds.add(uid);
+        const cb = box.querySelector(`#cb-addmember-${uid}`);
+        if (cb) cb.checked = selectedUserIds.has(uid);
+        const btn = box.querySelector('#btn-confirm-add-members');
+        if (btn) {
+            btn.textContent = selectedUserIds.size > 0 ? `Añadir (${selectedUserIds.size})` : 'Añadir';
+            btn.style.opacity = selectedUserIds.size > 0 ? '1' : '0.5';
+            btn.style.pointerEvents = selectedUserIds.size > 0 ? 'auto' : 'none';
+        }
+    };
+
+    box.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border,#2a2a33);">
+            <h3 style="margin:0;font-size:1.1rem;font-weight:600;color:var(--text-main);">Añadir miembros</h3>
+            <button id="btn-close-add-modal" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;display:flex;align-items:center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+        <div style="padding:12px 20px;border-bottom:1px solid var(--border,#2a2a33);">
+            <input type="text" id="add-member-search-input" placeholder="Buscar por nombre..." style="width:100%;box-sizing:border-box;background:var(--bg,#0f0f13);border:1px solid var(--border,#2a2a33);border-radius:8px;padding:8px 12px;color:var(--text-main);font-size:0.9rem;outline:none;">
+        </div>
+        <div id="add-member-list" style="flex:1;overflow-y:auto;padding:8px 12px;max-height:320px;"></div>
+        <div style="padding:14px 20px;border-top:1px solid var(--border,#2a2a33);display:flex;justify-content:flex-end;gap:10px;">
+            <button id="btn-cancel-add-modal" style="padding:8px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text-main);cursor:pointer;font-size:0.9rem;">Cancelar</button>
+            <button id="btn-confirm-add-members" style="padding:8px 20px;background:var(--indigo,#6d5bff);border:none;border-radius:8px;color:#fff;cursor:pointer;font-weight:500;font-size:0.9rem;opacity:0.5;pointer-events:none;transition:opacity 0.2s;">Añadir</button>
+        </div>
+    `;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    renderList();
+
+    box.querySelector('#add-member-search-input').oninput = (e) => renderList(e.target.value);
+
+    const close = () => {
+        overlay.style.opacity = '0';
+        box.style.transform = 'scale(0.95)';
+        setTimeout(() => overlay.remove(), 200);
+        delete window._toggleGroupMemberSelect;
+    };
+
+    box.querySelector('#btn-close-add-modal').onclick = close;
+    box.querySelector('#btn-cancel-add-modal').onclick = close;
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+    box.querySelector('#btn-confirm-add-members').onclick = async () => {
+        if (selectedUserIds.size === 0) return;
+        try {
+            const res = await fetch('/api/chat/group/add_member', {
+                method: 'POST', headers: HEADERS,
+                body: JSON.stringify({ group_id: currentChatContact.contact_id, user_ids: Array.from(selectedUserIds) })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                close();
+                updateActiveChatHeader();
+                openChatInfoSidebar();
+            } else {
+                showChatAlert('Error', data.error || 'No se pudieron añadir los miembros');
+            }
+        } catch(err) {
+            showChatAlert('Error', 'Ocurrió un error al añadir los miembros');
+        }
+    };
+
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        box.style.transform = 'scale(1)';
+    });
 }
 
 function updateChatInfoSidebarMedia() {
@@ -2751,8 +3456,374 @@ function updateChatInfoSidebarMedia() {
     }
 }
 
+function scrollToMessage(msgId) {
+    const row = document.querySelector(`.msg-row[data-msg-id*="${msgId}"]`);
+    if (row) {
+        row.scrollIntoView({behavior: 'smooth', block: 'center'});
+        const bubble = row.querySelector('.bubble');
+        if (bubble) {
+            const oldBg = bubble.style.background;
+            const oldTransition = bubble.style.transition;
+            bubble.style.transition = 'background 0.5s ease';
+            bubble.style.background = 'rgba(99,102,241,0.4)';
+            setTimeout(() => {
+                bubble.style.background = oldBg || '';
+                setTimeout(() => {
+                    bubble.style.transition = oldTransition || '';
+                }, 500);
+            }, 1000);
+        }
+    }
+}
+
 function closeChatInfoSidebar() {
     document.getElementById('chat-info-sidebar').classList.remove('active');
+    closeChatMediaSidebar();
+}
+
+function openChatMediaSidebar() {
+    document.getElementById('chat-media-sidebar').classList.add('active');
+    switchChatMediaTab('media');
+}
+
+function closeChatMediaSidebar() {
+    document.getElementById('chat-media-sidebar').classList.remove('active');
+}
+
+function switchChatMediaTab(tab) {
+    document.getElementById('chat-media-tab-media').style.color = tab === 'media' ? '#00a884' : 'var(--text-dim)';
+    document.getElementById('chat-media-tab-media').style.borderBottom = tab === 'media' ? '2px solid #00a884' : 'none';
+    
+    document.getElementById('chat-media-tab-docs').style.color = tab === 'docs' ? '#00a884' : 'var(--text-dim)';
+    document.getElementById('chat-media-tab-docs').style.borderBottom = tab === 'docs' ? '2px solid #00a884' : 'none';
+    
+    document.getElementById('chat-media-tab-links').style.color = tab === 'links' ? '#00a884' : 'var(--text-dim)';
+    document.getElementById('chat-media-tab-links').style.borderBottom = tab === 'links' ? '2px solid #00a884' : 'none';
+    
+    const contentEl = document.getElementById('chat-media-content');
+    if (!contentEl) return;
+    
+    let html = '';
+    
+    if (tab === 'media') {
+        const mediaMsgs = chatMessages.filter(m => m.file_path && m.file_name && (isImageFile(m.file_name) || isVideoFile(m.file_name))).reverse();
+        if (mediaMsgs.length === 0) {
+            html = '<div style="text-align: center; padding: 40px; opacity: 0.5;">No hay archivos multimedia</div>';
+        } else {
+            html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">';
+            mediaMsgs.forEach(m => {
+                if (isImageFile(m.file_name)) {
+                    html += `<img src="/api/chat/download/${m.id}" onclick="openChatLightbox('/api/chat/download/${m.id}')" loading="lazy" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px; cursor:pointer;">`;
+                } else if (isVideoFile(m.file_name)) {
+                    html += `<video src="/api/chat/download/${m.id}#t=0.1" onclick="openChatVideo('/api/chat/download/${m.id}')" preload="metadata" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px; cursor:pointer;"></video>`;
+                }
+            });
+            html += '</div>';
+        }
+    } else if (tab === 'docs') {
+        const docMsgs = chatMessages.filter(m => m.file_path && m.file_name && !isImageFile(m.file_name) && !isVideoFile(m.file_name) && !isAudioFile(m.file_name)).reverse();
+        if (docMsgs.length === 0) {
+            html = '<div style="text-align: center; padding: 40px; opacity: 0.5;">No hay documentos</div>';
+        } else {
+            html = '<div style="display:flex; flex-direction:column; gap:12px;">';
+            docMsgs.forEach(m => {
+                const ext = m.file_name.split('.').pop().toUpperCase();
+                html += `
+                <div style="display:flex; align-items:center; gap:12px; background:var(--surface-2); padding:12px; border-radius:8px; cursor:pointer;" onclick="window.open('/api/chat/download/${m.id}','_blank')">
+                    <div style="width:40px; height:40px; border-radius:8px; background:var(--surface-hi); display:flex; align-items:center; justify-content:center; color:var(--text-main); font-size:10px; font-weight:bold;">${ext}</div>
+                    <div style="flex:1; overflow:hidden;">
+                        <div style="font-size:0.9rem; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.file_name}</div>
+                        <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${formatChatTime(m.created_at)}</div>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+        }
+    } else if (tab === 'links') {
+        const linkRegex = /(https?:\/\/[^\s]+)/g;
+        const linkMsgs = chatMessages.filter(m => m.message && m.message.match(linkRegex)).reverse();
+        if (linkMsgs.length === 0) {
+            html = '<div style="text-align: center; padding: 40px; opacity: 0.5;">No hay enlaces</div>';
+        } else {
+            html = '<div style="display:flex; flex-direction:column; gap:12px;">';
+            linkMsgs.forEach(m => {
+                const links = m.message.match(linkRegex);
+                links.forEach(l => {
+                    html += `
+                    <div style="display:flex; align-items:center; gap:12px; background:var(--surface-2); padding:12px; border-radius:8px; cursor:pointer;" onclick="window.open('${l}','_blank')">
+                        <div style="width:40px; height:40px; border-radius:50%; background:var(--surface-hi); display:flex; align-items:center; justify-content:center; color:var(--indigo);">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        </div>
+                        <div style="flex:1; overflow:hidden;">
+                            <div style="font-size:0.9rem; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--indigo); text-decoration:underline;">${l}</div>
+                        </div>
+                    </div>`;
+                });
+            });
+            html += '</div>';
+        }
+    }
+    
+    contentEl.innerHTML = html;
+}
+
+let _groupSearchFriends = []; 
+let _selectedGroupMembers = new Set();
+let _groupAvatarFile = null;
+
+function showCreateGroupDialog() {
+    document.getElementById('chat-group-members-dialog').style.display = 'flex';
+    document.getElementById('chat-group-details-dialog').style.display = 'none';
+    document.getElementById('chat-group-name').value = '';
+    document.getElementById('chat-group-search').value = '';
+    
+    // Reset avatar
+    _groupAvatarFile = null;
+    const avatarInput = document.getElementById('chat-group-avatar-upload');
+    if (avatarInput) avatarInput.value = '';
+    const imgPreview = document.getElementById('chat-group-avatar-img');
+    if (imgPreview) {
+        imgPreview.src = '';
+        imgPreview.style.display = 'none';
+    }
+    const icon = document.getElementById('chat-group-avatar-icon');
+    if (icon) icon.style.display = 'block';
+    
+    _selectedGroupMembers.clear();
+    
+    fetch('/api/friends/list', { headers: window.HEADERS })
+        .then(r => r.json())
+        .then(data => {
+            _groupSearchFriends = (data.friends || []).map(f => ({
+                ...f,
+                username: f.username || f.friend_name || '',
+                user_id: f.user_id || f.friend_id || ''
+            }));
+            // Sort alphabetically as in WhatsApp
+            _groupSearchFriends.sort((a, b) => a.username.localeCompare(b.username));
+            renderGroupFriendsList('__INIT__');
+        });
+}
+
+function closeCreateGroupDialog() {
+    document.getElementById('chat-group-members-dialog').style.display = 'none';
+    document.getElementById('chat-group-details-dialog').style.display = 'none';
+    closeNewChatDialog();
+}
+
+function showCreateGroupDetails() {
+    if (_selectedGroupMembers.size === 0) return;
+    document.getElementById('chat-group-members-dialog').style.display = 'none';
+    document.getElementById('chat-group-details-dialog').style.display = 'flex';
+    document.getElementById('chat-group-name').focus();
+}
+
+function backToGroupMembers() {
+    document.getElementById('chat-group-details-dialog').style.display = 'none';
+    document.getElementById('chat-group-members-dialog').style.display = 'flex';
+}
+
+function handleGroupAvatarSelect(event) {
+    const file = event.target.files[0];
+    if (file) {
+        _groupAvatarFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('chat-group-avatar-icon').style.display = 'none';
+            const img = document.getElementById('chat-group-avatar-img');
+            img.src = e.target.result;
+            img.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function onGroupSearchInput(query) {
+    renderGroupFriendsList(query);
+}
+
+function toggleGroupMember(userId) {
+    if (_selectedGroupMembers.has(userId)) {
+        _selectedGroupMembers.delete(userId);
+    } else {
+        if (_selectedGroupMembers.size >= 50) {
+            showChatAlert('Máximo 50 miembros permitidos');
+            return;
+        }
+        _selectedGroupMembers.add(userId);
+    }
+    updateGroupSelectionUI();
+}
+
+function updateGroupSelectionUI() {
+    const chipsEl = document.getElementById('chat-group-selected-chips');
+    const nextBtn = document.getElementById('chat-group-next-btn');
+    
+    // Update checkmarks in the list
+    document.querySelectorAll('.group-friend-row').forEach(row => {
+        const id = row.dataset.userId;
+        const check = row.querySelector('.group-friend-check');
+        if (check) {
+            check.style.display = _selectedGroupMembers.has(id) ? 'flex' : 'none';
+        }
+    });
+
+    // Render chips
+    if (chipsEl) {
+        chipsEl.innerHTML = '';
+        Array.from(_selectedGroupMembers).forEach(id => {
+            const f = _groupSearchFriends.find(x => x.user_id === id);
+            if(f) {
+                const chip = document.createElement('div');
+                chip.style.cssText = 'display:flex; align-items:center; gap:6px; background:var(--surface-hi); padding:4px 8px; border-radius:16px; cursor:pointer;';
+                chip.innerHTML = `
+                    <img src="/api/system/user/avatar/${f.username}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" onerror="this.outerHTML='<div style=\\'width:24px; height:24px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:10px;\\'>${f.username.charAt(0).toUpperCase()}</div>'">
+                    <span style="font-size:0.85rem; color:var(--text-main); font-weight:500;">${f.username}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                `;
+                chip.onclick = () => toggleGroupMember(id);
+                chipsEl.appendChild(chip);
+            }
+        });
+    }
+    
+    // Toggle next button
+    if (nextBtn) {
+        nextBtn.style.display = _selectedGroupMembers.size > 0 ? 'flex' : 'none';
+    }
+}
+
+function renderGroupFriendsList(query = '') {
+    const listEl = document.getElementById('chat-group-friends-list');
+    if(!listEl) return;
+    
+    const q = query.toLowerCase();
+    
+    // If it's empty or forced, build it ONCE
+    if (listEl.children.length === 0 || query === '__INIT__') {
+        listEl.innerHTML = '';
+        let currentLetter = '';
+        _groupSearchFriends.forEach(f => {
+            const firstLetter = f.username.charAt(0).toUpperCase();
+            if (firstLetter !== currentLetter) {
+                currentLetter = firstLetter;
+                const header = document.createElement('div');
+                header.className = 'group-letter-header';
+                header.dataset.letter = currentLetter;
+                header.style.cssText = 'padding: 12px 16px 4px 16px; color: #00a884; font-weight: 500; font-size: 0.9rem; letter-spacing: 1px;';
+                header.textContent = currentLetter;
+                listEl.appendChild(header);
+            }
+            
+            const div = document.createElement('div');
+            div.className = 'group-friend-row';
+            div.dataset.userId = f.user_id;
+            div.dataset.username = f.username.toLowerCase();
+            div.dataset.letter = currentLetter;
+            div.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer;';
+            div.onclick = () => toggleGroupMember(f.user_id);
+            
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="position:relative;">
+                        <img src="/api/system/user/avatar/${f.username}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;" onerror="this.outerHTML='<div style=\\'width:40px; height:40px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center;\\'>${f.username.charAt(0).toUpperCase()}</div>'">
+                        <div class="group-friend-check" style="position:absolute; bottom:-2px; right:-2px; width:16px; height:16px; background:#00a884; border-radius:50%; border:2px solid var(--bg); display:none; align-items:center; justify-content:center;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                    </div>
+                    <span style="color:var(--text-main); font-size:1rem;">${f.username}</span>
+                </div>
+            `;
+            listEl.appendChild(div);
+        });
+        
+        if (_groupSearchFriends.length === 0) {
+            listEl.innerHTML = '<div style="padding:16px; color:var(--text-muted); text-align:center;">No se encontraron contactos</div>';
+        }
+    }
+    
+    // Now just filter display if it's a search
+    if (_groupSearchFriends.length > 0 && query !== '__INIT__') {
+        let visibleCount = 0;
+        
+        listEl.querySelectorAll('.group-friend-row').forEach(row => {
+            if (row.dataset.username.includes(q)) {
+                row.style.display = 'flex';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        listEl.querySelectorAll('.group-letter-header').forEach(header => {
+            if (q === '') {
+                header.style.display = 'block'; // Show headers only when not searching
+            } else {
+                header.style.display = 'none'; // Hide headers during search
+            }
+        });
+        
+        const noRes = listEl.querySelector('.no-results-msg');
+        if (noRes) noRes.remove();
+        
+        if (visibleCount === 0) {
+            const noResDiv = document.createElement('div');
+            noResDiv.className = 'no-results-msg';
+            noResDiv.style.cssText = 'padding:16px; color:var(--text-muted); text-align:center;';
+            noResDiv.textContent = 'No se encontraron contactos';
+            listEl.appendChild(noResDiv);
+        }
+    }
+    
+    updateGroupSelectionUI();
+}
+
+function createGroup() {
+    let name = document.getElementById('chat-group-name').value.trim();
+    
+    // Sanitize in JS (double check)
+    name = name.replace(/[<>"'\\/\\]/g, '');
+    
+    if (!name) {
+        showChatAlert('Por favor, introduce un nombre para el grupo');
+        return;
+    }
+    
+    if (name.length > 100) {
+        showChatAlert('El nombre del grupo no puede exceder los 100 caracteres');
+        return;
+    }
+    
+    const members = Array.from(_selectedGroupMembers);
+    
+    let fetchOpts = {
+        method: 'POST'
+    };
+    
+    if (_groupAvatarFile) {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('members', JSON.stringify(members));
+        formData.append('avatar', _groupAvatarFile);
+        fetchOpts.body = formData;
+        // Don't set content-type for FormData so browser sets boundary
+        const h = { ...window.HEADERS };
+        delete h['Content-Type'];
+        fetchOpts.headers = h;
+    } else {
+        fetchOpts.headers = window.HEADERS;
+        fetchOpts.body = JSON.stringify({ name: name, members: members });
+    }
+    
+    fetch('/api/chat/group/create', fetchOpts)
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            closeCreateGroupDialog();
+            loadChatConversations(); // refresh list
+            openChatWith(data.group_id, name, '', true);
+        } else {
+            showChatAlert(data.error || 'Error al crear el grupo');
+        }
+    });
 }
 
 function _exposeChatGlobals() {
@@ -2761,7 +3832,7 @@ function _exposeChatGlobals() {
         initSmartChat, sendSmartMessage, sendChatMessage, sendBotMessage,
         openChatContextMenu, closeChatContextMenu, handleMsgAction,
         editMessageInline, showForwardDialog, loadForwardContacts,
-        filterForwardContacts, doForward, deleteChatConversation,
+        filterForwardContacts, doForward, deleteChatConversation, clearChatConversation, toggleChatMute,
         openChatLightbox, closeChatLightbox, navigateLightbox, openChatVideo, playAudio,
         downloadFile, handleChatFileSelect, handleChatKeydown, handleChatInput,
         handleChatTyping, showChatTyping, hideChatTyping, markChatAsRead,
@@ -2779,7 +3850,11 @@ function _exposeChatGlobals() {
         showChatConfirm, getChatFileIcon, isImageFile, isAudioFile,
         isVideoFile, formatDuration, formatFileSize, formatChatTime,
         getStatusFromActivity, openChatConvMenu, toggleChatMute,
-        openChatInfoSidebar, closeChatInfoSidebar, handleChatScroll, chatScrollToBottom
+        openChatInfoSidebar, closeChatInfoSidebar, handleChatScroll, chatScrollToBottom,
+        scrollToMessage, showCreateGroupDialog, closeCreateGroupDialog, onGroupSearchInput,
+        createGroup, renderGroupFriendsList, showCreateGroupDetails, backToGroupMembers,
+        openChatMediaSidebar, closeChatMediaSidebar, switchChatMediaTab, addContactFromInfo,
+        handleGroupAvatarSelect, leaveGroup, deleteGroup, openAddGroupMemberModal
     });
 }
 _exposeChatGlobals();

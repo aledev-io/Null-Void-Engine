@@ -6,6 +6,7 @@ const CATEGORY_COLORS = {
   salud: '#6bd46b',
   estudio: '#f5a623',
   ocio: '#f97066',
+  otros: '#94a3b8',
 };
 
 const CATEGORY_BG = {
@@ -14,6 +15,7 @@ const CATEGORY_BG = {
   salud: 'rgba(107,212,107,.22)',
   estudio: 'rgba(245,166,35,.22)',
   ocio: 'rgba(249,112,102,.22)',
+  otros: 'rgba(148,163,184,.22)',
 };
 
 export const Events = {
@@ -32,7 +34,15 @@ export const Events = {
     const events = this.getAll();
     const idx = events.findIndex(e => e.id === id);
     if (idx < 0) return null;
-    events[idx] = { ...events[idx], ...data, updatedAt: new Date().toISOString() };
+    let patch = { ...data };
+    if (patch.completed && (events[idx].inProgress || patch.inProgress)) {
+      const now = new Date();
+      const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      patch.inProgress = false;
+      if (!patch.endDate) patch.endDate = window.dateToStr(now);
+      if (!patch.endTime) patch.endTime = currentHHMM;
+    }
+    events[idx] = { ...events[idx], ...patch, updatedAt: new Date().toISOString() };
     Storage.save(events);
     return events[idx];
   },
@@ -43,12 +53,38 @@ export const Events = {
 
   toggleComplete(id) {
     const ev = this.getById(id);
-    if (ev) this.update(id, { completed: !ev.completed });
+    if (!ev) return;
+    const isCompleted = !ev.completed;
+    this.update(id, { completed: isCompleted });
+  },
+
+  finishEvent(id) {
+    const ev = this.getById(id);
+    if (!ev) return null;
+    const now = new Date();
+    const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const endDate = window.dateToStr(now);
+    return this.update(id, {
+      inProgress: false,
+      endTime: currentHHMM,
+      endDate: endDate
+    });
   },
 
   forDate(dateStr) {
+    const today = window.todayStr();
     return this.getAll()
-      .filter(e => e.date === dateStr)
+      .filter(e => {
+        if (!e.date) return false;
+        if (e.inProgress) {
+          const effectiveEnd = e.endDate || today;
+          const maxDate = effectiveEnd < today ? today : effectiveEnd;
+          return e.date <= dateStr && dateStr <= maxDate;
+        }
+        if (!e.endDate || e.endDate === e.date) return e.date === dateStr;
+        // Multi-day: include if dateStr falls within [date, endDate]
+        return e.date <= dateStr && e.endDate >= dateStr;
+      })
       .sort((a, b) => {
         if (a.allDay && !b.allDay) return -1;
         if (!a.allDay && b.allDay) return 1;
@@ -58,7 +94,21 @@ export const Events = {
 
   forMonth(year, month) {
     const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-    return this.getAll().filter(e => e.date && e.date.startsWith(prefix));
+    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const today = window.todayStr();
+    return this.getAll().filter(e => {
+      if (!e.date) return false;
+      if (e.inProgress) {
+        const effectiveEnd = e.endDate || today;
+        const maxDate = effectiveEnd < today ? today : effectiveEnd;
+        return e.date <= monthEnd && maxDate >= monthStart;
+      }
+      if (!e.endDate || e.endDate === e.date) return e.date.startsWith(prefix);
+      // Multi-day: include if the event overlaps this month at all
+      return e.date <= monthEnd && e.endDate >= monthStart;
+    });
   },
 
   forWeek(mondayDate) {

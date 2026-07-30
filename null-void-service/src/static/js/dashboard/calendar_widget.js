@@ -218,7 +218,7 @@ export function initCalendarWidget() {
                 : `<div style="width:16px; height:16px; display:flex; justify-content:center; align-items:center; margin-right: 8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--indigo);"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>`;
 
             const itemHTML = `
-                <div class="dash-item" style="cursor: pointer; ${opacityStyle}" onclick="window.location.href='/calendar?date=${ev.date}'">
+                <div class="dash-item" style="cursor: pointer; ${opacityStyle}" onclick="window.location.href='/calendar?date=${ev.date}&event=${ev.id}'">
                     ${iconHTML}
                     <div class="dash-item-content" style="margin-left: 10px;">
                         <span class="dash-item-title" style="${isPassed ? 'text-decoration: line-through;' : ''}">${ev.title || 'Evento sin título'}</span>
@@ -245,9 +245,15 @@ export function initCalendarWidget() {
             });
             if (res.ok) {
                 const events = await res.json();
+                // Write authoritative server data to localStorage so calendar stays in sync
+                // Use the same key the calendar storage.js uses
                 const user = _getUser();
                 const key = `calendar_events_v1_${user}`;
-                localStorage.setItem(key, JSON.stringify(events));
+                const incoming = JSON.stringify(events);
+                // Only overwrite if different — avoids triggering unnecessary re-renders
+                if (incoming !== localStorage.getItem(key)) {
+                    localStorage.setItem(key, incoming);
+                }
                 renderCalendar();
                 renderPendingTasks();
             }

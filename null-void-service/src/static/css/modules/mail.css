@@ -61,6 +61,8 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 24px;
+    padding-left: calc(24px + env(safe-area-inset-left, 0px));
+    padding-right: calc(24px + env(safe-area-inset-right, 0px));
     height: 56px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-card, #161d2f);
@@ -138,6 +140,7 @@ body {
     display: flex;
     flex-direction: column;
     padding: 16px 12px 0 12px;
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
     overflow: hidden;
     flex-shrink: 0;
     position: relative;
@@ -714,40 +717,57 @@ body {
 
 .reader-body {
     padding: 24px 32px;
+    padding-left: calc(32px + env(safe-area-inset-left, 0px));
+    padding-right: calc(32px + env(safe-area-inset-right, 0px));
     overflow-y: auto;
     flex: 1;
     background: var(--bg);
     display: flex;
-    justify-content: center;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: center;
 }
 
 .mail-content-wrapper {
     width: 100%;
-    max-width: 850px;
-    background: var(--bg-card);
-    border-radius: 16px;
-    padding: 40px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--border);
-    color: var(--text-main);
+    max-width: 920px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    margin-bottom: 40px;
+    margin: 0 auto 40px auto;
 }
 
-.mail-content-wrapper iframe {
+.html-mail-card {
+    background: #ffffff;
+    color: #202124;
+    border-radius: 16px;
+    padding: 0;
+    margin-top: 16px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.html-mail-card iframe {
     width: 100%;
     border: none;
-    background: transparent;
+    background: #ffffff;
+    display: block;
+    min-height: 700px;
+    border-radius: 16px;
+    overflow: hidden;
 }
 
 .plain-text-mail {
-    padding: 24px 0;
+    padding: 24px 28px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    margin-top: 16px;
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 0.95rem;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--text-main);
@@ -1275,6 +1295,99 @@ input:-webkit-autofill:active {
 
     .compose-header-actions .btn-expand {
         display: none !important;
+    }
+
+    /* Mobile Reader View Styles */
+    #reader-content {
+        overflow-y: auto !important;
+    }
+
+    .reader-header {
+        padding: 12px 12px !important;
+    }
+
+    .reader-subject {
+        font-size: 1.1rem !important;
+        line-height: 1.3 !important;
+        word-break: break-word !important;
+    }
+
+    .reader-sender-info {
+        min-width: 0 !important;
+    }
+
+    .reader-sender-name {
+        font-size: 0.85rem !important;
+        word-break: break-all !important;
+    }
+
+    .reader-body {
+        padding: 8px !important;
+        overflow: visible !important;
+        flex: none !important;
+        display: block !important;
+    }
+
+    .mail-content-wrapper {
+        width: 100% !important;
+        margin: 0 auto 20px auto !important;
+    }
+
+    .html-mail-card {
+        border-radius: 8px !important;
+        margin-top: 8px !important;
+    }
+
+    .html-mail-card iframe {
+        border-radius: 8px !important;
+        min-height: 350px !important;
+    }
+
+    .plain-text-mail {
+        padding: 14px 16px !important;
+        border-radius: 8px !important;
+        font-size: 0.9rem !important;
+    }
+}
+
+@media (max-height: 500px) {
+    #reader-content {
+        overflow-y: auto !important;
+    }
+
+    .reader-header {
+        padding: 6px 12px !important;
+    }
+
+    .reader-subject {
+        font-size: 0.95rem !important;
+        margin-bottom: 2px !important;
+        line-height: 1.2 !important;
+    }
+
+    .reader-avatar {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 0.75rem !important;
+    }
+
+    .reader-reply-actions {
+        margin-top: 6px !important;
+    }
+
+    .btn-reply-action {
+        padding: 4px 10px !important;
+        font-size: 0.78rem !important;
+    }
+
+    .reader-body {
+        padding: 6px !important;
+        overflow: visible !important;
+        flex: none !important;
+    }
+
+    .html-mail-card iframe {
+        min-height: 300px !important;
     }
 }
 
