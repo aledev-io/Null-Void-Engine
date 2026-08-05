@@ -79,9 +79,15 @@ export function initCalendarWidget() {
         // Previous month days
         for (let i = startDay - 1; i >= 0; i--) {
             const dayNum = prevLastDay - i;
+            const prevMonthDate = new Date(year, month - 1, dayNum);
+            const dateStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-${String(prevMonthDate.getDate()).padStart(2, '0')}`;
             const el = document.createElement('div');
             el.className = 'cal-day cal-day-muted';
             el.textContent = dayNum;
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', () => {
+                window.location.href = `/calendar?date=${dateStr}`;
+            });
             grid.appendChild(el);
         }
         
@@ -118,9 +124,15 @@ export function initCalendarWidget() {
         const totalCells = startDay + daysInMonth;
         const nextDays = Math.ceil(totalCells / 7) * 7 - totalCells;
         for (let i = 1; i <= nextDays; i++) {
+            const nextMonthDate = new Date(year, month + 1, i);
+            const dateStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-${String(nextMonthDate.getDate()).padStart(2, '0')}`;
             const el = document.createElement('div');
             el.className = 'cal-day cal-day-muted';
             el.textContent = i;
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', () => {
+                window.location.href = `/calendar?date=${dateStr}`;
+            });
             grid.appendChild(el);
         }
     }

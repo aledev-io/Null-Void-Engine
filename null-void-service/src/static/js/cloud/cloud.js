@@ -1,11 +1,39 @@
 import { NV_Alert, NV_Confirm, NV_Prompt } from '../dashboard/ui.js';
 import { getCookie, formatBytes, getFileIcon, getFolderIcon, getComputerIcon, timeAgo } from '../dashboard/utils.js';
 
+// Garantiza que todas las peticiones fetch incluyan credenciales (cookies) para
+// preservar el token de sesión durante operaciones largas de descarga/streaming.
+if (!window.__nvFetchCredentialsPatched) {
+    window.__nvFetchCredentialsPatched = true;
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = function (url, options) {
+        options = Object.assign({}, options);
+        if (options.credentials === undefined) {
+            options.credentials = 'include';
+        }
+        return _origFetch(url, options);
+    };
+}
+
 let currentCloudPath = '';
 let currentCloudView = 'home';
 let currentCloudContextItem = null;
 let currentCloudInfoItem = null;
 let CLOUD_FILES = [];
+
+function updateTableHeaderVisibility(targetView = currentCloudView, targetPath = currentCloudPath) {
+    const tableHeader = document.querySelector('.cloud-table-header');
+    if (!tableHeader) return;
+    const isHome = targetView === 'home' && !targetPath;
+    const isBackupsRoot = targetView === 'backups' && !targetPath;
+    const isGrid = (typeof currentCloudLayout !== 'undefined') && currentCloudLayout === 'grid';
+
+    if (isHome || isBackupsRoot || isGrid) {
+        tableHeader.style.display = 'none';
+    } else {
+        tableHeader.style.display = 'grid';
+    }
+}
 
 async function fetchCloudFiles(path = '', view = 'home') {
     if (path === undefined) path = '';
@@ -18,6 +46,21 @@ async function fetchCloudFiles(path = '', view = 'home') {
         clearInterval(window.cloudFolderRefreshInterval);
         window.cloudFolderRefreshInterval = null;
     }
+
+    try {
+        const url = new URL(window.location.href);
+        if (view && view !== 'home') {
+            url.searchParams.set('view', view);
+        } else {
+            url.searchParams.delete('view');
+        }
+        if (path) {
+            url.searchParams.set('path', path);
+        } else {
+            url.searchParams.delete('path');
+        }
+        window.history.replaceState({}, '', url.pathname + url.search);
+    } catch (e) {}
     document.querySelectorAll('#cloud-sidebar-nav .cloud-nav-item').forEach(item => {
         item.classList.remove('active');
     });
@@ -25,6 +68,20 @@ async function fetchCloudFiles(path = '', view = 'home') {
     if (targetItem) {
         targetItem.classList.add('active');
     }
+
+    const backupsContainer = document.getElementById('cloud-backups-container');
+    const fileList = document.getElementById('cloud-file-list');
+
+    const isBackupsRoot = view === 'backups' && !path;
+
+    if (isBackupsRoot) {
+        if (backupsContainer) backupsContainer.style.display = 'block';
+        if (fileList) fileList.style.display = 'none';
+    } else {
+        if (backupsContainer) backupsContainer.style.display = 'none';
+        if (fileList) fileList.style.display = 'block';
+    }
+    updateTableHeaderVisibility(view, path);
 
     const header = document.querySelector('.cloud-header');
     if (header) {
@@ -63,7 +120,7 @@ async function fetchCloudFiles(path = '', view = 'home') {
         const data = await res.json();
         CLOUD_FILES = data.files || [];
 
-        renderCloudBreadcrumbs(path, view === 'home' ? window.t_cloud('nav_home', 'Página principal') : (view === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (view === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
+        renderCloudBreadcrumbs(path, view === 'home' ? null : (view === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (view === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
 
         const query = document.getElementById('cloud-search')?.value.toLowerCase() || '';
         const closeBtn = document.getElementById('btn-close-mobile-search');
@@ -85,7 +142,7 @@ async function fetchCloudFiles(path = '', view = 'home') {
 
         const layoutToggle = document.getElementById('cloud-layout-toggle-group');
         if (layoutToggle) {
-            layoutToggle.style.display = (view === 'home' || view === 'recent') ? 'none' : 'flex';
+            layoutToggle.style.display = (view === 'home' || view === 'computers' || view === 'backups') ? 'none' : 'flex';
         }
 
         if (view === 'computers' && path !== '') {
@@ -135,7 +192,7 @@ async function filterCloudFiles() {
 
     if (!query) {
         renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
-        renderCloudBreadcrumbs(currentCloudPath, currentCloudView === 'home' ? window.t_cloud('nav_home', 'Página principal') : (currentCloudView === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (currentCloudView === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
+        renderCloudBreadcrumbs(currentCloudPath, currentCloudView === 'home' ? null : (currentCloudView === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (currentCloudView === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
         return;
     }
 
@@ -157,21 +214,18 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
     const container = document.getElementById('cloud-breadcrumbs');
     if (!container) return;
 
+    if (currentCloudView === 'home' && (!path || path === '')) {
+        container.innerHTML = `<span class="breadcrumb-item active hide-desktop">${window.t_cloud('nav_home', 'Home')}</span>`;
+        return;
+    }
+
     if (currentCloudView === 'computers' && currentCloudPath === '') {
-        container.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                <span class="breadcrumb-item active" style="color: var(--text-main);">${window.t_cloud('nav_computers', 'Computadoras')}</span>
-                <button onclick="openLinkDeviceModal()" class="btn-primary hide-mobile" style="padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; background: var(--indigo); color: #fff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(99,102,241,0.3); transition: all 0.2s; margin-left: 10px;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(99,102,241,0.4)';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 2px 8px rgba(99,102,241,0.3)';">
-                    <span>💻</span>
-                    <span>${window.t_cloud('link_new_computer', 'Vincular nuevo computador')}</span>
-                </button>
-            </div>
-        `;
+        container.innerHTML = `<span class="breadcrumb-item active hide-desktop" style="color: var(--text-main);">${window.t_cloud('nav_computers', 'Computadoras')}</span>`;
         return;
     }
 
     if (customTitle) {
-        container.innerHTML = `<span class="breadcrumb-item active" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; width: 100%;">${customTitle}</span>`;
+        container.innerHTML = `<span class="breadcrumb-item active hide-desktop" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; width: 100%;">${customTitle}</span>`;
         return;
     }
 
@@ -205,7 +259,7 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
     if (currentCloudView === 'trash' && !path && CLOUD_FILES && CLOUD_FILES.length > 0) {
         trashEmptyBtn = `
             <button onclick="emptyCloudTrash()" style="padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.3); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; margin-left: 12px; flex-shrink: 0;" onmouseover="this.style.background='rgba(239,68,68,0.2)'; this.style.borderColor='#f87171';" onmouseout="this.style.background='rgba(239,68,68,0.1)'; this.style.borderColor='rgba(239,68,68,0.3)';">
-                🗑️ ${window.t_cloud('ctx_empty_trash', 'Vaciar papelera')}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> ${window.t_cloud('ctx_empty_trash', 'Vaciar papelera')}
             </button>`;
     }
 
@@ -215,7 +269,7 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
         linkBtn.style.display = currentCloudView === 'trash' ? 'none' : 'flex';
     }
 
-    let html = `<span class="breadcrumb-item ${!path ? 'active' : ''} ${parts.length > 0 ? 'hide-mobile' : ''}" onclick="${rootAction}">${rootName}</span>${trashEmptyBtn}`;
+    let html = `<span class="breadcrumb-item ${!path ? 'active' : ''} ${parts.length > 0 ? 'hide-mobile' : 'hide-desktop'}" onclick="${rootAction}">${rootName}</span>${trashEmptyBtn}`;
 
     let currentAccumulated = '';
     parts.forEach((p, i) => {
@@ -296,9 +350,9 @@ function renderCloudFiles(files, isRecent = false) {
     const header = document.querySelector('.cloud-table-header');
     if (!list) return;
 
-    const isHomeOrRecent = currentCloudView === 'home' || currentCloudView === 'recent';
+    const isHome = currentCloudView === 'home';
 
-    if (currentCloudLayout === 'grid' && !isHomeOrRecent) {
+    if (currentCloudLayout === 'grid' && !isHome) {
         list.classList.add('grid-layout');
     } else {
         list.classList.remove('grid-layout');
@@ -309,9 +363,9 @@ function renderCloudFiles(files, isRecent = false) {
     }
 
     if (header) {
-        if (currentCloudLayout === 'grid' && !isHomeOrRecent) {
+        if (currentCloudLayout === 'grid' && !isHome) {
             header.style.display = 'none';
-        } else if (isRecent || (currentCloudView === 'computers' && currentCloudPath === '' && (!files || files.length === 0))) {
+        } else if (currentCloudView === 'computers' && currentCloudPath === '' && (!files || files.length === 0)) {
             header.style.display = 'none';
         } else {
             header.style.display = 'grid';
@@ -323,19 +377,19 @@ function renderCloudFiles(files, isRecent = false) {
             list.innerHTML = `
 <div style="display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; min-height: 200px; width: 100%;">
     <div style="display: flex; flex-direction: column; align-items: center; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: clamp(16px, 4vw, 36px) clamp(16px, 5vw, 40px); box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 100%; max-width: 480px; gap: 0;">
-        <div style="font-size: clamp(2rem, 8vw, 3.5rem); line-height: 1; margin-bottom: clamp(10px, 2vw, 18px);">💻</div>
+        <div style="margin-bottom: clamp(10px, 2vw, 18px);"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>
         <h3 style="font-size: clamp(0.95rem, 3.5vw, 1.35rem); font-weight: 700; color: var(--text-main); margin: 0 0 clamp(6px, 1.5vw, 10px); line-height: 1.3;">${window.t_cloud('link_modal_title')}</h3>
         <p style="font-size: clamp(0.75rem, 2.5vw, 0.88rem); color: var(--text-muted); margin: 0 0 clamp(14px, 3vw, 22px); line-height: 1.5;">
             ${window.t_cloud('link_modal_desc_computers')}
         </p>
         <button onclick="openLinkDeviceModal()" class="btn-primary" style="padding: clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px); border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99,102,241,0.4); cursor: pointer; border: none; background: var(--indigo); color: #fff; font-size: clamp(0.78rem, 2.5vw, 0.95rem); white-space: nowrap;">
-            <span>⚡</span> ${window.t_cloud('link_this_device')}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> ${window.t_cloud('link_this_device')}
         </button>
     </div>
 </div>`;
         } else {
-            list.innerHTML = `<div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.3; margin-top: 50px;">
-            <div style="font-size: 4rem; margin-bottom: 10px;">📂</div>
+            list.innerHTML = `<div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.4; margin-top: 50px;">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
             <p>${isRecent ? window.t_cloud('no_recent_activity') : window.t_cloud('empty_folder')}</p>
         </div>`;
         }
@@ -365,7 +419,7 @@ function renderCloudFiles(files, isRecent = false) {
                 statusBadge = `<span style="display:inline-block; width:8px; height:8px; background:#ef4444; border-radius:50%; margin-left:4px;" title="Offline"></span>`;
             }
         } else if (f.shared) {
-            statusBadge = `<span style="color: #818cf8; font-size: 0.9rem; margin-left: 6px;" title="Compartido">👥</span>`;
+            statusBadge = `<span style="color: #818cf8; display: inline-flex; align-items: center; margin-left: 6px;" title="Compartido"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>`;
         }
 
         const safeClickAction = clickAction.replace(/`/g, "\\`").replace(/'/g, "\\'");
@@ -384,16 +438,22 @@ function renderCloudFiles(files, isRecent = false) {
 
         const previewView = f.id ? 'trash' : (f.view || currentCloudView);
 
+        const thumbUrl = `/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}`;
+
+        // Miniaturas: carga diferida (lazy) y, si fallan, se muestra el icono en vez de imagen rota
+        const fallbackIcon = `<span style="font-size: 3rem; opacity: 0.25;">${getFileIcon(f.ext)}</span>`;
+
         if (isImg) {
-            previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}">`;
+            previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${fallbackIcon}<img loading="lazy" src="${thumbUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()"></div>`;
         } else if (isVid) {
             previewContent = `
                 <div style="width:100%; height:100%; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                    <img src="/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}" style="width:100%; height:100%; object-fit:cover;">
+                    ${fallbackIcon}
+                    <img loading="lazy" src="${thumbUrl}" style="position:absolute;inset:0;width:100%; height:100%; object-fit:cover;" onerror="this.remove()">
                     <div class="video-overlay" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--indigo); color: #fff; font-size: 0.8rem; position:absolute; z-index:2;">▶</div>
                 </div>`;
         } else if (isPdf) {
-            previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}">`;
+            previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${fallbackIcon}<img loading="lazy" src="${thumbUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()"></div>`;
         }
 
         return {
@@ -412,6 +472,8 @@ function renderCloudFiles(files, isRecent = false) {
         };
     }
 
+    updateTableHeaderVisibility(currentCloudView, currentCloudPath);
+
     let html = '';
 
     if (isRecent) {
@@ -427,16 +489,20 @@ function renderCloudFiles(files, isRecent = false) {
 
             let previewContent = `<span style="font-size: 2.5rem;">${getFileIcon(f.ext)}</span>`;
 
+            const cardThumb = `/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}`;
+            const cardFallback = `<span style="font-size:2.5rem;">${getFileIcon(f.ext)}</span>`;
+
             if (isImg) {
-                previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}" class="card-preview-img">`;
+                previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${cardFallback}<img loading="lazy" src="${cardThumb}" class="card-preview-img" style="position:absolute;inset:0;" onerror="this.remove()"></div>`;
             } else if (isVid) {
                 previewContent = `
                         <div style="width:100%; height:100%; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                            <img src="/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}" class="card-preview-img" style="width:100%; height:100%; object-fit:cover;">
+                            ${cardFallback}
+                            <img loading="lazy" src="${cardThumb}" class="card-preview-img" style="position:absolute;inset:0; width:100%; height:100%; object-fit:cover;" onerror="this.remove()">
                             <div class="video-overlay" style="display:flex; align-items:center; justify-content:center; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.5); color:#fff; font-size:0.9rem; z-index:2;">▶</div>
                         </div>`;
             } else if (isPdf) {
-                previewContent = `<img src="/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}" class="card-preview-img">`;
+                previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${cardFallback}<img loading="lazy" src="${cardThumb}" class="card-preview-img" style="position:absolute;inset:0;" onerror="this.remove()"></div>`;
             }
 
             return `
@@ -465,7 +531,7 @@ function renderCloudFiles(files, isRecent = false) {
     </div>`;
     }
 
-    if (currentCloudLayout === 'grid' && !isHomeOrRecent) {
+    if (currentCloudLayout === 'grid' && currentCloudView !== 'home') {
         const folders = files.filter(f => f.is_dir);
         const items = files.filter(f => !f.is_dir);
 
@@ -518,7 +584,7 @@ function renderCloudFiles(files, isRecent = false) {
     } else {
         // Si estamos en la papelera, agrupar por origen (view)
         if (currentCloudView === 'trash' && files.length > 0) {
-            const viewLabels = { 'drive': '📁 ' + window.t_cloud('nav_drive', 'Mi unidad'), 'backups': '💾 Backups', 'business': '📑 ' + window.t_cloud('nav_business', 'Facturación'), 'computers': '💻 ' + window.t_cloud('nav_computers', 'Computadoras') };
+            const viewLabels = { 'drive': window.t_cloud('nav_drive', 'Mi unidad'), 'backups': 'Backups', 'business': window.t_cloud('nav_business', 'Facturación'), 'computers': window.t_cloud('nav_computers', 'Computadoras') };
             const groups = {};
             files.forEach(f => {
                 const src = f.view || 'drive';
@@ -719,6 +785,7 @@ function navigateCloud(path, view = null) {
 }
 
 function handleCloudNavClick(el, section) {
+    closeCloudInfoPanel();
     document.querySelectorAll('#cloud-sidebar-nav .cloud-nav-item').forEach(item => {
         item.classList.remove('active');
     });
@@ -758,19 +825,19 @@ function showCloudNewMenu(e) {
     if (currentCloudView === 'computers' && currentCloudPath === '') {
         menu.innerHTML = `
             <div class="context-item" onclick="openLinkDeviceModal()">
-                <span style="font-size: 1.1rem;">💻</span> <span data-i18n="new_computer">${window.t_cloud('new_computer') || 'Añadir computadora'}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> <span data-i18n="new_computer">${window.t_cloud('new_computer') || 'Añadir computadora'}</span>
             </div>
         `;
     } else {
         menu.innerHTML = `
             <div class="context-item" onclick="triggerNewItemAction('file')">
-                <span style="font-size:1.1rem; opacity:0.7;">↑</span> <span data-i18n="new_upload_file">${window.t_cloud('new_upload_file') || 'Subir archivo'}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> <span data-i18n="new_upload_file">${window.t_cloud('new_upload_file') || 'Subir archivo'}</span>
             </div>
             <div class="context-item" onclick="triggerNewItemAction('folder')">
-                <span style="font-size:1.1rem; opacity:0.7;">⇡</span> <span data-i18n="new_upload_folder">${window.t_cloud('new_upload_folder') || 'Subir carpeta'}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="new_upload_folder">${window.t_cloud('new_upload_folder') || 'Subir carpeta'}</span>
             </div>
             <div class="context-item" onclick="triggerNewItemAction('mkdir')">
-                <span style="font-size:1.1rem; opacity:0.7;">+</span> <span data-i18n="ctx_new_folder">${window.t_cloud('ctx_new_folder') || 'Carpeta nueva'}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="ctx_new_folder">${window.t_cloud('ctx_new_folder') || 'Carpeta nueva'}</span>
             </div>
         `;
     }
@@ -1827,16 +1894,16 @@ function showCloudDetails(name, path, data) {
     const isComputer = currentCloudView === 'computers' && currentCloudPath === '';
 
     if (isComputer) {
-        icon.innerText = '💻';
+        icon.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>';
     } else {
-        icon.innerText = data.is_dir ? '📁' : getFileIcon('.' + ext);
+        icon.innerHTML = data.is_dir ? getFolderIcon() : getFileIcon('.' + ext);
     }
 
     const isTrash = currentCloudView === 'trash';
-    let previewHtml = `<span style="font-size: 4rem; opacity: 0.2;">${data.is_dir ? '📁' : getFileIcon('.' + ext)}</span>`;
+    let previewHtml = `<div style="display: flex; align-items: center; justify-content: center; height: 100%; opacity: 0.5;">${data.is_dir ? getFolderIcon() : getFileIcon('.' + ext)}</div>`;
 
     if (isComputer) {
-        previewHtml = `<span style="font-size: 5rem; display: block; filter: drop-shadow(0 8px 20px rgba(99,102,241,0.25)); text-align: center;">💻</span>`;
+        previewHtml = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto; filter: drop-shadow(0 8px 20px rgba(99,102,241,0.25));"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`;
     } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'].includes(ext)) {
         const trashId = currentCloudInfoItem ? currentCloudInfoItem.id : null;
         const ownerId = data.owner_id || '';
@@ -1925,7 +1992,7 @@ function showSyncInstructionsAlert(deviceName) {
     const alertHtml = `
         <div style="text-align: left; line-height: 1.5; font-size: 0.9rem; color: #e2e8f0; font-family: sans-serif;">
             <div style="font-weight: 700; color: #fbbf24; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-size: 1.05rem;">
-                <span>💡</span> Guía de Ejecución Permanente (nohup)
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.55.63 2.89 1.63 3.82.64.6 1.33 2.18"></path></svg> Guía de Ejecución Permanente (nohup)
             </div>
             <p style="margin-bottom: 12px; color: #94a3b8; font-size: 0.85rem;">Si deseas que el Agente de Sincronización siga ejecutándose en tu ordenador incluso si cierras la ventana de tu terminal física, ejecútalo usando <b>nohup</b> en segundo plano:</p>
             <div style="position: relative; margin-bottom: 16px;">
@@ -2098,6 +2165,12 @@ document.addEventListener('contextmenu', function (e) {
                         document.getElementById('ctx-organize-btn').style.display = 'block';
                         document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
                         document.getElementById('ctx-copy-btn').style.display = 'block';
+                        
+                        const zipBtn = document.getElementById('ctx-zip-btn');
+                        const unzipBtn = document.getElementById('ctx-unzip-btn');
+                        if (zipBtn) zipBtn.style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'flex';
+                        if (unzipBtn) unzipBtn.style.display = (!isMineRow || !name || !name.toLowerCase().endsWith('.zip')) ? 'none' : 'flex';
+
                         document.getElementById('ctx-info-btn').style.display = 'block';
 
                         document.getElementById('ctx-delete-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
@@ -2143,7 +2216,7 @@ document.addEventListener('contextmenu', function (e) {
 
             const creationItems = Array.from(menu.children).filter(child => child.id !== 'ctx-item-actions');
             creationItems.forEach(item => {
-                item.style.display = isAllowedView ? '' : 'none';
+                item.style.display = (isAllowedView && !currentCloudContextItem) ? '' : 'none';
             });
 
             menu.style.display = 'block';
@@ -3532,6 +3605,8 @@ function setCloudLayout(layout) {
         }
     }
 
+    updateTableHeaderVisibility(currentCloudView, currentCloudPath);
+
     if (typeof CLOUD_FILES !== 'undefined' && CLOUD_FILES) {
         renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
     }
@@ -3718,11 +3793,79 @@ function initClipboardPaste() {
     });
 }
 
+async function handleZipItem() {
+    if (!currentCloudContextItem) return;
+    const item = currentCloudContextItem;
+    const defaultZipName = (item.isDir ? item.name : item.name.substring(0, item.name.lastIndexOf('.')) || item.name) + '.zip';
+    
+    const zipName = await NV_Prompt(
+        window.t_cloud('prompt_zip_name', 'Nombre del archivo .ZIP:'),
+        defaultZipName,
+        window.t_cloud('title_zip', 'Comprimir en .ZIP')
+    );
+    if (!zipName) return;
+    
+    try {
+        const res = await fetch('/api/cloud/zip', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                view: item.view || currentCloudView,
+                name: item.name,
+                path: item.path || currentCloudPath,
+                zip_name: zipName
+            }),
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+        } else {
+            NV_Alert(data.error || 'Error al comprimir', 'Error');
+        }
+    } catch (e) {
+        NV_Alert('Error de conexión al comprimir', 'Error');
+    }
+}
+
+async function handleUnzipItem() {
+    if (!currentCloudContextItem) return;
+    const item = currentCloudContextItem;
+    
+    const confirm = await NV_Confirm(
+        `¿Deseas descomprimir el archivo "${item.name}" en la carpeta actual?`,
+        window.t_cloud('title_unzip', 'Descomprimir .ZIP')
+    );
+    if (!confirm) return;
+    
+    try {
+        const res = await fetch('/api/cloud/unzip', {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                view: item.view || currentCloudView,
+                name: item.name,
+                path: item.path || currentCloudPath
+            }),
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.ok) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+        } else {
+            NV_Alert(data.error || 'Error al descomprimir', 'Error');
+        }
+    } catch (e) {
+        NV_Alert('Error de conexión al descomprimir', 'Error');
+    }
+}
+
 function initCloud() {
     initMarqueeSelection();
     initCloudLayout();
     initDragAndDropUpload();
     initClipboardPaste();
+
     window.addEventListener('language_changed', () => {
         if (typeof fetchCloudFiles === 'function') {
             fetchCloudFiles(currentCloudPath || '', currentCloudView || 'drive');
@@ -3749,9 +3892,10 @@ function initCloud() {
         confirmCloudShare, closeCloudShareModal, handleCreateFolder,
         generateSyncCommand, searchUsersForSharing, handleLinkDeviceFolderSelect,
         selectUserForSharing, refreshCloudInfoPanel, showCloudInfo,
-        handleUnshareItem, revokeCloudShare, toggleCloudFileSelection
+        handleUnshareItem, revokeCloudShare, toggleCloudFileSelection,
+        handleZipItem, handleUnzipItem
     });
 }
 
-export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud };
+export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud, handleZipItem, handleUnzipItem };
 

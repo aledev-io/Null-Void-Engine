@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from modules.session import session, security, audit
 from . import services
 from core.socket_ext import socketio
+from config.config import CONFIG
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -52,8 +53,14 @@ def api_login():
         "ok": True, "user": result["username"],
         "user_id": result["user_id"], "token": token,
     })
-    response.set_cookie("token", token, httponly=True, secure=False, samesite='Lax', max_age=86400)
-    response.set_cookie("user", result["username"], httponly=False, secure=False, samesite='Lax', max_age=86400)
+    # Cookies seguras: SameSite=Lax, Path='/', HttpOnly para el token.
+    # secure se activa solo cuando el despliegue usa HTTPS.
+    _cookie_secure = bool(getattr(CONFIG, "USE_HTTPS", False))
+    response.set_cookie("token", token, httponly=True, secure=_cookie_secure,
+                        samesite='Lax', path='/', max_age=86400)
+    # 'user' es legible por JS (la UI la consulta); el token sigue siendo HttpOnly.
+    response.set_cookie("user", result["username"], httponly=False, secure=_cookie_secure,
+                        samesite='Lax', path='/', max_age=86400)
     return response
 
 

@@ -6,6 +6,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./null-void-service/src:/app/src
+      - ./client_agent:/app/client_agent
       - ./.secrets:/app/src/.secrets:ro
       - ./certs:/app/certs:ro
       - /etc/timezone:/etc/timezone:ro
@@ -72,6 +73,16 @@ services:
     network_mode: "host"
 
 
+
+  nullvoid-agent-builder:
+    build:
+      context: ./client_agent
+      dockerfile: Dockerfile.builder
+    container_name: nullvoid-agent-builder
+    volumes:
+      - ./client_agent/dist:/app/dist
+      - ./.env:/app/src/.env:ro
+    restart: "no"
 
 volumes:
   ollama-data:

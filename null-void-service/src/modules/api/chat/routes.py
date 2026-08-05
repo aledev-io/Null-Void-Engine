@@ -155,18 +155,20 @@ def _send_message_impl():
             for member_id in members:
                 socketio.emit('new_message', {**result, 'mine': member_id == user_id}, room=f"user_{member_id}")
                 
+            file_url = file_path if (file_name and file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))) else None
             group_info = repository.get_contact_info(receiver_id)
             if group_info:
                 for member_id in members:
                     if member_id != user_id and not repository.is_muted(member_id, receiver_id):
-                        notifier.notify_chat_message(f"{sender_name} @ {group_info['username']}", member_id, message, file_name)
+                        notifier.notify_chat_message(f"{sender_name} @ {group_info['username']}", member_id, message, file_name, sender_id=receiver_id, image_url=file_url)
         else:
             socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{result['receiver_id']}")
             socketio.emit('new_message', result, room=f"user_{user_id}")
             
             # Only notify if the receiver hasn't muted the sender
             if not repository.is_muted(receiver_id, user_id):
-                notifier.notify_chat_message(sender_name, receiver_id, message, file_name)
+                file_url = file_path if (file_name and file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))) else None
+                notifier.notify_chat_message(sender_name, receiver_id, message, file_name, sender_id=user_id, image_url=file_url)
     except Exception as ex:
         import traceback
         sys.stderr.write(f"[CHAT][SEND_ERROR] {traceback.format_exc()}\n")

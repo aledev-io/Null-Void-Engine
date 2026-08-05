@@ -49,3 +49,4 @@ null-void-app/android/local.properties
 null-void-app/android/app/google-services.json
 .cxx/
 .externalNativeBuild/
+.opencode

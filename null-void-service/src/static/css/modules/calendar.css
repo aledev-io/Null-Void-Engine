@@ -433,6 +433,7 @@
   grid-template-columns: 52px 1fr;
   flex: 1;
   overflow: auto;
+  position: relative;
 }
 
 .day-col {

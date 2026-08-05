@@ -22,12 +22,12 @@ fi
 
 # 3. Activar entorno virtual
 echo "Activando entorno virtual..."
-source venv/bin/activate
+. venv/bin/activate
 
 # 4. Instalar dependencias necesarias
 echo "Verificando e instalando dependencias (PyInstaller, Requests, Watchdog)..."
 pip install --upgrade pip > /dev/null 2>&1
-pip install pyinstaller requests watchdog urllib3 > /dev/null 2>&1
+pip install pyinstaller requests watchdog urllib3 pywebview > /dev/null 2>&1
 
 # 5. Ejecutar el script de construcción inteligente
 echo "Ejecutando el compilador (build_agent.py)..."

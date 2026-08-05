@@ -127,62 +127,48 @@ def register_agent():
         sys.exit(1)
 
     print("\nBuscando servidor y registrando dispositivo...")
+    device_name = get_device_name()
+    payload = {
+        "temp_token": token,
+        "device": device_name,
+        "os": platform.system()
+    }
+    
     for url in test_urls:
+        reg_url = f"{url}/api/cloud/sync-agent/register"
         print(f"Probando conexión con: {url}...")
-        try:
-            reg_url = f"{url}/api/cloud/sync-agent/register"
-            data = {
-                "temp_token": token,
-                "device": platform.node(),  # El servidor lo ignorará y asignará Usuario-PCX
-                "os": platform.system()
-            }
-            res = requests.post(reg_url, json=data, verify=True, timeout=5)
-            if res.status_code == 200:
-                res_data = res.json()
-                fingerprint = res_data.get("server_fingerprint")
-                assigned_device_name = res_data.get("device_name", platform.node())
-                
-                # We save all tried urls starting with the successful one
-                saved_urls = [url] + [u for u in test_urls if u != url]
-                
-                config = {
-                    "server_urls": saved_urls,
-                    "device_token": res_data.get("device_token"),
-                    "device_name": assigned_device_name,
-                    "server_fingerprint": fingerprint,
-                    "verify_ssl": True
-                }
-                save_config(config)
-                print(f"¡Dispositivo vinculado con éxito a {url} como '{assigned_device_name}'!")
-                return config
-            else:
-                print(f"Error devuelto por {url}: {res.text}")
-        except requests.exceptions.SSLError:
-            print(f"Advertencia: Certificado SSL no válido en {url}. Reintentando sin verificación estricta de seguridad...")
+        
+        for verify_ssl in (True, False):
             try:
-                res = requests.post(reg_url, json=data, verify=False, timeout=5)
+                res = requests.post(reg_url, json=payload, verify=verify_ssl, timeout=5)
                 if res.status_code == 200:
                     res_data = res.json()
                     fingerprint = res_data.get("server_fingerprint")
-                    assigned_device_name = res_data.get("device_name", platform.node())
+                    assigned_device_name = res_data.get("device_name", device_name)
                     saved_urls = [url] + [u for u in test_urls if u != url]
+                    
                     config = {
                         "server_urls": saved_urls,
                         "device_token": res_data.get("device_token"),
                         "device_name": assigned_device_name,
                         "server_fingerprint": fingerprint,
-                        "verify_ssl": False
+                        "verify_ssl": verify_ssl
                     }
                     save_config(config)
-                    print(f"¡Dispositivo vinculado con éxito a {url} (sin verificación SSL) como '{assigned_device_name}'!")
+                    ssl_str = "" if verify_ssl else " (sin verificación SSL)"
+                    print(f"¡Dispositivo vinculado con éxito a {url}{ssl_str} como '{assigned_device_name}'!")
                     return config
                 else:
                     print(f"Error devuelto por {url}: {res.text}")
+                    break  # Si devolvió error de API (p.ej. 400/401), no reintentar sin SSL
+            except requests.exceptions.SSLError:
+                if verify_ssl:
+                    print(f"Advertencia: Certificado SSL no válido en {url}. Reintentando sin verificación estricta...")
+                    continue
             except Exception as e:
-                print(f"No se pudo conectar a {url} en el reintento sin SSL.")
-        except Exception as e:
-            print(f"No se pudo conectar a {url}.")
-            
+                print(f"No se pudo conectar a {url}: {e}")
+                break
+
     print("\nNinguno de los servidores proporcionó un registro exitoso.")
     sys.exit(1)
 
@@ -232,6 +218,17 @@ class SyncClient:
         self.observer = None
         self.stop_event = threading.Event()
 
+        # --- Estado en vivo para la interfaz ---
+        self.connected = False
+        self.last_sync_time = None
+        self.last_ping_error = None
+        self.stats_lock = threading.Lock()
+        self.stats = {"uploaded": 0, "downloaded": 0, "deleted": 0, "created_dirs": 0}
+
+    def _bump_stat(self, key):
+        with self.stats_lock:
+            self.stats[key] = self.stats.get(key, 0) + 1
+
     def ignore_path(self, rel_path, duration=3.0):
         with self.ignore_lock:
             self.ignored_events[rel_path] = time.time() + duration
@@ -280,6 +277,7 @@ class SyncClient:
             print("Alguien está interceptando tu conexión o el servidor ha sido modificado.")
             print("Deteniendo la sincronización de inmediato para proteger tus archivos.")
             print("!" * 50 + "\n")
+            self.connected = False
             self.stop_event.set()
             sys.exit(1)
         return True
@@ -289,17 +287,32 @@ class SyncClient:
             try:
                 res = requests.post(f"{url}/api/cloud/sync-agent/ping",
                     headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
-                    json={"device": self.device_name, "os": platform.system()}, timeout=5, verify=self.verify_ssl)
+                    json={"device": self.device_name, "os": platform.system(), "version": "1.0.0"}, timeout=5, verify=self.verify_ssl)
                 if res.status_code == 401:
                     print(f"[Null-Void Sync] Token revocado en {url}. Por favor, vuelve a vincular el dispositivo.")
                     if os.path.exists(CONFIG_FILE): os.remove(CONFIG_FILE)
+                    self.connected = False
+                    self.last_ping_error = "Token revocado"
                     self.stop_event.set()
                     return False
                 if res.status_code == 200:
-                    self.active_url = url  # Guardamos la URL que ha funcionado
-                    self.verify_server_identity(res.json())
+                    data = res.json()
+                    self.active_url = url
+                    self.verify_server_identity(data)
+                    self.connected = True
+                    self.last_ping_error = None
+                    if data.get("has_update"):
+                        new_ver = data.get("latest_version")
+                        if getattr(self, "latest_version_available", None) != new_ver:
+                            self.latest_version_available = new_ver
+                            log(f"[ACTUALIZACIÓN] Nueva versión disponible en el servidor: v{self.latest_version_available}")
+                    else:
+                        self.latest_version_available = None
                     return True
-            except: continue
+            except Exception as e:
+                self.last_ping_error = str(e)
+                continue
+        self.connected = False
         return False
 
     def upload_file(self, local_path):
@@ -319,6 +332,7 @@ class SyncClient:
             success = res.status_code in (200, 201)
             if success:
                 print(f"[Null-Void Sync] ¡Archivo subido con éxito: {rel_path}!")
+                self._bump_stat("uploaded")
             else:
                 print(f"[Null-Void Sync] Error al subir {rel_path}: HTTP {res.status_code}")
             return success
@@ -339,6 +353,7 @@ class SyncClient:
             success = res.status_code in (200, 204)
             if success:
                 print(f"[Null-Void Sync] ¡Borrado en servidor: {rel_path}!")
+                self._bump_stat("deleted")
             else:
                 print(f"[Null-Void Sync] Error al borrar {rel_path}: HTTP {res.status_code}")
             return success
@@ -359,6 +374,7 @@ class SyncClient:
             success = res.status_code in (200, 201)
             if success:
                 print(f"[Null-Void Sync] ¡Carpeta creada en servidor: {rel_path}!")
+                self._bump_stat("created_dirs")
             else:
                 print(f"[Null-Void Sync] Error al crear carpeta {rel_path}: HTTP {res.status_code}")
             return success
@@ -389,6 +405,7 @@ class SyncClient:
                 self.ignore_path(rel_path, 3.0)
                 with open(local_path, "wb") as f:
                     f.write(res.content)
+                self._bump_stat("downloaded")
                 return True
             return False
         except: return False
@@ -410,6 +427,7 @@ class SyncClient:
                 local_mtime = os.path.getmtime(fp)
                 if rel not in srv_files or local_mtime > srv_files[rel] + 2:
                     self.event_queue.put(("upload", rel))
+        self.last_sync_time = time.time()
 
     def local_worker(self):
         import queue
@@ -479,11 +497,13 @@ class SyncClient:
                     
                     self.server_known_dirs = srv_dirs
                     self.server_known_files = srv_files
+                    self.last_sync_time = time.time()
                 
                 time.sleep(3)
         except KeyboardInterrupt:
             self.stop_event.set()
         
+        self.connected = False
         try: requests.post(f"{self.active_url}/api/cloud/sync-agent/disconnect", headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}, json={"device": self.device_name}, timeout=5, verify=self.verify_ssl)
         except: pass
         
@@ -529,6 +549,188 @@ class SyncHandler(FileSystemEventHandler):
             else: self.client.event_queue.put(("upload", new_rel))
 
 
+ui_log_queue = Queue()
+
+def log(msg):
+    t_str = time.strftime("%H:%M:%S")
+    full = f"[{t_str}] {msg}"
+    print(f"[Null-Void Sync] {full}")
+    try: ui_log_queue.put(full)
+    except Exception: pass
+
+def open_local_folder():
+    try:
+        if platform.system() == "Windows": os.startfile(LOCAL_DIR)
+        elif platform.system() == "Darwin": subprocess.Popen(["open", LOCAL_DIR])
+        else: subprocess.Popen(["xdg-open", LOCAL_DIR], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception: pass
+
+
+# --- Paleta compartida con el resto de Null-Void Engine ---
+PALETTE = {
+    "bg":        "#0b0f19",
+    "surface":   "#111827",
+    "surface_2": "#1e293b",
+    "border":    "#1f2937",
+    "text_main": "#f8fafc",
+    "text_dim":  "#94a3b8",
+    "text_faint":"#64748b",
+    "indigo":    "#6366f1",
+    "indigo_hover": "#4f46e5",
+    "violet":    "#818cf8",
+    "green":     "#10b981",
+    "amber":     "#f59e0b",
+    "red":       "#ef4444",
+    "console":   "#030712",
+    "console_fg":"#34d399",
+}
+
+
+def load_agent_html_template():
+    if getattr(sys, 'frozen', False):
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        template_path = os.path.join(base_dir, 'templates', 'agent_ui.html')
+        if os.path.exists(template_path):
+            try:
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except Exception:
+                pass
+
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(curr_dir, 'templates', 'agent_ui.html')
+    if os.path.exists(template_path):
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception:
+            pass
+
+    return """<!DOCTYPE html><html><head><title>Null-Void Cloud Sync</title></head><body><h2>Null-Void Cloud Sync</h2></body></html>"""
+
+
+def get_agent_html_template(client):
+    cloud_iframe_url = f"{client.active_url}/cloud?view=computers" if client.active_url else "about:blank"
+    raw_html = load_agent_html_template()
+    return raw_html.replace("{{ DEVICE_NAME }}", str(client.device_name))\
+                   .replace("{{ LOCAL_DIR }}", str(LOCAL_DIR))\
+                   .replace("{{ ACTIVE_URL }}", str(client.active_url or '—'))\
+                   .replace("{{ CLOUD_IFRAME_URL }}", str(cloud_iframe_url))
+
+
+def launch_gui(client):
+    import socket
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    
+    # 1. Reservar un puerto local libre
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(('127.0.0.1', 0))
+        local_port = s.getsockname()[1]
+        s.close()
+    except Exception:
+        local_port = 25433
+
+    # 2. Servidor HTTP local embebido
+    class AgentUIHandler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+
+        def do_GET(self):
+            if self.path == "/" or self.path.startswith("/?"):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                html = get_agent_html_template(client)
+                self.wfile.write(html.encode('utf-8'))
+            elif self.path == "/api/status":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                with client.stats_lock:
+                    stats = dict(client.stats)
+                
+                elapsed_str = "—"
+                if client.last_sync_time:
+                    elapsed = int(time.time() - client.last_sync_time)
+                    if elapsed < 5: elapsed_str = "justo ahora"
+                    elif elapsed < 60: elapsed_str = f"hace {elapsed}s"
+                    else: elapsed_str = f"hace {elapsed // 60} min"
+
+                data = {
+                    "connected": client.connected,
+                    "device_name": client.device_name,
+                    "server_url": client.active_url,
+                    "local_dir": LOCAL_DIR,
+                    "last_sync": elapsed_str,
+                    "latest_version": getattr(client, "latest_version_available", None),
+                    "stats": {
+                        "uploaded": stats.get("uploaded", 0),
+                        "downloaded": stats.get("downloaded", 0),
+                        "deleted": stats.get("deleted", 0),
+                        "pending": client.event_queue.qsize()
+                    }
+                }
+                self.wfile.write(json.dumps(data).encode('utf-8'))
+            elif self.path == "/api/logs":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                logs = []
+                while not ui_log_queue.empty():
+                    try: logs.append(ui_log_queue.get_nowait())
+                    except Exception: break
+                self.wfile.write(json.dumps({"logs": logs}).encode('utf-8'))
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def do_POST(self):
+            if self.path == "/api/sync-now":
+                threading.Thread(target=client.initial_sync, daemon=True).start()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True}).encode('utf-8'))
+            elif self.path == "/api/open-folder":
+                open_local_folder()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True}).encode('utf-8'))
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+    try:
+        server = HTTPServer(('127.0.0.1', local_port), AgentUIHandler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        local_app_url = f"http://127.0.0.1:{local_port}"
+        log(f"Interfaz web interna iniciada en {local_app_url}")
+    except Exception as e:
+        log(f"Error iniciando servidor web interno: {e}")
+        while not client.stop_event.is_set(): time.sleep(1)
+        return
+
+    # 3. Abrir ventana de aplicación nativa (pywebview / GUI de escritorio)
+    try:
+        import webview
+        webview.create_window(
+            f"Null-Void Cloud Sync — {client.device_name}",
+            local_app_url,
+            width=900,
+            height=720,
+            resizable=True,
+            background_color="#0b0f19"
+        )
+        webview.start()
+    except Exception as e:
+        log(f"Error al abrir la ventana de escritorio nativa (pywebview): {e}")
+        log("Iniciando servicio en segundo plano...")
+        while not client.stop_event.is_set():
+            time.sleep(1)
+
 if __name__ == "__main__":
     config = load_config()
     if not config:
@@ -538,7 +740,7 @@ if __name__ == "__main__":
     
     def signal_handler(sig, frame):
         try:
-            print("\n[Null-Void Sync] Señal de apagado recibida. Cerrando hilos y conexiones con seguridad...")
+            log("Señal de apagado recibida. Cerrando hilos y conexiones...")
         except Exception:
             pass
         client.stop_event.set()
@@ -546,8 +748,5 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    try:
-        client.start()
-    except Exception as e:
-        print(f"Error inesperado: {e}")
-        client.stop_event.set()
+    threading.Thread(target=client.start, daemon=True).start()
+    launch_gui(client)

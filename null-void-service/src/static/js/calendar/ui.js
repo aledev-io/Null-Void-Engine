@@ -536,7 +536,9 @@ export const UI = {
 
     let html = '';
     for (let i = startDow - 1; i >= 0; i--) {
-      html += `<div class="mini-day other-month">${daysInPrevMonth - i}</div>`;
+      const d = daysInPrevMonth - i;
+      const ds = window.dateToStr(new Date(year, month - 1, d));
+      html += `<div class="mini-day other-month" data-date="${ds}">${d}</div>`;
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -548,7 +550,12 @@ export const UI = {
     }
     const total = startDow + daysInMonth;
     const rem = total % 7;
-    if (rem > 0) for (let i = 1; i <= 7 - rem; i++) html += `<div class="mini-day other-month">${i}</div>`;
+    if (rem > 0) {
+      for (let i = 1; i <= 7 - rem; i++) {
+        const ds = window.dateToStr(new Date(year, month + 1, i));
+        html += `<div class="mini-day other-month" data-date="${ds}">${i}</div>`;
+      }
+    }
 
     const grid = document.getElementById('mini-cal-grid');
     grid.innerHTML = html;

@@ -2,12 +2,21 @@ import { Events } from './events.js';
 
 const THEME_KEY = 'theme';
 const API_BASE = '/api/events';
+const eventsChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('nv_events_channel') : null;
+
+if (eventsChannel) {
+  eventsChannel.onmessage = (msg) => {
+    if (msg && msg.data && msg.data.type === 'EVENT_CHANGED') {
+      Storage.syncFromAPI();
+    }
+  };
+}
 
 function _getToken() {
   const value = `; ${document.cookie}`;
   const parts = value.split('; token=');
   if (parts.length === 2) return parts.pop().split(';').shift();
-  return '';
+  return (typeof window !== 'undefined' && window.TOKEN) || '';
 }
 
 function _getUser() {
@@ -22,7 +31,10 @@ function _getStorageKey() {
 }
 
 function _apiHeaders(extra = {}) {
-  return { 'Content-Type': 'application/json', 'X-Token': _getToken(), ...extra };
+  const token = _getToken();
+  const headers = { 'Content-Type': 'application/json', ...extra };
+  if (token) headers['X-Token'] = token;
+  return headers;
 }
 
 function _diffEvents(previous, current) {
@@ -41,24 +53,26 @@ function _diffEvents(previous, current) {
 
 async function _syncToAPI(previous, current) {
   const { added, updated, deleted } = _diffEvents(previous, current);
+  const token = _getToken();
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
 
   const requests = [
     ...added.map(ev =>
-      fetch(API_BASE, {
+      fetch(`${API_BASE}${tokenQuery}`, {
         method: 'POST',
         headers: _apiHeaders(),
         body: JSON.stringify(ev),
       })
     ),
     ...updated.map(ev =>
-      fetch(`${API_BASE}/${ev.id}`, {
+      fetch(`${API_BASE}/${ev.id}${tokenQuery}`, {
         method: 'PUT',
         headers: _apiHeaders(),
         body: JSON.stringify(ev),
       })
     ),
     ...deleted.map(ev =>
-      fetch(`${API_BASE}/${ev.id}`, { method: 'DELETE', headers: _apiHeaders() })
+      fetch(`${API_BASE}/${ev.id}${tokenQuery}`, { method: 'DELETE', headers: _apiHeaders() })
     ),
   ];
 
@@ -79,6 +93,7 @@ export const Storage = {
     const previous = this.getAll();
     localStorage.setItem(_getStorageKey(), JSON.stringify(events));
     window.dispatchEvent(new CustomEvent('calendar:changed'));
+    if (eventsChannel) eventsChannel.postMessage({ type: 'EVENT_CHANGED' });
     _syncToAPI(previous, events).then(() => {
         window.dispatchEvent(new CustomEvent('calendar:synced'));
     });
@@ -118,7 +133,9 @@ export const Storage = {
 
   async syncFromAPI() {
     try {
-      const res = await fetch(API_BASE, { headers: _apiHeaders() });
+      const token = _getToken();
+      const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+      const res = await fetch(`${API_BASE}${tokenQuery}`, { headers: _apiHeaders() });
       if (!res.ok) return;
       const events = await res.json();
       const incoming = JSON.stringify(events);
@@ -135,3 +152,4 @@ document.addEventListener('DOMContentLoaded', () => {
   // Delay sync to avoid double render competing with initial paint
   setTimeout(() => Storage.syncFromAPI(), 1500);
 });
+

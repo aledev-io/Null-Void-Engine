@@ -1,30 +1,35 @@
 /* ─── TOKENS & DESIGN SYSTEM ─────────────────────────────────────────────── */
 :root {
     /* Global Backgrounds */
-    --bg: #0f172a;
-    --surface: rgba(30, 41, 59, 0.7);
-    --surface-hi: rgba(51, 65, 85, 0.9);
-    --bg-card: #1e293b;
-    --panel-right-bg: #0c0f1a;
+    --bg-primary: #151f35;
+    --bg-secondary: #111827;
+    --bg: #111827;
+    --surface: #161d2f;
+    --surface-hi: #1e2842;
+    --bg-card: #161d2f;
+    --panel-right-bg: #111827;
 
     /* Borders */
-    --border: rgba(148, 163, 184, 0.2);
-    --border-hi: rgba(148, 163, 184, 0.4);
+    --border: rgba(255, 255, 255, 0.07);
+    --border-hi: rgba(99, 102, 241, 0.3);
+    --border-hover: rgba(99, 102, 241, 0.4);
 
     /* Typography */
-    --text-main: #ffffff;
-    --text-heading: #f1f5f9;
-    --text-dim: #f8fafc;
-    --text-sub: #4a6080;
-    --text-muted: #cbd5e1;
-    --text-label: #3d5575;
+    --text-main: #e8edf8;
+    --text-heading: #e8edf8;
+    --text-dim: #e8edf8;
+    --text-sub: #4e5870;
+    --text-muted: #8b95b0;
+    --text-label: #8b95b0;
 
     /* Accents (Indigo) */
-    --indigo: #818cf8;
-    --indigo-dim: rgba(129, 140, 248, 0.2);
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --indigo: #6366f1;
+    --indigo-dim: rgba(99, 102, 241, 0.2);
     --badge-bg: rgba(99, 102, 241, 0.13);
     --badge-border: rgba(99, 102, 241, 0.35);
-    --badge-color: #818cf8;
+    --badge-color: #6366f1;
     --badge-dot: #6366f1;
 
     /* Metrics Colors */
@@ -61,10 +66,9 @@
 
     /* Nav Items */
     --nav-hover: rgba(255, 255, 255, 0.05);
-    --nav-active: rgba(255, 255, 255, 0.1);
-}
+    --nav-active: rgba(129, 140, 248, 0.25);
+    --nav-text-active: #ffffff;
 
-[data-theme="dark"] {
     color-scheme: dark;
 }
 
@@ -129,10 +133,43 @@
     --toggle-color: #64748b;
 
     /* Nav Items */
-    --nav-hover: rgba(0, 0, 0, 0.03);
-    --nav-active: rgba(0, 0, 0, 0.06);
+    --nav-hover: rgba(0, 0, 0, 0.04);
+    --nav-active: #e8f0fe;
+    --nav-text-active: #174ea6;
 
     color-scheme: light;
+}
+
+/* ─── SHARED NAVIGATION & PILL COMPONENTS (CLOUD DESIGN) ─────────────── */
+.nav-link,
+.cloud-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--cloud-nav-text, var(--text-main));
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 2px;
+    text-decoration: none;
+    user-select: none;
+}
+
+.nav-link:hover,
+.cloud-nav-item:hover {
+    background: var(--cloud-row-hover, var(--nav-hover));
+    color: var(--text-main);
+}
+
+.nav-link.active,
+.cloud-nav-item.active {
+    background: var(--cloud-nav-bg-active, var(--nav-active)) !important;
+    color: var(--cloud-nav-text-active, var(--nav-text-active)) !important;
+    font-weight: 600 !important;
+    border-left: none !important;
 }
 
 /* Prevenir el Flash de Traducción (FOUC) */

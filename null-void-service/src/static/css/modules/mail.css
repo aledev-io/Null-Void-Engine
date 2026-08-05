@@ -1,33 +1,4 @@
-:root,
-[data-theme="dark"] {
-    --bg: #151f35;
-    --surface: #161d2f;
-    --surface-hi: #1e2842;
-    --border: rgba(255, 255, 255, 0.07);
-    --border-hi: rgba(99, 102, 241, 0.4);
-    --indigo: #6366f1;
-    --indigo-dim: rgba(99, 102, 241, 0.15);
-    --text-main: #e8edf8;
-    --text-dim: #8b95b0;
-    --text-muted: #4e5870;
-    --bg-card: #161d2f;
-    color-scheme: dark;
-}
-
-[data-theme="light"] {
-    --bg: #f9fafb;
-    --surface: #ffffff;
-    --surface-hi: #f3f4f6;
-    --border: rgba(0, 0, 0, 0.08);
-    --border-hi: rgba(0, 0, 0, 0.15);
-    --text-main: #1f2937;
-    --text-dim: #4b5563;
-    --text-muted: #9ca3af;
-    --indigo: #6366f1;
-    --indigo-dim: rgba(99, 102, 241, 0.15);
-    --bg-card: #ffffff;
-    color-scheme: light;
-}
+/* Los colores/tokens provienen de css/core/cloud-theme.css (paleta global del módulo Cloud) */
 
 *,
 *::before,
@@ -39,16 +10,17 @@
 
 body {
     height: 100dvh;
-    background: var(--bg);
-    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     color: var(--text-main);
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    -webkit-font-smoothing: antialiased;
 }
 
 ::-webkit-scrollbar {
-    width: 5px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -60,12 +32,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
-    padding-left: calc(24px + env(safe-area-inset-left, 0px));
-    padding-right: calc(24px + env(safe-area-inset-right, 0px));
-    height: 56px;
+    padding: 10px 16px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    min-height: 60px;
     border-bottom: 1px solid var(--border);
-    background: var(--bg-card, #161d2f);
+    background: var(--bg-card);
     backdrop-filter: blur(12px);
     z-index: 100;
     flex-shrink: 0;
@@ -75,7 +47,7 @@ body {
 .tb-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 15px;
     flex: 1;
 }
 
@@ -106,11 +78,11 @@ body {
 }
 
 .btn-theme {
-    background: transparent;
+    background: var(--surface-hi);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    width: 32px;
-    height: 32px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -134,13 +106,13 @@ body {
 
 /* Sidebar */
 #sidebar {
-    width: 240px;
+    width: 260px;
     border-right: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--bg-card);
     display: flex;
     flex-direction: column;
-    padding: 16px 12px 0 12px;
-    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+    padding: 16px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
     overflow: hidden;
     flex-shrink: 0;
     position: relative;
@@ -207,9 +179,9 @@ body {
 }
 
 .btn-compose {
-    background: var(--accent, #6366f1);
-    color: #ffffff;
-    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--border);
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 0.95rem;
@@ -220,52 +192,40 @@ body {
     align-items: center;
     justify-content: flex-start;
     gap: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    transition: all 0.2s;
+    transition: background 0.2s;
     margin-bottom: 10px;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .btn-compose:hover {
-    filter: brightness(1.15);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.nav-section {
-    font-size: 0.6rem;
+[data-theme="dark"] .btn-compose {
+    background: var(--accent, #6366f1);
+    color: #ffffff;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .btn-compose:hover {
+    filter: brightness(1.15);
+    background: var(--accent, #6366f1);
+}
+
+.nav-section,
+.sidebar-section-title {
+    font-size: 0.7rem;
     font-weight: 700;
     color: var(--text-muted);
-    letter-spacing: 0.12em;
     text-transform: uppercase;
-    padding: 12px 14px 6px;
+    letter-spacing: 0.05em;
+    margin: 16px 16px 8px;
 }
 
-.nav-link {
-    padding: 9px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-main);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.15s;
-    margin-bottom: 2px;
-}
-
-.nav-link:hover {
-    background: var(--nav-hover, rgba(148, 163, 184, 0.08));
-    color: var(--text-main);
-}
-
-.nav-link.active {
-    background: var(--nav-active, rgba(148, 163, 184, 0.15));
-    color: var(--indigo, var(--accent, #6366f1)) !important;
-    border-left: 3px solid var(--indigo, var(--accent, #6366f1));
-    padding-left: 11px;
-    /* Adjust for border */
-}
+/* .nav-link styling inherited globally from tokens.css */
 
 .nav-link .badge-count {
     margin-left: auto;
@@ -292,7 +252,7 @@ body {
 .search-bar {
     display: flex;
     align-items: center;
-    background: var(--surface);
+    background: var(--surface-hi);
     border: 1px solid var(--border);
     border-radius: 24px;
     padding: 8px 16px;
@@ -303,7 +263,8 @@ body {
 
 .search-bar:focus-within {
     background: var(--surface-hi);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-color: var(--border-hi);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 .search-bar input {
@@ -312,7 +273,7 @@ body {
     border: none;
     outline: none;
     color: inherit;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-family: inherit;
 }
 
@@ -392,7 +353,7 @@ body {
 }
 
 .btn-icon:hover {
-    background: var(--surface-hi);
+    background: rgba(255, 255, 255, 0.05);
     color: var(--text-main);
 }
 
@@ -418,16 +379,20 @@ body {
 
 .email-item:hover {
     box-shadow: inset 1px 0 0 var(--border), inset -1px 0 0 var(--border), 0 1px 2px 0 rgba(0, 0, 0, .1), 0 1px 3px 1px rgba(0, 0, 0, .05);
-    background: var(--surface-hi);
+    background: var(--bg-tertiary);
     z-index: 1;
     position: relative;
 }
 
 .email-item.selected {
-    background: var(--indigo-dim);
+    background: rgba(99, 102, 241, 0.08);
     box-shadow: inset 1px 0 0 var(--border), inset -1px 0 0 var(--border);
     z-index: 1;
     position: relative;
+}
+
+[data-theme="light"] .email-item.selected {
+    background: rgba(99, 102, 241, 0.05);
 }
 
 .email-item.unread {
@@ -941,11 +906,11 @@ body {
 }
 
 .btn-send {
-    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    background: var(--indigo);
     color: #fff;
     border: none;
     padding: 8px 22px;
-    border-radius: 20px;
+    border-radius: 8px;
     font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
@@ -953,10 +918,11 @@ body {
     align-items: center;
     gap: 6px;
     transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .btn-send:hover {
+    filter: brightness(1.1);
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
 }
@@ -1051,15 +1017,15 @@ body {
 }
 
 .toast.success {
-    background: #059669;
+    background: var(--success);
 }
 
 .toast.error {
-    background: #dc2626;
+    background: var(--danger);
 }
 
 .toast.info {
-    background: #4338ca;
+    background: var(--info);
 }
 
 .toast.fadeout {
@@ -1117,7 +1083,7 @@ input:-webkit-autofill:active {
 /* Mobile Sidebar */
 .sidebar-overlay {
     position: fixed;
-    top: 56px;
+    top: 60px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -1143,7 +1109,7 @@ input:-webkit-autofill:active {
         left: 0;
         right: 0;
         z-index: 200;
-        height: 56px;
+        min-height: 52px;
         padding: 0 12px;
         flex-shrink: 0;
     }
@@ -1165,8 +1131,8 @@ input:-webkit-autofill:active {
 
     /* Mail app fills remaining height below fixed topbar */
     #mail-app {
-        margin-top: 56px;
-        height: calc(100dvh - 56px);
+        margin-top: 52px;
+        height: calc(100dvh - 52px);
         overflow: hidden;
         position: relative;
     }
@@ -1174,11 +1140,11 @@ input:-webkit-autofill:active {
     /* Sidebar: slide-in from left, solid background */
     #sidebar {
         position: fixed;
-        left: -270px;
-        top: 56px;
+        left: -250px;
+        top: 52px;
         bottom: 0;
         height: auto !important;
-        width: 260px;
+        width: 240px;
         z-index: 150;
         transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: 4px 0 16px rgba(0, 0, 0, 0.4);

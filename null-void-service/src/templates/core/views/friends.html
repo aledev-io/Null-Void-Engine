@@ -104,6 +104,8 @@
             border: 1px solid var(--border);
             overflow-x: auto;
             max-width: 100%;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         
         .fr-tab-container::-webkit-scrollbar {
@@ -113,29 +115,54 @@
         @media (max-width: 600px) {
             .fr-panel-header {
                 flex-direction: column;
-                align-items: flex-start;
-                padding: 16px;
+                align-items: stretch;
+                padding: 12px;
+                gap: 12px;
             }
             .fr-panel-header-right {
                 width: 100%;
                 margin-left: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
             }
             .fr-tab-container {
                 width: 100%;
-                justify-content: flex-start;
+                display: flex;
+                background: var(--bg-tabs);
+                padding: 3px;
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                box-sizing: border-box;
+                gap: 2px;
+            }
+            .fr-tab-btn {
+                flex: 1;
+                min-width: 0;
+                text-align: center;
+                padding: 7px 3px;
+                font-size: 0.72rem;
+                font-weight: 700;
+                white-space: nowrap;
+                border-radius: 8px;
+            }
+            .fr-panel-header-right .fr-btn-action {
+                width: 100%;
+                padding: 10px 14px;
+                font-size: 0.82rem;
+                font-weight: 600;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+            }
+            .fr-panel-header-right .fr-btn-action .fr-btn-text {
+                display: inline;
             }
             .fr-grid {
                 padding: 16px;
                 grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 450px) {
-            .fr-btn-text {
-                display: none;
-            }
-            .fr-btn-action {
-                padding: 8px;
             }
         }
 
@@ -228,6 +255,12 @@
             font-weight: 700;
             cursor: pointer;
             transition: all 0.2s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            justify-content: center;
         }
 
         .fr-tab-btn:hover {

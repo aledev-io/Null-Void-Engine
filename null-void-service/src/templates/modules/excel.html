@@ -16,25 +16,36 @@
     <style>
         :root,
         [data-theme="dark"] {
-            --bg: #0f172a;
-            --surface: rgba(30, 41, 59, 0.7);
-            --surface-hi: rgba(51, 65, 85, 0.9);
-            --border: rgba(148, 163, 184, 0.2);
-            --border-hi: rgba(148, 163, 184, 0.4);
-            --indigo: #818cf8;
-            --indigo-light: rgba(129, 140, 248, 0.15);
-            --indigo-lighter: rgba(129, 140, 248, 0.05);
-            --text-main: #ffffff;
-            --text-dim: #f8fafc;
-            --text-muted: #cbd5e1;
-            --text-sub: #94a3b8;
-            --bg-card: #1e293b;
+            --bg-primary: #151f35;
+            --bg-secondary: #111827;
+            --bg-card: #161d2f;
+            --bg: #111827;
+            --surface: #161d2f;
+            --surface-hi: #1e2842;
+            --bg-tertiary: #1e2842;
+
+            --border: rgba(255, 255, 255, 0.07);
+            --border-hi: rgba(99, 102, 241, 0.3);
+            --border-hover: rgba(99, 102, 241, 0.4);
+
+            --accent: #6366f1;
+            --accent-2: #8b5cf6;
+            --indigo: #6366f1;
+            --indigo-light: rgba(99, 102, 241, 0.15);
+            --indigo-lighter: rgba(99, 102, 241, 0.05);
+
+            --text-main: #e8edf8;
+            --text-dim: #e8edf8;
+            --text-muted: #8b95b0;
+            --text-sub: #4e5870;
+
             --success: #10b981;
             --success-light: rgba(16, 185, 129, 0.1);
             --danger: #ef4444;
             --danger-light: rgba(239, 68, 68, 0.1);
             --warning: #f59e0b;
             --warning-light: rgba(245, 158, 11, 0.1);
+
             /* Typography scale */
             --font-xs: 12px;
             --font-sm: 13px;
@@ -58,19 +69,26 @@
         }
 
         [data-theme="light"] {
-            --bg: #f1f5f9;
-            --surface: #ffffff;
-            --surface-hi: #f8fafc;
-            --border: rgba(99, 102, 241, 0.12);
-            --border-hi: rgba(99, 102, 241, 0.3);
-            --text-main: #000000;
-            --text-dim: #3730a3;
-            --text-muted: #334155;
-            --text-sub: #94a3b8;
-            --indigo: #4338ca;
-            --indigo-light: rgba(79, 70, 229, 0.15);
-            --indigo-lighter: rgba(79, 70, 229, 0.05);
+            --bg-primary: #f9fafb;
+            --bg-secondary: #ffffff;
             --bg-card: #ffffff;
+            --bg: #f9fafb;
+            --surface: #ffffff;
+            --surface-hi: #f3f4f6;
+            --bg-tertiary: #f3f4f6;
+
+            --border: rgba(0, 0, 0, 0.08);
+            --border-hi: rgba(99, 102, 241, 0.3);
+            --border-hover: rgba(99, 102, 241, 0.4);
+
+            --text-main: #1e293b;
+            --text-dim: #334155;
+            --text-muted: #64748b;
+            --text-sub: #94a3b8;
+            --indigo: #4f46e5;
+            --indigo-light: rgba(99, 102, 241, 0.12);
+            --indigo-lighter: rgba(99, 102, 241, 0.05);
+
             --success: #059669;
             --success-light: rgba(5, 150, 105, 0.1);
             --danger: #dc2626;
@@ -1112,10 +1130,10 @@
 
                     <div class="nv-sidebar-tabs">
                         <button class="nv-sidebar-tab-btn active" onclick="switchSidebarTab('billing')">
-                            💰 Facturación
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg> Facturación
                         </button>
                         <button class="nv-sidebar-tab-btn" onclick="switchSidebarTab('python')">
-                            🐍 Python
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg> Python
                         </button>
                     </div>
 
@@ -1132,13 +1150,13 @@
                         </div>
 
                         <div class="nv-form-group">
-                            <label class="nv-form-label">🛒 Coste del Producto (€)</label>
+                            <label class="nv-form-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Coste del Producto (€)</label>
                             <input type="number" id="billing-ui-cost" placeholder="Introduce el coste..."
                                 class="nv-form-input" min="0" step="0.01">
                         </div>
 
                         <div class="nv-form-group">
-                            <label class="nv-form-label">📈 Rentabilidad (Equilibrio) (%)</label>
+                            <label class="nv-form-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg> Rentabilidad (Equilibrio) (%)</label>
                             <input type="number" id="billing-ui-margin" placeholder="Ej: 50" class="nv-form-input"
                                 min="0" step="0.1">
                         </div>
@@ -1151,8 +1169,8 @@
                         </div>
 
 
-                        <button class="btn-primary" onclick="applyBillingCalculatorUI()" style="margin-top: 4px;">
-                            📋 Generar Hoja
+                        <button class="btn-primary" onclick="applyBillingCalculatorUI()" style="margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Generar Hoja
                         </button>
                         <button class="btn-danger" onclick="clearSpreadsheet()" style="margin-bottom: 30px;">
                             Limpiar Tabla
@@ -1229,12 +1247,12 @@
                         <button onclick="exportSpreadsheet()"
                             style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-main); padding: var(--space-2) var(--space-3); font-size: var(--font-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: var(--space-2); transition: all 0.2s;"
                             title="Exportar a .nvx">
-                            📤 Exportar
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Exportar
                         </button>
                         <button onclick="document.getElementById('import-input').click()"
                             style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-main); padding: var(--space-2) var(--space-3); font-size: var(--font-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: var(--space-2); transition: all 0.2s;"
                             title="Importar .json o .nvx">
-                            📥 Importar
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Importar
                         </button>
                         <input type="file" id="import-input" style="display: none;" accept=".nvx,.json"
                             onchange="importSpreadsheet(event)">

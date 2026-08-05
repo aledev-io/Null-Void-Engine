@@ -76,7 +76,6 @@ ALL_MODULES = [
     {"id": "invoices", "name": "ERP Facturación", "icon": "📑", "desc": "Facturas y OCR.", "url": "/invoices"},
     {"id": "transactions", "name": "Contabilidad", "icon": "💰", "desc": "Control de gastos."},
     {"id": "cloud", "name": "Null-Void Cloud", "icon": "📂", "desc": "Almacenamiento personal.", "url": "/cloud", "core": True},
-    {"id": "backups", "name": "Backups", "icon": "💾", "desc": "Respaldos del sistema.","url": "/backups", "core": True},
     {"id": "ai", "name": "AI", "icon": "🤖", "desc": "Asistente Inteligente.", "url": "/ai", "core": True},
 ]
 ALL_MODULES.insert(3, {"id": "budgets", "name": "Excel", "icon": "🧮", "desc": "Excel con Python.", "url": "/excel"})

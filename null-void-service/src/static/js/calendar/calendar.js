@@ -53,7 +53,8 @@ export const Calendar = {
 
     for (let i = startDow - 1; i >= 0; i--) {
       const d = daysInPrevMonth - i;
-      html += `<div class="month-cell other-month"><span class="cell-day-num">${d}</span></div>`;
+      const prevDateStr = window.dateToStr(new Date(year, month - 1, d));
+      html += `<div class="month-cell other-month" data-date="${prevDateStr}"><span class="cell-day-num">${d}</span></div>`;
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -103,7 +104,8 @@ export const Calendar = {
     const remainder = totalCells % 7;
     if (remainder > 0) {
       for (let i = 1; i <= 7 - remainder; i++) {
-        html += `<div class="month-cell other-month"><span class="cell-day-num">${i}</span></div>`;
+        const nextDateStr = window.dateToStr(new Date(year, month + 1, i));
+        html += `<div class="month-cell other-month" data-date="${nextDateStr}"><span class="cell-day-num">${i}</span></div>`;
       }
     }
 
@@ -333,7 +335,7 @@ export const Calendar = {
                      style="top:${top}px;height:${height}px;width:calc(${w}% - 12px);left:calc(${l}% + 6px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
                      title="${ev.title}">
                   <div class="time-event-title" style="font-size:13px;">${icon} ${ev.title}</div>
-                  ${height > 36 ? `<div class="time-event-time">${timeDisplay}${ev.description ? ' · ' + ev.description.slice(0, 40) : ''}</div>` : ''}
+                  ${height > 36 ? `<div class="time-event-time">${timeDisplay}${ev.description ? ' · ' + ev.description.replace(/\s+/g, ' ').slice(0, 40) : ''}</div>` : ''}
                 </div>`;
       }).join('');
     })();

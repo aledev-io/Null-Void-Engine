@@ -126,15 +126,29 @@ window.renderReminders = function() {
             const cat = ev.category || 'personal';
             const catStyle = CATEGORY_COLORS[cat] || CATEGORY_COLORS['personal'];
             const catKey = 'cat_' + cat;
+            const btnLabel = (typeof window.t_rem === 'function') ? window.t_rem('view_in_calendar') : 'Abrir';
 
             return `
-                <div class="reminder-card" style="--card-color: ${indicatorColor}; opacity: ${isPassed ? '0.7' : '1'};" onclick="window.location.href='/calendar?event=${ev.id}'">
+                <div class="reminder-card" style="--card-color: ${indicatorColor}; opacity: ${isPassed ? '0.7' : '1'};" onclick="window.handleReminderCardClick(event, '${ev.id}')">
                     <div class="reminder-header">
                         <h3 class="reminder-title">${ev.title}</h3>
-                        <div class="admin-event-star" 
-                             style="color: ${isImportant ? '#fbbf24' : 'var(--border-hi)'}; font-size:1.3rem; margin-top:-4px;"
-                             onclick="event.stopPropagation(); window.toggleEventImportance('${ev.id}', ${isImportant})">
-                            ${isImportant ? '★' : '☆'}
+                        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:12px; margin-right:4px;">
+                            <div class="admin-event-star" 
+                                 style="color: ${isImportant ? '#fbbf24' : 'var(--border-hi)'}; font-size:1.3rem; margin-top:-2px; cursor:pointer;"
+                                 onclick="event.stopPropagation(); window.toggleEventImportance('${ev.id}', ${isImportant})">
+                                ${isImportant ? '★' : '☆'}
+                            </div>
+                            <button class="btn-icon btn-open-cal-mobile" 
+                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 8px; color: var(--indigo); background: rgba(99, 102, 241, 0.15); align-items:center; justify-content:center;"
+                                    onclick="event.stopPropagation(); window.location.href='/calendar?event=${ev.id}'"
+                                    title="${window.currentLang === 'en' ? 'Open in Calendar' : 'Abrir en Calendario'}">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                     <p class="reminder-desc">${descText}</p>
@@ -167,9 +181,20 @@ window.renderReminders = function() {
     }
 };
 
+function _notifyEventsChanged() {
+    window.dispatchEvent(new CustomEvent('calendar:changed'));
+    if (typeof BroadcastChannel !== 'undefined') {
+        try {
+            const bc = new BroadcastChannel('nv_events_channel');
+            bc.postMessage({ type: 'EVENT_CHANGED' });
+            bc.close();
+        } catch (e) {}
+    }
+}
+
 window.toggleEventImportance = async function(id, currentStatus) {
     try {
-        const ev = window.allEvents.find(e => e.id === id);
+        const ev = (window.allEvents || []).find(e => e.id === id);
         if (!ev) return;
         
         const updatedEv = {
@@ -177,13 +202,65 @@ window.toggleEventImportance = async function(id, currentStatus) {
             isImportant: !currentStatus
         };
 
-        await fetch('/api/events/' + id + '?token=' + window.TOKEN, {
+        const token = window.TOKEN || '';
+        const url = `/api/events/${id}` + (token ? `?token=${encodeURIComponent(token)}` : '');
+        await fetch(url, {
             method: 'PUT',
-            headers: window.HEADERS || { 'Content-Type': 'application/json' },
+            headers: window.HEADERS || { 'Content-Type': 'application/json', 'X-Token': token },
             body: JSON.stringify(updatedEv)
         });
+        _notifyEventsChanged();
         fetchAdminAlerts();
     } catch (e) {
         console.error(e);
     }
 };
+
+window.deleteReminder = async function(id, e) {
+    if (e) e.stopPropagation();
+    const confirmMsg = window.currentLang === 'es' ? '¿Deseas eliminar este recordatorio?' : 'Do you want to delete this reminder?';
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const token = window.TOKEN || '';
+        const url = `/api/events/${id}` + (token ? `?token=${encodeURIComponent(token)}` : '');
+        const res = await fetch(url, {
+            method: 'DELETE',
+            headers: window.HEADERS || { 'Content-Type': 'application/json', 'X-Token': token }
+        });
+        
+        if (res.ok) {
+            if (window.allEvents) {
+                window.allEvents = window.allEvents.filter(ev => ev.id !== id);
+            }
+            // Also update localStorage calendar events if loaded
+            function _getUser() {
+                const value = `; ${document.cookie}`;
+                const parts = value.split('; user=');
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return 'guest';
+            }
+            const key = `calendar_events_v1_${_getUser()}`;
+            try {
+                const stored = JSON.parse(localStorage.getItem(key) || '[]');
+                const updated = stored.filter(ev => ev.id !== id);
+                localStorage.setItem(key, JSON.stringify(updated));
+            } catch (err) {}
+
+            _notifyEventsChanged();
+            fetchAdminAlerts();
+        } else {
+            console.error('Failed to delete event:', await res.text());
+        }
+    } catch (err) {
+        console.error('Error deleting event:', err);
+    }
+};
+
+window.handleReminderCardClick = function(e, id) {
+    if (window.innerWidth > 768) {
+        window.location.href = `/calendar?event=${id}`;
+    }
+};
+
+

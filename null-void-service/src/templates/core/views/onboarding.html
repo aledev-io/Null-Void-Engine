@@ -16,11 +16,9 @@
                     <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
                 </svg>
             </div>
-            <h1 data-i18n="onboarding_title"
-                style="font-size: 2.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 16px; letter-spacing: -0.5px;">
+            <h1 data-i18n="onboarding_title" class="onboarding-title">
                 Automatiza tu Trabajo sin Complicaciones</h1>
-            <p data-i18n="onboarding_desc"
-                style="font-size: 1.1rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto; line-height: 1.6;">
+            <p data-i18n="onboarding_desc" class="onboarding-desc">
                 Bienvenido a tu centro de control. Null-Void Engine está diseñado para que cualquier persona,
                 independientemente de su experiencia técnica, pueda automatizar procesos tediosos y recuperar su tiempo.
             </p>
@@ -126,12 +124,29 @@
         let isSubscribed = false;
 
         async function checkStatus() {
-            if ('serviceWorker' in navigator && 'PushManager' in window) {
-                const registration = await navigator.serviceWorker.ready;
-                const subscription = await registration.pushManager.getSubscription();
-                isSubscribed = !!subscription;
-                updateButton();
+            const pushEnabled = localStorage.getItem('push_enabled') !== 'false';
+            let hasActiveSub = false;
+
+            if (window.Android) {
+                hasActiveSub = pushEnabled;
+            } else if ('Notification' in window && Notification.permission === 'granted') {
+                if ('serviceWorker' in navigator && 'PushManager' in window) {
+                    try {
+                        const reg = await navigator.serviceWorker.ready;
+                        const sub = await reg.pushManager.getSubscription();
+                        hasActiveSub = !!sub && pushEnabled;
+                    } catch (e) {
+                        hasActiveSub = pushEnabled;
+                    }
+                } else {
+                    hasActiveSub = pushEnabled;
+                }
+            } else {
+                hasActiveSub = false;
             }
+
+            isSubscribed = hasActiveSub;
+            updateButton();
         }
 
         function updateButton() {
@@ -141,7 +156,7 @@
                 btn.style.borderColor = 'var(--danger)';
                 btn.style.color = 'var(--danger)';
                 btn.onmouseover = () => { btn.style.background = 'var(--danger)'; btn.style.color = 'white'; };
-                btn.onmouseout = () => { btn.style.background = 'rgba(99, 102, 241, 0.1)'; btn.style.color = 'var(--danger)'; };
+                btn.onmouseout = () => { btn.style.background = 'rgba(239, 68, 68, 0.1)'; btn.style.color = 'var(--danger)'; };
             } else {
                 const key = 'onboarding_push_btn_enable';
                 btn.innerHTML = `<span data-i18n="${key}">${window.I18n ? window.I18n.t(key) : 'Habilitar Notificaciones'}</span>`;
@@ -157,21 +172,24 @@
         }
 
         btn.addEventListener('click', async () => {
-            if (!window.PushNotifications) {
-                console.warn("PushNotifications no está cargado aún.");
-                return;
-            }
             btn.disabled = true;
             btn.style.pointerEvents = 'none';
             btn.style.opacity = '0.7';
             const key = 'onboarding_push_btn_processing';
             btn.innerHTML = `<span data-i18n="${key}">${window.I18n ? window.I18n.t(key) : 'Procesando...'}</span>`;
 
-            if (isSubscribed) {
-                await window.PushNotifications.unsubscribe();
-            } else {
-                await window.PushNotifications.init();
+            const targetState = !isSubscribed;
+            if (window.togglePushNotifications) {
+                await window.togglePushNotifications(targetState);
+            } else if (window.PushNotifications) {
+                if (targetState) {
+                    await window.PushNotifications.init();
+                } else {
+                    await window.PushNotifications.unsubscribe();
+                }
+                localStorage.setItem('push_enabled', targetState ? 'true' : 'false');
             }
+
             await checkStatus();
         });
 
@@ -194,9 +212,51 @@
 </div>
 
 <style>
+    .onboarding-title {
+        font-size: clamp(1.4rem, 5vw, 2.2rem);
+        font-weight: 800;
+        color: var(--text-main);
+        margin-bottom: 16px;
+        letter-spacing: -0.5px;
+        line-height: 1.25;
+    }
+    .onboarding-desc {
+        font-size: clamp(0.85rem, 3.5vw, 1.05rem);
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.5;
+    }
     .step-card:hover {
         transform: translateY(-5px);
         border-color: var(--border-hover);
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    @media (max-width: 600px) {
+        .onboarding-container {
+            padding: 10px 12px !important;
+        }
+        .onboarding-hero {
+            margin-bottom: 24px !important;
+        }
+        .hero-icon {
+            width: 56px !important;
+            height: 56px !important;
+            margin-bottom: 16px !important;
+            border-radius: 16px !important;
+        }
+        .hero-icon svg {
+            width: 28px !important;
+            height: 28px !important;
+        }
+        .step-card {
+            padding: 20px 16px !important;
+        }
+        .step-card h3 {
+            font-size: 1.05rem !important;
+        }
+        .step-card p {
+            font-size: 0.85rem !important;
+        }
     }
 </style>

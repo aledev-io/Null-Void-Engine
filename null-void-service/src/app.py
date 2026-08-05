@@ -28,12 +28,18 @@ from flask import Flask, render_template, request, jsonify, abort, redirect, url
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_parent_dir = os.path.dirname(_current_dir)
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
 
 from config.config import CONFIG
 from core.database import init_db, migrate_users_to_db
 from core.notifications import notifier
 from core.mail_scheduler import mail_scheduler
+from core.backup_scheduler import backup_scheduler
 from modules.session import session as sess 
 from core.socket_ext import socketio
 from core.limiter import limiter
@@ -116,6 +122,7 @@ def create_app():
     if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         notifier.start()
         mail_scheduler.start()
+        backup_scheduler.start()
 
     @app.route('/favicon.ico')
     def favicon():
@@ -215,14 +222,6 @@ def create_app():
             return redirect(url_for('auth.index'))
         return render_template('modules/invoices.html', user=user, token=token)
 
-    @app.route('/backups')
-    def backups():
-        token = request.cookies.get('token')
-        user = sess.get_user(token) if token else None
-        if not user:
-            return redirect(url_for('auth.index'))
-        return render_template('modules/backups.html', user=user, token=token)
-
     @app.route('/reminders')
     def reminders():
         token = request.cookies.get('token')
@@ -265,6 +264,29 @@ def create_app():
             resp.delete_cookie('token')
             resp.delete_cookie('user')
             return resp
+
+    @app.after_request
+    def inject_connection_monitor(response):
+        """Inyecta el monitor global de conexión en todas las páginas HTML,
+        de modo que el banner "Intentando reconectarse…" aparezca desde
+        cualquier vista de la app cuando el servidor deja de responder."""
+        try:
+            content_type = response.content_type or ''
+            if 'text/html' not in content_type:
+                return response
+            data = response.get_data(as_text=True)
+            if '</body>' not in data.lower():
+                return response
+            tag = '<script src="{}"></script>\n'.format(
+                url_for('static', filename='js/core/connection_monitor.js')
+            )
+            pos = data.lower().rfind('</body>')
+            data = data[:pos] + tag + data[pos:]
+            response.set_data(data)
+            response.headers['Content-Length'] = str(len(data.encode('utf-8')))
+        except Exception:
+            pass
+        return response
 
     @app.after_request
     def add_security_headers(response):

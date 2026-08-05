@@ -182,10 +182,9 @@ function renderGoogleAccounts() {
     for (const acc of googleAccounts) {
         const firstLetter = acc.email.charAt(0).toUpperCase();
         const isActive = mailMode === 'google' && googleEmail === acc.email;
-        const bg = isActive ? 'var(--surface-hi)' : 'transparent';
         
         html += `
-            <div class="nav-link" onclick="setMailMode('google', '${acc.email}')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;font-size:0.88rem;color:var(--text-main);font-weight:500;cursor:pointer;transition:background 0.2s;background:${bg};">
+            <div class="nav-link${isActive ? ' active' : ''}" onclick="setMailMode('google', '${acc.email}')">
                 <div style="width:18px;height:18px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;flex-shrink:0;">${firstLetter}</div>
                 <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">${escapeHtml(acc.email)}</span>
                 <div onclick="removeGoogleAccount('${acc.email}'); event.stopPropagation();" style="display:flex;align-items:center;justify-content:center;padding:4px;margin:-4px;border-radius:4px;color:var(--text-muted);transition:color 0.2s;" onmouseover="this.style.color='var(--red-400)'" onmouseout="this.style.color='var(--text-muted)'" title="Eliminar cuenta">

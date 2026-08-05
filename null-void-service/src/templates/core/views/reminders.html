@@ -41,9 +41,19 @@
                 margin-bottom: 24px;
                 gap: 16px;
             }
-            @media (max-width: 600px) {
+            @media (max-width: 768px) {
                 .reminders-header-top {
                     flex-direction: column;
+                }
+                .reminder-card {
+                    cursor: default;
+                    user-select: none;
+                    -webkit-user-select: none;
+                    -webkit-touch-callout: none;
+                    -webkit-tap-highlight-color: transparent;
+                }
+                .reminder-card:hover {
+                    transform: none;
                 }
             }
             

@@ -135,7 +135,7 @@ class SystemNotifier:
         except Exception as e:
             print(f"[Notifier] Error crítico en _check_events: {e}")
 
-    def _add_to_history(self, title, date, time_val, body, category, user_id):
+    def _add_to_history(self, title, date, time_val, body, category, user_id, **kwargs):
         """Guarda la notificación en un archivo JSON local por usuario"""
         try:
             # Ruta personalizada por ID de usuario
@@ -156,9 +156,46 @@ class SystemNotifier:
                 "time": time_val,
                 "category": category,
                 "user_id": user_id,
+                "sender_id": kwargs.get('sender_id'),
+                "image": kwargs.get('image'),
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
             
+            # Si es notificación de chat, agrupar con cualquier notificación existente del mismo remitente
+            if category == 'chat' and history:
+                existing_entry = None
+                for idx, item in enumerate(history):
+                    if item.get('category') == 'chat' and item.get('title') == title:
+                        existing_entry = history.pop(idx)
+                        break
+                
+                if existing_entry:
+                    msg_list = existing_entry.get('messages', [])
+                    if not msg_list and existing_entry.get('body'):
+                        lines = [line.strip() for line in existing_entry['body'].split('\n') if line.strip() and not line.strip().startswith('+')]
+                        msg_list = lines
+                    
+                    msg_list.append(body)
+                    existing_entry['messages'] = msg_list
+                    
+                    if len(msg_list) <= 3:
+                        existing_entry['body'] = "\n".join(msg_list)
+                    else:
+                        shown = msg_list[:3]
+                        extra_count = len(msg_list) - 3
+                        existing_entry['body'] = "\n".join(shown) + f"\n+ {extra_count} más"
+                        
+                    existing_entry['time'] = time_val
+                    existing_entry['date'] = date
+                    existing_entry['timestamp'] = new_entry['timestamp']
+                    if kwargs.get('image'):
+                        existing_entry['image'] = kwargs.get('image')
+                    
+                    history.insert(0, existing_entry)
+                    with open(user_history_path, 'w', encoding='utf-8') as f:
+                        json.dump(history, f, indent=4, ensure_ascii=False)
+                    return
+
             history.insert(0, new_entry)
             # Mantener solo las últimas 100 notificaciones
             history = history[:100]
@@ -169,12 +206,12 @@ class SystemNotifier:
         except Exception as e:
             print(f"[Notifier] Error guardando historial para {user_id}: {e}")
 
-    def _send_system_notification(self, title, start_time, diff, description, category, user_id=None):
+    def _send_system_notification(self, title, start_time, diff, description, category, user_id=None, **kwargs):
         # Local system notifications
         self._send_local_notification(title, start_time, diff, description, category)
         
         # Web Push notifications
-        self._send_web_push(title, description, category, user_id)
+        self._send_web_push(title, description, category, user_id, **kwargs)
         
         # FCM Push Notifications (E2EE for Android App)
         self._send_fcm_push(title, description, category, user_id)
@@ -195,7 +232,7 @@ class SystemNotifier:
             full_body = f"[{category.upper()}] {body}" if body else f"[{category.upper()}]"
             send_fcm_notification(tokens, full_title, full_body)
             
-    def _send_web_push(self, title, body, category, user_id=None):
+    def _send_web_push(self, title, body, category, user_id=None, **kwargs):
         if not webpush:
             print("[Notifier] pywebpush not installed. Skipping web push.")
             return
@@ -219,12 +256,17 @@ class SystemNotifier:
                             "auth": sub['auth']
                         }
                     }
-                    payload = json.dumps({
+                    payload_dict = {
                         "title": title,
                         "body": body,
                         "category": category,
-                        "url": "/app"
-                    })
+                        "tag": kwargs.get('tag') or (f"chat-{kwargs.get('sender_id', title)}" if category == 'chat' else category),
+                        "url": kwargs.get('url', '/app')
+                    }
+                    img = kwargs.get('image') or kwargs.get('photo')
+                    if img:
+                        payload_dict["image"] = img
+                    payload = json.dumps(payload_dict)
                     webpush(
                         subscription_info=sub_info,
                         data=payload,
@@ -234,7 +276,6 @@ class SystemNotifier:
                     )
                 except WebPushException as ex:
                     print(f"[Notifier] Error enviando web push a {sub['endpoint']}: {ex}")
-                    # You could delete the subscription here if ex.response.status_code in [404, 410]
                     if ex.response and ex.response.status_code in [404, 410]:
                         with get_db() as conn:
                             conn.execute("DELETE FROM webpush_subs WHERE id = ?", (sub['id'],))
@@ -322,10 +363,10 @@ class SystemNotifier:
             print(f"[Notifier] Error en send_telegram_message: {e}")
             return False
 
-    def notify_chat_message(self, sender_name, receiver_id, message, file_name=None):
+    def notify_chat_message(self, sender_name, receiver_id, message, file_name=None, sender_id=None, image_url=None):
         """Notifica un nuevo mensaje de chat al destinatario."""
         import re
-        title = f"Nuevo mensaje de {sender_name}"
+        title = sender_name
         category = "chat"
         now = datetime.now()
         date_str = now.strftime("%Y-%m-%d")
@@ -340,6 +381,8 @@ class SystemNotifier:
                 body = "🎤 Audio" + (f" - {body}" if body else "")
             elif file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
                 body = "📷 Foto" + (f" - {body}" if body else "")
+                if not image_url and file_name.startswith('/'):
+                    image_url = file_name
             elif file_name.lower().endswith(('.mp4', '.webm', '.ogg')):
                 body = "🎬 Video" + (f" - {body}" if body else "")
             else:
@@ -348,10 +391,10 @@ class SystemNotifier:
         if len(body) > 60:
             body = body[:60] + "..."
             
-        # 1. Guardar en el historial del destinatario (para el dashboard)
-        self._add_to_history(title, date_str, time_str, body, category, receiver_id)
+        # 1. Guardar en el historial del destinatario (agrupando si es del mismo chat)
+        self._add_to_history(title, date_str, time_str, body, category, receiver_id, sender_id=sender_id, image=image_url)
         
-        # 2. Lanzar la notificación nativa de escritorio
-        self._send_system_notification(title, time_str, 0, body, category, user_id=receiver_id)
+        # 2. Lanzar la notificación nativa / push
+        self._send_system_notification(title, time_str, 0, body, category, user_id=receiver_id, sender_id=sender_id, image=image_url)
 
 notifier = SystemNotifier()

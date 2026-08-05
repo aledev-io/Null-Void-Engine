@@ -23,11 +23,22 @@ def get_sent_requests(user_id):
     return reqs
 
 
+MAX_FRIENDS = 1000
+
+
 def send_friend_request(requester_id, addressee_id):
     if requester_id == addressee_id:
         return None, "No puedes enviarte solicitud a ti mismo"
     if repository.are_friends(requester_id, addressee_id):
         return None, "Ya sois amigos"
+        
+    requester_friends = repository.get_friends(requester_id)
+    if len(requester_friends) >= MAX_FRIENDS:
+        return None, f"Has alcanzado el límite máximo de {MAX_FRIENDS} amigos"
+
+    addressee_friends = repository.get_friends(addressee_id)
+    if len(addressee_friends) >= MAX_FRIENDS:
+        return None, f"El usuario ha alcanzado el límite máximo de {MAX_FRIENDS} amigos"
         
     # Check if the other user already sent a request to this user
     pending_id = repository.get_pending_request_id(addressee_id, requester_id)
@@ -49,6 +60,10 @@ def send_friend_request(requester_id, addressee_id):
 
 
 def accept_request(request_id, user_id):
+    user_friends = repository.get_friends(user_id)
+    if len(user_friends) >= MAX_FRIENDS:
+        return False, f"Has alcanzado el límite máximo de {MAX_FRIENDS} amigos"
+        
     ok = repository.respond_request(request_id, user_id, 'accepted')
     return ok, "Solicitud aceptada" if ok else "No se pudo aceptar"
 

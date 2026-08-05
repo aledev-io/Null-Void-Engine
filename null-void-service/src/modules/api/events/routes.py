@@ -3,9 +3,12 @@ from modules.session import session as sess
 from . import events_bp
 from .services import get_user_events, create_user_event, update_user_event, delete_user_event
 
+def _get_token():
+    return request.cookies.get('token') or request.headers.get('X-Token') or request.args.get('token')
+
 @events_bp.route('', methods=['GET'])
 def get_events():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = _get_token()
     uid = sess.get_user_id(token)
     if not uid:
         return jsonify(error='No autorizado'), 401
@@ -18,7 +21,7 @@ def get_events():
 
 @events_bp.route('', methods=['POST'])
 def create_event():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = _get_token()
     uid = sess.get_user_id(token)
     if not uid:
         return jsonify(error='No autorizado'), 401
@@ -34,7 +37,7 @@ def create_event():
 
 @events_bp.route('/<event_id>', methods=['PUT'])
 def update_event(event_id):
-    token = request.cookies.get('token') or request.args.get('token')
+    token = _get_token()
     uid = sess.get_user_id(token)
     if not uid:
         return jsonify(error='No autorizado'), 401
@@ -50,7 +53,7 @@ def update_event(event_id):
 
 @events_bp.route('/<event_id>', methods=['DELETE'])
 def delete_event(event_id):
-    token = request.cookies.get('token') or request.args.get('token')
+    token = _get_token()
     uid = sess.get_user_id(token)
     if not uid:
         return jsonify(error='No autorizado'), 401
@@ -63,7 +66,7 @@ def delete_event(event_id):
 
 @events_bp.route('/parse-ai', methods=['POST'])
 def parse_ai_events():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = _get_token()
     uid = sess.get_user_id(token)
     if not uid:
         return jsonify(error='No autorizado'), 401

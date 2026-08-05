@@ -1,10 +1,16 @@
 import os
 import sys
 from functools import wraps
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from modules.session import session as sess
 from core.socket_ext import socketio
-from . import services, sync_agent, repository
+from . import services, repository
+
+service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
+if service_dir not in sys.path:
+    sys.path.insert(0, service_dir)
+
+import sync_agent
 
 cloud_bp = Blueprint('cloud', __name__, url_prefix='/api/cloud')
 
@@ -77,9 +83,9 @@ def upload_file():
     if 'file' not in request.files:
         return jsonify(error="No hay archivo"), 400
         
-    MAX_SIZE = 1 * 1024 * 1024 * 1024
+    MAX_SIZE = 50 * 1024 * 1024 * 1024
     if request.content_length and request.content_length > MAX_SIZE:
-        return jsonify(error="El archivo supera el límite de 1GB"), 413
+        return jsonify(error="El archivo supera el límite de 50GB"), 413
         
     file = request.files['file']
     file.seek(0, os.SEEK_END)
@@ -87,7 +93,7 @@ def upload_file():
     file.seek(0)
     
     if size > MAX_SIZE:
-        return jsonify(error="El archivo supera el límite de 1GB"), 413
+        return jsonify(error="El archivo supera el límite de 50GB"), 413
         
     ok, err = services.upload_file(view, subpath, request.user_token, file)
     if ok is None:
@@ -206,6 +212,45 @@ def copy_item():
     result = services.copy_item(view, name, old_path, new_path, request.user_id, request.user_token, new_name)
     if result is None:
         return jsonify(error="No autorizado o sesión expirada"), 401
+    if isinstance(result, str):
+        return jsonify(error=result), 400
+    return jsonify(ok=True)
+
+
+@cloud_bp.route('/zip', methods=['POST'])
+@login_required
+def zip_item():
+    data = request.get_json(silent=True) or {}
+    view = data.get('view', 'drive')
+    name = data.get('name')
+    subpath = data.get('path', '')
+    zip_name = data.get('zip_name')
+    
+    if not name:
+        return jsonify(error="Falta especificar el elemento a comprimir"), 400
+        
+    result = services.zip_item(view, name, subpath, request.user_token, zip_name)
+    if result is None:
+        return jsonify(error="No autorizado o ruta no válida"), 401
+    if isinstance(result, str):
+        return jsonify(error=result), 400
+    return jsonify(ok=True)
+
+
+@cloud_bp.route('/unzip', methods=['POST'])
+@login_required
+def unzip_item():
+    data = request.get_json(silent=True) or {}
+    view = data.get('view', 'drive')
+    name = data.get('name')
+    subpath = data.get('path', '')
+    
+    if not name:
+        return jsonify(error="Falta especificar el archivo a descomprimir"), 400
+        
+    result = services.unzip_item(view, name, subpath, request.user_token)
+    if result is None:
+        return jsonify(error="No autorizado o ruta no válida"), 401
     if isinstance(result, str):
         return jsonify(error=result), 400
     return jsonify(ok=True)
@@ -539,11 +584,43 @@ def sync_agent_download():
 def download_client_agent():
     try:
         service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
-        agent_path = os.path.join(service_dir, 'client_agent', 'dist', 'nv-agent')
-        if os.path.exists(agent_path):
-            from flask import send_file
-            return send_file(agent_path, as_attachment=True, download_name='nv-agent')
-        return jsonify(error="Agent not found"), 404
+        possible_paths = [
+            os.path.join(service_dir, 'client_agent'),
+            os.path.abspath(os.path.join(service_dir, '..', 'client_agent')),
+            '/app/client_agent',
+            '/client_agent'
+        ]
+        client_agent_dir = next((p for p in possible_paths if os.path.exists(p)), possible_paths[0])
+        
+        dist_dir = os.path.join(client_agent_dir, 'dist')
+        
+        user_agent = request.headers.get('User-Agent', '').lower()
+        is_windows = any(w in user_agent for w in ['windows', 'win32', 'win64'])
+        is_mac = any(m in user_agent for m in ['macintosh', 'mac os', 'darwin'])
+
+        exe_path = os.path.join(dist_dir, 'Null-Void-Agent.exe')
+        if not os.path.exists(exe_path): exe_path = os.path.join(dist_dir, 'nv-agent.exe')
+
+        mac_path = os.path.join(dist_dir, 'Null-Void-Agent-Mac')
+        if not os.path.exists(mac_path): mac_path = os.path.join(dist_dir, 'nv-agent-mac')
+
+        linux_path = os.path.join(dist_dir, 'Null-Void-Agent-Linux')
+        if not os.path.exists(linux_path): linux_path = os.path.join(dist_dir, 'nv-agent')
+
+        if is_windows and os.path.exists(exe_path):
+            return send_file(exe_path, as_attachment=True, download_name='Null-Void-Agent.exe')
+        elif is_mac and os.path.exists(mac_path):
+            return send_file(mac_path, as_attachment=True, download_name='Null-Void-Agent-Mac')
+        elif os.path.exists(linux_path):
+            dl_name = 'Null-Void-Agent.exe' if is_windows else ('Null-Void-Agent-Mac' if is_mac else 'Null-Void-Agent-Linux')
+            return send_file(linux_path, as_attachment=True, download_name=dl_name)
+        elif os.path.exists(exe_path):
+            return send_file(exe_path, as_attachment=True, download_name='Null-Void-Agent.exe')
+        else:
+            py_script = os.path.join(client_agent_dir, 'agent.py')
+            if os.path.exists(py_script):
+                return send_file(py_script, as_attachment=True, download_name='nullvoid_sync_agent.py')
+        return jsonify(error="Agent file not found"), 404
     except Exception as e:
         return jsonify(error=str(e)), 500
 

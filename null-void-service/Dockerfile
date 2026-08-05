@@ -9,13 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Compilar el agente de sincronización en la imagen. 
-# Copiar primero solo el agente para aprovechar el caché de Docker
-# NOTA: Descomenta estas líneas en producción si quieres que el contenedor sirva el ejecutable ya listo.
-COPY client_agent/ client_agent/
-RUN chmod +x client_agent/compile.sh
-RUN ./client_agent/compile.sh
-
 COPY . .
 
 RUN mkdir -p data/app

@@ -1,19 +1,19 @@
-import { initCloud, updateCloudQuotaInfo, fetchCloudFiles } from './cloud.js?v=2';
+import { initCloud, updateCloudQuotaInfo, fetchCloudFiles } from './cloud.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialView = urlParams.get('view') || 'home';
+    const initialPath = urlParams.get('path') || '';
+
     initCloud();
     updateCloudQuotaInfo();
     setInterval(updateCloudQuotaInfo, 30000);
 
-    // Load initial cloud files
-    setTimeout(async () => {
-        try {
-            await updateCloudQuotaInfo();
-            await fetchCloudFiles('', 'home');
-        } catch (e) {
-            console.error("Error en carga inicial cloud:", e);
-        }
-    }, 300);
+    try {
+        await fetchCloudFiles(initialPath, initialView);
+    } catch (e) {
+        console.error("Error en carga inicial cloud:", e);
+    }
 
     if (typeof io !== 'undefined') {
         const cloudSocket = io({ auth: { token: window.TOKEN }, reconnection: true });

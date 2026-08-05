@@ -91,19 +91,15 @@ async function initChat() {
     initSocketConnection();
     await loadChatConversations();
 
-
+    if (!currentChatContact) {
+        try {
+            const saved = localStorage.getItem('nv_chat_contact');
+            if (saved) currentChatContact = JSON.parse(saved);
+        } catch (e) { }
+    }
 
     if (currentChatContact && currentChatContact.contact_id) {
-        document.getElementById('chat-empty-state').style.display = 'none';
-        document.getElementById('chat-active-area').style.display = 'flex';
-
-        updateActiveChatHeader();
-
-        await loadChatMessages(currentChatContact.contact_id);
-        startChatPolling();
-        document.querySelectorAll('.chat-conv-item').forEach(el => el.classList.remove('active'));
-        const activeEl = document.querySelector(`.chat-conv-item[onclick*="${currentChatContact.contact_id}"]`);
-        if (activeEl) activeEl.classList.add('active');
+        openChatWith(currentChatContact.contact_id, currentChatContact.contact_name || '', currentChatContact.last_activity || '', !!currentChatContact.is_group);
     }
 
     setupChatDragAndPaste();
@@ -572,7 +568,7 @@ function renderChatConversations(conversations) {
             preview = preview.replace(/^\[REPLY\|.*?\|.*?\|.*?\]\s*/, '');
         }
         if (!isFile && preview && preview.length > 35) preview = preview.substring(0, 35) + '...';
-        
+
         let prefix = (c.last_sender && c.last_sender !== c.contact_id) ? 'Tú: ' : '';
         if (preview === '[DELETED]') {
             const svgIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:2px"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>';
@@ -586,7 +582,7 @@ function renderChatConversations(conversations) {
         const onlineDot = status.isOnline ? '<div class="online-dot"></div>' : '';
 
         const isGroup = c.contact_id.startsWith('group_');
-        const avatarHtml = isGroup 
+        const avatarHtml = isGroup
             ? `<img src="/api/system/user/avatar/${c.contact_id}" onerror="this.outerHTML='<div style=\\'width:100%; height:100%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--text-dim); border-radius:50%;\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><path d=\\'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2\\' /><circle cx=\\'9\\' cy=\\'7\\' r=\\'4\\' /><path d=\\'M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75\\' /></svg></div>'">`
             : `<img src="/api/system/user/avatar/${c.contact_name}" onerror="this.outerHTML = '${c.contact_name.charAt(0).toUpperCase()}'">`;
 
@@ -627,11 +623,11 @@ async function openChatWith(contactId, contactName, lastActivityIso = '', isGrou
 
     document.getElementById('chat-empty-state').style.display = 'none';
     document.getElementById('chat-active-area').style.display = 'flex';
-    
+
     // Activar vista móvil
     const viewChat = document.getElementById('view-chat');
     if (viewChat) viewChat.classList.add('mobile-chat-active');
-    
+
     // Cerrar info de contacto si está abierta al cambiar de chat
     closeChatInfoSidebar();
 
@@ -661,9 +657,9 @@ async function loadChatMessages(contactId) {
             body: JSON.stringify({ contact_id: contactId, limit: 50 })
         });
         const data = await res.json();
-        
+
         _chatMessageCache[contactId] = data.messages || [];
-        
+
         if (currentChatContact && currentChatContact.contact_id === contactId) {
             chatMessages = _chatMessageCache[contactId];
             renderChatMessages();
@@ -696,6 +692,15 @@ function renderChatMessages() {
     let groupedMessages = [];
     let currentGroup = [];
 
+    let unreadDividerInserted = false;
+    let firstUnreadMsgId = null;
+
+    // Detectar el primer mensaje no leído que recibimos
+    const firstUnread = chatMessages.find(m => !m.mine && !m.read);
+    if (firstUnread) {
+        firstUnreadMsgId = firstUnread.id;
+    }
+
     chatMessages.forEach(msg => {
         const isImage = msg.file_path && msg.file_name && isImageFile(msg.file_name);
         const hasText = !!msg.message;
@@ -708,7 +713,7 @@ function renderChatMessages() {
                 const lastMsg = currentGroup[currentGroup.length - 1];
                 const sameSender = lastMsg.mine === msg.mine;
                 const timeDiff = Math.abs(msg.time - lastMsg.time);
-                
+
                 if (sameSender && timeDiff <= 60) {
                     currentGroup.push(msg);
                 } else {
@@ -724,7 +729,7 @@ function renderChatMessages() {
             groupedMessages.push([msg]);
         }
     });
-    
+
     if (currentGroup.length > 0) {
         groupedMessages.push(currentGroup);
     }
@@ -732,7 +737,7 @@ function renderChatMessages() {
     groupedMessages.forEach(group => {
         const isGrouped = group.length > 1;
         const msg = isGrouped ? group[group.length - 1] : group[0];
-        
+
         const date = new Date(msg.time * 1000);
         const dateStr = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -742,16 +747,23 @@ function renderChatMessages() {
             lastDate = dateStr;
         }
 
+        // Insertar separador "MENSAJES NO LEÍDOS" antes del primer mensaje no leído
+        if (!unreadDividerInserted && firstUnreadMsgId && group.some(m => m.id === firstUnreadMsgId)) {
+            const unreadLabel = window.t ? (window.t('unread_messages_divider') || 'MENSAJES NO LEÍDOS') : 'MENSAJES NO LEÍDOS';
+            html += `<div class="unread-messages-divider"><span>${unreadLabel}</span></div>`;
+            unreadDividerInserted = true;
+        }
+
         if (isGrouped) {
             let gridClass = 'grid-2';
             if (group.length === 3) gridClass = 'grid-3';
             else if (group.length === 4) gridClass = 'grid-4';
             else if (group.length > 4) gridClass = 'grid-more';
-            
+
             let groupIds = group.map(g => g.id);
             let groupIdsStr = `['${groupIds.join("','")}']`;
             let joinedIds = groupIds.join(",");
-            
+
             let gridItemsHtml = '';
             group.forEach((gMsg, idx) => {
                 gridItemsHtml += `
@@ -760,7 +772,7 @@ function renderChatMessages() {
                     </div>
                 `;
             });
-            
+
             const isSelected = _selectedMessages.has(group[0].id);
             const selClass = _chatSelectionMode ? (isSelected ? 'selection-mode selected' : 'selection-mode') : '';
 
@@ -787,7 +799,7 @@ function renderChatMessages() {
             const msgText = msg.message || '';
             let isDeleted = (msgText === '[DELETED]');
             let safeMsg = '';
-            
+
             if (isDeleted) {
                 const delName = msg.mine ? 'ti' : (currentChatContact ? currentChatContact.contact_name : 'el usuario');
                 safeMsg = `<div style="font-style:italic; opacity:0.6; display:flex; align-items:center; gap:6px;">
@@ -819,7 +831,7 @@ function renderChatMessages() {
                 }
 
                 let snippetHtml = replyMatch[3].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\[REPLY\|.*?\|.*?\|.*?\]/g, '').trim() || 'Archivo';
-                
+
                 let isDeletedMsg = (!origMsg || (origMsg && origMsg.message === '[DELETED]'));
 
                 if (isDeletedMsg) {
@@ -940,7 +952,7 @@ function renderChatMessages() {
 
     container.innerHTML = html;
     container.scrollTop = container.scrollHeight;
-    
+
     const images = container.querySelectorAll('img');
     images.forEach(img => {
         img.addEventListener('load', () => {
@@ -949,7 +961,7 @@ function renderChatMessages() {
             }
         });
     });
-    
+
     if (typeof updateChatInfoSidebarMedia === 'function') {
         updateChatInfoSidebarMedia();
     }
@@ -966,7 +978,7 @@ function handleChatScroll() {
     const container = document.getElementById('chat-messages');
     const btn = document.getElementById('chat-scroll-bottom-btn');
     if (!container || !btn) return;
-    
+
     if (container.scrollHeight - container.scrollTop - container.clientHeight > 200) {
         btn.style.display = 'flex';
     } else {
@@ -1055,7 +1067,7 @@ function openChatContextMenu(e, msgId, isMine) {
     if (x + mw > window.innerWidth) x = window.innerWidth - mw - 10;
     if (x < 10) x = 10;
     if (y + mh > window.innerHeight) y = window.innerHeight - mh - 10;
-    
+
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
 
@@ -1063,7 +1075,7 @@ function openChatContextMenu(e, msgId, isMine) {
 
     setTimeout(() => {
         document.addEventListener('click', closeChatContextMenu, { once: true });
-        
+
         const scrollContainer = document.getElementById('chat-messages');
         if (scrollContainer) {
             menu._scrollHandler = closeChatContextMenu;
@@ -1078,7 +1090,7 @@ async function handleMsgAction(action, msgId, msgText) {
     let ids = msgIdStr.includes(',') ? msgIdStr.split(',') : [msgIdStr];
     let messages = ids.map(id => chatMessages.find(m => m.id == id)).filter(Boolean);
     if (messages.length === 0) return;
-    
+
     const msg = messages[0];
 
     switch (action) {
@@ -1180,12 +1192,12 @@ function editMessageInline(msgId) {
     if (!msg) return;
 
     if (_chatReplyToMsg) cancelChatReply();
-    
+
     _chatEditMsgId = msgId;
     const prev = document.getElementById('chat-edit-preview');
     const textEl = document.getElementById('chat-edit-text');
     const input = document.getElementById('chat-input');
-    
+
     if (prev && textEl && input) {
         let snippet = msg.message || '';
         const replyMatch = snippet.match(/^\[REPLY\|.*?\|.*?\|.*?\]\n/);
@@ -1198,12 +1210,12 @@ function editMessageInline(msgId) {
 
         let displaySnippet = snippet;
         if (!displaySnippet && msg.file_name) displaySnippet = 'Archivo adjunto';
-        
+
         textEl.textContent = displaySnippet;
         prev.style.display = 'flex';
         input.value = snippet;
         input.focus();
-        
+
         if (typeof updateChatActionBtn === 'function') updateChatActionBtn();
     }
 }
@@ -1320,12 +1332,12 @@ function openChatConvMenu(e, contactId, contactName, isMuted, isGroup = false, i
     const menu = document.createElement('div');
     menu.id = 'chat-conv-menu';
     menu.style.cssText = 'position:fixed;z-index:99999;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);padding:6px;min-width:190px;';
-    
-    const muteIcon = isMuted 
+
+    const muteIcon = isMuted
         ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path></svg>'
         : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
-    const muteText = isMuted 
-        ? (isGroup ? 'Dejar de silenciar grupo' : 'Dejar de silenciar') 
+    const muteText = isMuted
+        ? (isGroup ? 'Dejar de silenciar grupo' : 'Dejar de silenciar')
         : (isGroup ? 'Silenciar grupo' : 'Silenciar conversación');
 
     const clearItem = `<div style="padding:10px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;color:var(--text-main);display:flex;align-items:center;gap:12px;" onmouseenter="this.style.background='rgba(239, 68, 68, 0.08)'" onmouseleave="this.style.background=''" onclick="this.closest('#chat-conv-menu').remove();clearChatConversation('${contactId}','${contactName.replace(/'/g, "\\'")}')">${'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>'}<span>Vaciar chat</span></div>`;
@@ -1504,9 +1516,9 @@ function startMessageSelection(msgId) {
 
 function toggleMessageSelection(msgId) {
     const ids = String(msgId).includes(',') ? String(msgId).split(',') : [String(msgId)];
-    
+
     let allSelected = ids.every(id => _selectedMessages.has(id));
-    
+
     if (allSelected) {
         ids.forEach(id => _selectedMessages.delete(id));
     } else {
@@ -1532,7 +1544,7 @@ function selectRangeMessages(id1, id2) {
     for (let i = start; i <= end; i++) {
         _selectedMessages.add(chatMessages[i].id);
     }
-    
+
     const rows = document.querySelectorAll('.msg-row');
     rows.forEach(r => {
         const rIds = String(r.dataset.msgId).split(',');
@@ -1560,7 +1572,7 @@ function updateSelectionBar() {
         bar.style.display = 'flex';
         if (inputArea) inputArea.style.display = 'none';
         countSpan.textContent = _selectedMessages.size;
-        
+
         if (copyBtn) {
             const hasNonTextMsg = Array.from(_selectedMessages).some(id => {
                 const msg = chatMessages.find(m => m.id === id);
@@ -1622,12 +1634,12 @@ function forwardSelectedMessages() {
 
 async function deleteSelectedMessages() {
     if (_selectedMessages.size === 0) return;
-    
+
     // Comprobar si todos son míos y si hay archivos
     const ids = Array.from(_selectedMessages);
     let allMine = true;
     let hasFiles = false;
-    
+
     for (const msgId of ids) {
         const msg = chatMessages.find(m => m.id == msgId);
         if (msg) {
@@ -1643,14 +1655,14 @@ async function deleteSelectedMessages() {
         for (const msgId of ids) {
             await fetch('/api/chat/delete_message', {
                 method: 'POST', headers: HEADERS,
-                body: JSON.stringify({ 
-                    msg_id: msgId, 
+                body: JSON.stringify({
+                    msg_id: msgId,
                     delete_type: result.action,
                     delete_files: result.deleteFiles
                 })
             });
             const idx = chatMessages.findIndex(m => m.id == msgId);
-            if (idx !== -1) { 
+            if (idx !== -1) {
                 if (result.action === 'for_everyone') {
                     chatMessages[idx].message = '[DELETED]';
                     chatMessages[idx].file_name = null;
@@ -1727,7 +1739,7 @@ function playAudio(el, url) {
     el.classList.add('playing');
     el.classList.remove('paused');
     _chatAudioEl = el;
-    
+
     // Fetch blob with token
     fetch(url, { headers: { 'X-Token': typeof TOKEN !== 'undefined' ? TOKEN : '' } })
         .then(res => {
@@ -1739,54 +1751,54 @@ function playAudio(el, url) {
             const blobUrl = URL.createObjectURL(blob);
             _chatAudio = new Audio(blobUrl);
 
-    _chatAudio.ontimeupdate = () => {
-        if (!durSpan || !_chatAudio) return;
+            _chatAudio.ontimeupdate = () => {
+                if (!durSpan || !_chatAudio) return;
 
-        // Parse original duration from dataset to avoid Infinity issues with WebM
-        let totalSecs = 0;
-        if (durSpan.dataset.duration) {
-            const parts = durSpan.dataset.duration.split(':');
-            if (parts.length === 2) {
-                totalSecs = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-            }
-        }
+                // Parse original duration from dataset to avoid Infinity issues with WebM
+                let totalSecs = 0;
+                if (durSpan.dataset.duration) {
+                    const parts = durSpan.dataset.duration.split(':');
+                    if (parts.length === 2) {
+                        totalSecs = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+                    }
+                }
 
-        // If we can't parse it, default to just counting up
-        if (!totalSecs) {
-            const cur = Math.floor(_chatAudio.currentTime);
-            const m = Math.floor(cur / 60);
-            const s = Math.floor(cur % 60);
-            durSpan.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-            return;
-        }
+                // If we can't parse it, default to just counting up
+                if (!totalSecs) {
+                    const cur = Math.floor(_chatAudio.currentTime);
+                    const m = Math.floor(cur / 60);
+                    const s = Math.floor(cur % 60);
+                    durSpan.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+                    return;
+                }
 
-        const remaining = Math.max(0, totalSecs - _chatAudio.currentTime);
-        const mins = Math.floor(remaining / 60);
-        const secs = Math.floor(remaining % 60);
-        durSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
+                const remaining = Math.max(0, totalSecs - _chatAudio.currentTime);
+                const mins = Math.floor(remaining / 60);
+                const secs = Math.floor(remaining % 60);
+                durSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            };
 
-    _chatAudio.onended = () => {
-        el.classList.remove('playing', 'paused');
-        restoreDuration(el);
-        _chatAudio = null;
-        _chatAudioEl = null;
-        URL.revokeObjectURL(blobUrl);
-    };
-    _chatAudio.onerror = () => {
-        el.classList.remove('playing', 'paused');
-        restoreDuration(el);
-        _chatAudio = null;
-        _chatAudioEl = null;
-        URL.revokeObjectURL(blobUrl);
-    };
-    _chatAudio.play().catch(() => {
-        el.classList.remove('playing', 'paused');
-        restoreDuration(el);
-        _chatAudio = null;
-        _chatAudioEl = null;
-        URL.revokeObjectURL(blobUrl);
-    });
+            _chatAudio.onended = () => {
+                el.classList.remove('playing', 'paused');
+                restoreDuration(el);
+                _chatAudio = null;
+                _chatAudioEl = null;
+                URL.revokeObjectURL(blobUrl);
+            };
+            _chatAudio.onerror = () => {
+                el.classList.remove('playing', 'paused');
+                restoreDuration(el);
+                _chatAudio = null;
+                _chatAudioEl = null;
+                URL.revokeObjectURL(blobUrl);
+            };
+            _chatAudio.play().catch(() => {
+                el.classList.remove('playing', 'paused');
+                restoreDuration(el);
+                _chatAudio = null;
+                _chatAudioEl = null;
+                URL.revokeObjectURL(blobUrl);
+            });
         })
         .catch(err => {
             console.error(err);
@@ -1828,13 +1840,13 @@ function openChatLightbox(src, groupIds = []) {
     const img = document.getElementById('chat-lightbox-img');
     const video = lb.querySelector('video');
     if (video) { video.style.display = 'none'; video.pause(); }
-    
+
     currentLbGroup = groupIds;
     currentLbIndex = -1;
-    
+
     const prevBtn = document.getElementById('lb-prev');
     const nextBtn = document.getElementById('lb-next');
-    
+
     if (groupIds && groupIds.length > 1) {
         const msgIdMatch = src.match(/\/api\/chat\/download\/([a-zA-Z0-9_-]+)/);
         if (msgIdMatch) {
@@ -1856,12 +1868,12 @@ function openChatLightbox(src, groupIds = []) {
 
 function navigateLightbox(direction) {
     if (currentLbIndex === -1 || currentLbGroup.length <= 1) return;
-    
+
     currentLbIndex += direction;
-    
+
     if (currentLbIndex < 0) currentLbIndex = currentLbGroup.length - 1;
     if (currentLbIndex >= currentLbGroup.length) currentLbIndex = 0;
-    
+
     const newSrc = `/api/chat/download/${currentLbGroup[currentLbIndex]}`;
     const img = document.getElementById('chat-lightbox-img');
     if (img) img.src = newSrc;
@@ -1954,7 +1966,7 @@ async function toggleVoiceRecorder() {
         if (attachBtn) attachBtn.style.display = 'none';
 
         document.getElementById('chat-voice-timer').textContent = '0:00';
-        
+
         const pauseIcon = document.getElementById('chat-voice-pause-icon');
         const resumeIcon = document.getElementById('chat-voice-resume-icon');
         const dot = document.getElementById('chat-voice-dot');
@@ -1991,7 +2003,7 @@ function togglePauseVoiceRecording() {
         if (pauseIcon) pauseIcon.style.display = 'block';
         if (resumeIcon) resumeIcon.style.display = 'none';
         if (dot) dot.style.animationPlayState = 'running';
-        
+
         _recordingTimer = setInterval(() => {
             _recordingSeconds++;
             document.getElementById('chat-voice-timer').textContent = formatDuration(_recordingSeconds);
@@ -2158,18 +2170,18 @@ function handleChatFileSelect(event) {
     }
 
     selectedChatFiles = []; // Replace selection instead of accumulating
-    
+
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const ext = file.name.split('.').pop().toLowerCase();
-        const isMedia = file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/') || 
-                        isImageFile(file.name) || isAudioFile(file.name) || isVideoFile(file.name);
+        const isMedia = file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/') ||
+            isImageFile(file.name) || isAudioFile(file.name) || isVideoFile(file.name);
 
         if (isMedia && file.size > 16 * 1024 * 1024) {
             showChatAlert('Archivo muy pesado', 'El límite para multimedia es de 16 MB. Se omitió ' + file.name);
             continue;
         }
-        
+
         if (!isMedia && file.size > 2 * 1024 * 1024 * 1024) {
             showChatAlert('Archivo muy pesado', 'El límite para documentos es de 2 GB. Se omitió ' + file.name);
             continue;
@@ -2207,7 +2219,7 @@ async function sendChatMessage() {
     if (_chatEditMsgId) {
         const msgId = _chatEditMsgId;
         const msg = chatMessages.find(m => m.id === msgId);
-        
+
         let fullMessage = message;
         if (_chatEditReplySnippet) {
             fullMessage = _chatEditReplySnippet + message;
@@ -2517,12 +2529,12 @@ function handleChatInput(e) {
 
     const len = el.value.length;
     const limit = 65536;
-    
+
     if (len > 60000) {
         counter.style.display = 'block';
         const remaining = limit - len;
         counter.textContent = remaining;
-        
+
         if (remaining < 0) {
             counter.style.color = '#f87171';
         } else {
@@ -2538,7 +2550,7 @@ function updateChatActionBtn() {
     const voiceIcon = document.getElementById('chat-voice-icon');
     const sendIcon = document.getElementById('chat-send-icon');
     const editIcon = document.getElementById('chat-edit-icon');
-    
+
     if (!input || !voiceIcon || !sendIcon || !editIcon) return;
 
     const hasText = input.value.trim().length > 0;
@@ -2691,44 +2703,44 @@ function filterChatConversations(query) {
     });
 }
 
-window.closeMobileChat = function() {
+window.closeMobileChat = function () {
     const viewChat = document.getElementById('view-chat');
     if (viewChat) viewChat.classList.remove('mobile-chat-active');
-    
+
     // Deseleccionar chat actual
     currentChatContact = null;
     localStorage.removeItem('nv_chat_contact');
     stopChatPolling();
-    
+
     document.getElementById('chat-active-area').style.display = 'none';
     document.getElementById('chat-empty-state').style.display = 'flex';
     document.querySelectorAll('.chat-conv-item').forEach(el => el.classList.remove('active'));
-    
+
     if (window.innerWidth <= 900) {
         document.querySelector('.chat-main').style.display = 'none';
     }
 };
-window.openChatDrawer = function() {
+window.openChatDrawer = function () {
     const drawer = document.getElementById('chat-drawer');
     const overlay = document.getElementById('chat-drawer-overlay');
     if (drawer) drawer.classList.add('active');
     if (overlay) overlay.classList.add('active');
 };
 
-window.closeChatDrawer = function() {
+window.closeChatDrawer = function () {
     const drawer = document.getElementById('chat-drawer');
     const overlay = document.getElementById('chat-drawer-overlay');
     if (drawer) drawer.classList.remove('active');
     if (overlay) overlay.classList.remove('active');
 };
 
-window.toggleUserMenu = function(event) {
+window.toggleUserMenu = function (event) {
     const menu = document.getElementById('user-menu');
     if (menu) menu.classList.toggle('active');
     if (event) event.stopPropagation();
 };
 
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     const userMenu = document.getElementById('user-menu');
     if (userMenu && userMenu.classList.contains('active') && !e.target.closest('.rail-avatar')) {
         userMenu.classList.remove('active');
@@ -3066,13 +3078,13 @@ function showChatDeleteConfirm(count, allMine, hasFiles) {
     return new Promise(resolve => {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px);opacity:0;transition:opacity 0.2s ease;';
-        
+
         const modal = document.createElement('div');
         modal.style.cssText = 'background:var(--surface);padding:32px;border-radius:24px;width:90%;max-width:380px;border:1px solid var(--border);text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.4);transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);';
-        
+
         let html = `<div style="margin-bottom:16px;color:var(--text-main);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.8"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></div>`;
-        html += `<h3 style="margin:0 0 8px;font-size:1.25rem;font-weight:600;color:var(--text-main);">Eliminar ${count} mensaje${count>1?'s':''}</h3>`;
-        
+        html += `<h3 style="margin:0 0 8px;font-size:1.25rem;font-weight:600;color:var(--text-main);">Eliminar ${count} mensaje${count > 1 ? 's' : ''}</h3>`;
+
         if (hasFiles) {
             html += `
                 <label style="display:flex;align-items:center;gap:12px;margin:20px 0;text-align:left;font-size:0.9rem;color:var(--text-dim);cursor:pointer;background:var(--surface-1);padding:14px;border-radius:12px;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-2)'" onmouseleave="this.style.background='var(--surface-1)'">
@@ -3091,7 +3103,7 @@ function showChatDeleteConfirm(count, allMine, hasFiles) {
         }
         html += `<button id="chat-del-me" style="padding:14px;background:#ef4444;color:white;border:none;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(239,68,68,0.2);" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(239,68,68,0.3)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 12px rgba(239,68,68,0.2)'">Eliminar para mí</button>`;
         html += `<button id="chat-del-cancel" style="padding:14px;background:transparent;color:var(--text-main);border:1px solid var(--border);border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-1)'" onmouseleave="this.style.background='transparent'">Cancelar</button>`;
-        
+
         html += `</div>`;
         modal.innerHTML = html;
         overlay.appendChild(modal);
@@ -3128,14 +3140,14 @@ function showChatClearConfirm(contactName) {
     return new Promise(resolve => {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px);opacity:0;transition:opacity 0.2s ease;';
-        
+
         const modal = document.createElement('div');
         modal.style.cssText = 'background:var(--surface);padding:32px;border-radius:24px;width:90%;max-width:380px;border:1px solid var(--border);text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.4);transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);';
-        
+
         let html = `<div style="margin-bottom:16px;color:var(--text-main);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.8"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg></div>`;
         html += `<h3 style="margin:0 0 8px;font-size:1.25rem;font-weight:600;color:var(--text-main);">Vaciar chat</h3>`;
         html += `<p style="margin:0 0 16px;font-size:0.95rem;color:var(--text-muted);">Se vaciará la conversación con <b>${contactName}</b>. Los mensajes se eliminarán solo para ti.</p>`;
-        
+
         html += `
             <label style="display:flex;align-items:center;gap:12px;margin:20px 0;text-align:left;font-size:0.9rem;color:var(--text-dim);cursor:pointer;background:var(--surface-1);padding:14px;border-radius:12px;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-2)'" onmouseleave="this.style.background='var(--surface-1)'">
                 <input type="checkbox" id="chat-clear-files-chk" checked style="accent-color:var(--indigo);width:18px;height:18px;cursor:pointer;">
@@ -3147,7 +3159,7 @@ function showChatClearConfirm(contactName) {
         html += `<button id="chat-clear-confirm" style="padding:14px;background:#ef4444;color:white;border:none;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(239,68,68,0.2);" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(239,68,68,0.3)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 12px rgba(239,68,68,0.2)'">Vaciar chat</button>`;
         html += `<button id="chat-clear-cancel" style="padding:14px;background:transparent;color:var(--text-main);border:1px solid var(--border);border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;transition:background 0.2s;" onmouseenter="this.style.background='var(--surface-1)'" onmouseleave="this.style.background='transparent'">Cancelar</button>`;
         html += `</div>`;
-        
+
         modal.innerHTML = html;
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
@@ -3173,12 +3185,12 @@ function showChatClearConfirm(contactName) {
 
 function openChatInfoSidebar() {
     if (!currentChatContact) return;
-    
+
     const nameEl = document.getElementById('chat-info-name');
     const avatarEl = document.getElementById('chat-info-avatar');
     const statusEl = document.getElementById('chat-info-status');
     const memSection = document.getElementById('chat-info-group-members');
-    
+
     if (nameEl) nameEl.textContent = currentChatContact.contact_name;
     if (avatarEl) {
         if (currentChatContact.is_group) {
@@ -3187,7 +3199,7 @@ function openChatInfoSidebar() {
             avatarEl.innerHTML = `<img src="/api/system/user/avatar/${currentChatContact.contact_name}" onerror="this.outerHTML = '${currentChatContact.contact_name.charAt(0).toUpperCase()}'">`;
         }
     }
-    
+
     if (statusEl) {
         if (currentChatContact.is_group) {
             statusEl.textContent = 'Grupo';
@@ -3196,7 +3208,7 @@ function openChatInfoSidebar() {
             statusEl.textContent = status.text;
         }
     }
-    
+
     if (memSection) {
         if (currentChatContact.is_group) {
             memSection.style.display = 'block';
@@ -3205,28 +3217,28 @@ function openChatInfoSidebar() {
                 headers: window.HEADERS,
                 body: JSON.stringify({ group_id: currentChatContact.contact_id })
             })
-            .then(r => r.json())
-            .then(data => {
-                if (data.ok && data.members) {
-                    const countEl = document.getElementById('chat-info-members-count');
-                    const listEl = document.getElementById('chat-info-members-list');
-                    if (countEl) countEl.textContent = data.members.length;
-                    if (listEl) {
-                        listEl.innerHTML = data.members.map(m => `
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok && data.members) {
+                        const countEl = document.getElementById('chat-info-members-count');
+                        const listEl = document.getElementById('chat-info-members-list');
+                        if (countEl) countEl.textContent = data.members.length;
+                        if (listEl) {
+                            listEl.innerHTML = data.members.map(m => `
                             <div style="display:flex; align-items:center; gap:12px;">
                                 <img src="/api/system/user/avatar/${m.username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;" onerror="this.outerHTML='<div style=\\'width:32px; height:32px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:12px;\\'>${m.username.charAt(0).toUpperCase()}</div>'">
                                 <span style="font-weight:500; font-size:0.9rem;">${m.username}</span>
                                 ${m.is_owner ? `<svg title="Propietario del grupo" width="15" height="15" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1.5" style="margin-left:2px; display:inline-block; vertical-align:middle;"><path d="M2 4l3 12h14l3-12-6 7-4-8-4 8-6-7z"/><path d="M3 20h18v2H3z"/></svg>` : ''}
                             </div>
                         `).join('');
+                        }
                     }
-                }
-            });
+                });
         } else {
             memSection.style.display = 'none';
         }
     }
-    
+
     // Update buttons status
     const addBtn = document.getElementById('chat-info-add-btn');
     const groupAddBtn = document.getElementById('chat-info-group-add-btn');
@@ -3278,9 +3290,9 @@ function openChatInfoSidebar() {
             }
         }
     }
-    
+
     updateChatInfoSidebarMedia();
-    
+
     document.getElementById('chat-info-sidebar').classList.add('active');
 }
 
@@ -3328,7 +3340,7 @@ async function openAddGroupMemberModal() {
         });
         const d = await r.json();
         if (d.ok && d.members) existingMemberIds = d.members.map(m => m.user_id);
-    } catch(e) {}
+    } catch (e) { }
 
     const availableFriends = _chatFriendsList.filter(f => !existingMemberIds.includes(f.friend_id));
 
@@ -3421,7 +3433,7 @@ async function openAddGroupMemberModal() {
             } else {
                 showChatAlert('Error', data.error || 'No se pudieron añadir los miembros');
             }
-        } catch(err) {
+        } catch (err) {
             showChatAlert('Error', 'Ocurrió un error al añadir los miembros');
         }
     };
@@ -3437,19 +3449,19 @@ function updateChatInfoSidebarMedia() {
         if (!m.file_path || !m.file_name) return false;
         return isImageFile(m.file_name) || isVideoFile(m.file_name);
     });
-    
+
     const countEl = document.getElementById('chat-info-media-count');
     if (countEl) countEl.textContent = mediaMsgs.length;
-    
+
     const gridEl = document.getElementById('chat-info-media-grid');
     if (gridEl) {
         let gridHtml = '';
         const recent = mediaMsgs.slice(-8).reverse();
         recent.forEach(m => {
             if (isImageFile(m.file_name)) {
-                gridHtml += `<img src="/api/chat/download/${m.id}" onclick="openChatLightbox('/api/chat/download/${m.id}')" loading="lazy">`;
+                gridHtml += `<img src="/api/chat/download/${m.id}" onclick="event.stopPropagation(); openChatLightbox('/api/chat/download/${m.id}')" style="cursor:pointer;" loading="lazy">`;
             } else if (isVideoFile(m.file_name)) {
-                gridHtml += `<video src="/api/chat/download/${m.id}#t=0.1" onclick="openChatVideo('/api/chat/download/${m.id}')" preload="metadata"></video>`;
+                gridHtml += `<video src="/api/chat/download/${m.id}#t=0.1" onclick="event.stopPropagation(); openChatVideo('/api/chat/download/${m.id}')" style="cursor:pointer;" preload="metadata"></video>`;
             }
         });
         gridEl.innerHTML = gridHtml;
@@ -3459,7 +3471,7 @@ function updateChatInfoSidebarMedia() {
 function scrollToMessage(msgId) {
     const row = document.querySelector(`.msg-row[data-msg-id*="${msgId}"]`);
     if (row) {
-        row.scrollIntoView({behavior: 'smooth', block: 'center'});
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         const bubble = row.querySelector('.bubble');
         if (bubble) {
             const oldBg = bubble.style.background;
@@ -3482,7 +3494,12 @@ function closeChatInfoSidebar() {
 }
 
 function openChatMediaSidebar() {
-    document.getElementById('chat-media-sidebar').classList.add('active');
+    const infoSidebar = document.getElementById('chat-info-sidebar');
+    if (infoSidebar && !infoSidebar.classList.contains('active')) {
+        openChatInfoSidebar();
+    }
+    const mediaSidebar = document.getElementById('chat-media-sidebar');
+    if (mediaSidebar) mediaSidebar.classList.add('active');
     switchChatMediaTab('media');
 }
 
@@ -3493,18 +3510,18 @@ function closeChatMediaSidebar() {
 function switchChatMediaTab(tab) {
     document.getElementById('chat-media-tab-media').style.color = tab === 'media' ? '#00a884' : 'var(--text-dim)';
     document.getElementById('chat-media-tab-media').style.borderBottom = tab === 'media' ? '2px solid #00a884' : 'none';
-    
+
     document.getElementById('chat-media-tab-docs').style.color = tab === 'docs' ? '#00a884' : 'var(--text-dim)';
     document.getElementById('chat-media-tab-docs').style.borderBottom = tab === 'docs' ? '2px solid #00a884' : 'none';
-    
+
     document.getElementById('chat-media-tab-links').style.color = tab === 'links' ? '#00a884' : 'var(--text-dim)';
     document.getElementById('chat-media-tab-links').style.borderBottom = tab === 'links' ? '2px solid #00a884' : 'none';
-    
+
     const contentEl = document.getElementById('chat-media-content');
     if (!contentEl) return;
-    
+
     let html = '';
-    
+
     if (tab === 'media') {
         const mediaMsgs = chatMessages.filter(m => m.file_path && m.file_name && (isImageFile(m.file_name) || isVideoFile(m.file_name))).reverse();
         if (mediaMsgs.length === 0) {
@@ -3563,11 +3580,11 @@ function switchChatMediaTab(tab) {
             html += '</div>';
         }
     }
-    
+
     contentEl.innerHTML = html;
 }
 
-let _groupSearchFriends = []; 
+let _groupSearchFriends = [];
 let _selectedGroupMembers = new Set();
 let _groupAvatarFile = null;
 
@@ -3576,7 +3593,7 @@ function showCreateGroupDialog() {
     document.getElementById('chat-group-details-dialog').style.display = 'none';
     document.getElementById('chat-group-name').value = '';
     document.getElementById('chat-group-search').value = '';
-    
+
     // Reset avatar
     _groupAvatarFile = null;
     const avatarInput = document.getElementById('chat-group-avatar-upload');
@@ -3588,9 +3605,9 @@ function showCreateGroupDialog() {
     }
     const icon = document.getElementById('chat-group-avatar-icon');
     if (icon) icon.style.display = 'block';
-    
+
     _selectedGroupMembers.clear();
-    
+
     fetch('/api/friends/list', { headers: window.HEADERS })
         .then(r => r.json())
         .then(data => {
@@ -3628,7 +3645,7 @@ function handleGroupAvatarSelect(event) {
     if (file) {
         _groupAvatarFile = file;
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             document.getElementById('chat-group-avatar-icon').style.display = 'none';
             const img = document.getElementById('chat-group-avatar-img');
             img.src = e.target.result;
@@ -3658,7 +3675,7 @@ function toggleGroupMember(userId) {
 function updateGroupSelectionUI() {
     const chipsEl = document.getElementById('chat-group-selected-chips');
     const nextBtn = document.getElementById('chat-group-next-btn');
-    
+
     // Update checkmarks in the list
     document.querySelectorAll('.group-friend-row').forEach(row => {
         const id = row.dataset.userId;
@@ -3673,7 +3690,7 @@ function updateGroupSelectionUI() {
         chipsEl.innerHTML = '';
         Array.from(_selectedGroupMembers).forEach(id => {
             const f = _groupSearchFriends.find(x => x.user_id === id);
-            if(f) {
+            if (f) {
                 const chip = document.createElement('div');
                 chip.style.cssText = 'display:flex; align-items:center; gap:6px; background:var(--surface-hi); padding:4px 8px; border-radius:16px; cursor:pointer;';
                 chip.innerHTML = `
@@ -3686,7 +3703,7 @@ function updateGroupSelectionUI() {
             }
         });
     }
-    
+
     // Toggle next button
     if (nextBtn) {
         nextBtn.style.display = _selectedGroupMembers.size > 0 ? 'flex' : 'none';
@@ -3695,10 +3712,10 @@ function updateGroupSelectionUI() {
 
 function renderGroupFriendsList(query = '') {
     const listEl = document.getElementById('chat-group-friends-list');
-    if(!listEl) return;
-    
+    if (!listEl) return;
+
     const q = query.toLowerCase();
-    
+
     // If it's empty or forced, build it ONCE
     if (listEl.children.length === 0 || query === '__INIT__') {
         listEl.innerHTML = '';
@@ -3714,7 +3731,7 @@ function renderGroupFriendsList(query = '') {
                 header.textContent = currentLetter;
                 listEl.appendChild(header);
             }
-            
+
             const div = document.createElement('div');
             div.className = 'group-friend-row';
             div.dataset.userId = f.user_id;
@@ -3722,7 +3739,7 @@ function renderGroupFriendsList(query = '') {
             div.dataset.letter = currentLetter;
             div.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer;';
             div.onclick = () => toggleGroupMember(f.user_id);
-            
+
             div.innerHTML = `
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="position:relative;">
@@ -3734,16 +3751,16 @@ function renderGroupFriendsList(query = '') {
             `;
             listEl.appendChild(div);
         });
-        
+
         if (_groupSearchFriends.length === 0) {
             listEl.innerHTML = '<div style="padding:16px; color:var(--text-muted); text-align:center;">No se encontraron contactos</div>';
         }
     }
-    
+
     // Now just filter display if it's a search
     if (_groupSearchFriends.length > 0 && query !== '__INIT__') {
         let visibleCount = 0;
-        
+
         listEl.querySelectorAll('.group-friend-row').forEach(row => {
             if (row.dataset.username.includes(q)) {
                 row.style.display = 'flex';
@@ -3752,7 +3769,7 @@ function renderGroupFriendsList(query = '') {
                 row.style.display = 'none';
             }
         });
-        
+
         listEl.querySelectorAll('.group-letter-header').forEach(header => {
             if (q === '') {
                 header.style.display = 'block'; // Show headers only when not searching
@@ -3760,10 +3777,10 @@ function renderGroupFriendsList(query = '') {
                 header.style.display = 'none'; // Hide headers during search
             }
         });
-        
+
         const noRes = listEl.querySelector('.no-results-msg');
         if (noRes) noRes.remove();
-        
+
         if (visibleCount === 0) {
             const noResDiv = document.createElement('div');
             noResDiv.className = 'no-results-msg';
@@ -3772,32 +3789,32 @@ function renderGroupFriendsList(query = '') {
             listEl.appendChild(noResDiv);
         }
     }
-    
+
     updateGroupSelectionUI();
 }
 
 function createGroup() {
     let name = document.getElementById('chat-group-name').value.trim();
-    
+
     // Sanitize in JS (double check)
     name = name.replace(/[<>"'\\/\\]/g, '');
-    
+
     if (!name) {
         showChatAlert('Por favor, introduce un nombre para el grupo');
         return;
     }
-    
+
     if (name.length > 100) {
         showChatAlert('El nombre del grupo no puede exceder los 100 caracteres');
         return;
     }
-    
+
     const members = Array.from(_selectedGroupMembers);
-    
+
     let fetchOpts = {
         method: 'POST'
     };
-    
+
     if (_groupAvatarFile) {
         const formData = new FormData();
         formData.append('name', name);
@@ -3812,18 +3829,18 @@ function createGroup() {
         fetchOpts.headers = window.HEADERS;
         fetchOpts.body = JSON.stringify({ name: name, members: members });
     }
-    
+
     fetch('/api/chat/group/create', fetchOpts)
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            closeCreateGroupDialog();
-            loadChatConversations(); // refresh list
-            openChatWith(data.group_id, name, '', true);
-        } else {
-            showChatAlert(data.error || 'Error al crear el grupo');
-        }
-    });
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                closeCreateGroupDialog();
+                loadChatConversations(); // refresh list
+                openChatWith(data.group_id, name, '', true);
+            } else {
+                showChatAlert(data.error || 'Error al crear el grupo');
+            }
+        });
 }
 
 function _exposeChatGlobals() {

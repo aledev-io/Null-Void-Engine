@@ -62,8 +62,9 @@ export async function showFriendsView() {
                             </button>
                         </div>
                         
-                        <button class="fr-btn-action accept" onclick="window.openAddFriendDialog()">
-                            <span>${window.t('fr_add_friend')}</span>
+                        <button class="fr-btn-action accept" onclick="window.openAddFriendDialog()" title="${window.t('fr_add_friend')}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            <span class="fr-btn-text">${window.t('fr_add_friend')}</span>
                         </button>
                     </div>
                 </div>
@@ -147,9 +148,10 @@ async function loadFriendsData() {
         const countIncoming = document.getElementById('count-incoming');
         const countSent = document.getElementById('count-sent');
 
-        if (countFriends) countFriends.textContent = _friendsData.friends.length;
-        if (countIncoming) countIncoming.textContent = _friendsData.incoming.length;
-        if (countSent) countSent.textContent = _friendsData.sent.length;
+        const formatCount = (cnt) => (cnt > 99 ? '+99' : cnt);
+        if (countFriends) countFriends.textContent = formatCount(_friendsData.friends.length);
+        if (countIncoming) countIncoming.textContent = formatCount(_friendsData.incoming.length);
+        if (countSent) countSent.textContent = formatCount(_friendsData.sent.length);
 
         renderFriends();
     } catch (e) {
@@ -413,10 +415,14 @@ export async function sendFriendRequest(userId) {
 
 export async function acceptFriendRequest(requestId) {
     try {
-        await fetch('/api/friends/accept', {
+        const res = await fetch('/api/friends/accept', {
             method: 'POST', headers: window.HEADERS,
             body: JSON.stringify({ request_id: requestId })
         });
+        const data = await res.json();
+        if (!data.ok) {
+            NV_Alert(data.msg || data.error || 'No se pudo aceptar la solicitud');
+        }
         await loadFriendsData();
     } catch (e) {
         console.error(e);

@@ -12,6 +12,7 @@ import threading
 import fcntl
 import logging
 import hashlib
+import stat
 from pathlib import Path
 from flask import request, send_file, after_this_request
 from modules.session import session as sess
@@ -26,7 +27,7 @@ BASE_CLOUD_ROOT = os.path.join(CONFIG.DATA_DIR, 'Cloud')
 CONFIG_PATH = os.path.join(CONFIG.DATA_DIR, 'cloud_config.json')
 os.makedirs(BASE_CLOUD_ROOT, exist_ok=True)
 
-MAX_FILE_SIZE_PREVIEW = 25 * 1024 * 1024 
+MAX_FILE_SIZE_PREVIEW = 100 * 1024 * 1024
 
 user_size_cache = {}
 cache_lock = threading.Lock()
@@ -74,6 +75,29 @@ def _get_user_lock(user_id) -> threading.Lock:
         return _user_json_locks[user_id]
 
 
+# ── Hardening ZIP (CWE-400): chunks de I/O y cooperación con el event loop ──
+_ZIP_CHUNK_BYTES = int(os.environ.get("ZIP_CHUNK_BYTES", str(2 * 1024 * 1024)))
+# Límite de seguridad: tamaño total descomprimido máximo admitido por descompresión.
+_MAX_UNCOMPRESSED_BYTES = int(os.environ.get("ZIP_MAX_UNCOMPRESSED_BYTES", str(10 * 1024 ** 3)))
+
+def _yield_event_loop():
+    """Cede el control al event loop (gevent/eventlet) en iteraciones largas;
+    si no hay monkey-patch, un sleep(0) libera el GIL brevemente."""
+    try:
+        import eventlet
+        eventlet.sleep(0)
+        return
+    except ImportError:
+        pass
+    try:
+        import gevent
+        gevent.sleep(0)
+        return
+    except ImportError:
+        pass
+    time.sleep(0)
+
+
 def safe_join(base, *paths):
     base_abs = os.path.abspath(base)
     current = base_abs
@@ -93,6 +117,22 @@ def safe_join(base, *paths):
         current = real_next
 
     return current
+
+
+def _unique_path(path):
+    """Devuelve una ruta libre en el mismo directorio. Si ya existe,
+    añade un sufijo numérico estilo SO: 'Archivo(1).txt', 'Archivo(2).txt'..."""
+    if not os.path.exists(path):
+        return path
+    parent = os.path.dirname(path)
+    base = os.path.basename(path)
+    stem, ext = os.path.splitext(base)
+    n = 1
+    while True:
+        candidate = os.path.join(parent, f"{stem}({n}){ext}")
+        if not os.path.exists(candidate):
+            return candidate
+        n += 1
 
 
 def require_access(user_id, owner_id=None, file_name=None):
@@ -514,11 +554,11 @@ def upload_file(view, subpath, token, file_storage):
     except ValueError:
         return None, None
 
-    existing_size = 0
-    if os.path.exists(final_file_path) and os.path.isfile(final_file_path):
-        existing_size = os.path.getsize(final_file_path)
+    # Si ya existe, añadir sufijo numérico estilo SO: 'Archivo(1).txt'
+    final_file_path = _unique_path(final_file_path)
+    final_filename = os.path.basename(final_file_path)
 
-    if current_usage - existing_size + file_size > limit_bytes:
+    if current_usage + file_size > limit_bytes:
         return False, "Espacio insuficiente en Null-Void Cloud"
 
     pool_dir = os.path.join(BASE_CLOUD_ROOT, '.pool')
@@ -543,14 +583,11 @@ def upload_file(view, subpath, token, file_storage):
     else:
         os.rename(temp_path, pool_file_path)
 
-    if os.path.exists(final_file_path):
-        os.unlink(final_file_path)
-
     os.link(pool_file_path, final_file_path)
 
     current_user = sess.get_user(token)
     current_uid = sess.get_user_id(token)
-    add_activity(current_user, current_uid, "act_subiste", safe_filename, subpath)
+    add_activity(current_user, current_uid, "act_subiste", final_filename, subpath)
     invalidate_user_index(current_uid)
     return True, None
 
@@ -813,8 +850,8 @@ def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=No
         if os.path.commonpath([old_path, new_path]) == old_path:
             return "No se puede copiar un directorio dentro de sí mismo"
             
-    if os.path.exists(new_path):
-        return "Ya existe un archivo o carpeta con ese nombre en el destino"
+    # Si ya existe, añadir sufijo numérico estilo SO: 'Archivo(1).txt'
+    new_path = _unique_path(new_path)
 
     try:
         if os.path.isdir(old_path):
@@ -983,6 +1020,20 @@ def get_quota_info(token):
     return {"used_bytes": used, "limit_gb": limit_gb, "disk_total": disk['total'], "disk_free": disk['free']}
 
 
+def _check_storage_capacity(token, needed_bytes):
+    """Comprueba si `needed_bytes` adicionales caben en la cuota del usuario
+    y físicamente en el disco del servidor. Devuelve (ok, mensaje_error)."""
+    limit_gb = get_user_quota(token)
+    limit_bytes = limit_gb * 1024 * 1024 * 1024
+    current_usage = get_dir_size(get_user_root(token))
+    if current_usage + needed_bytes > limit_bytes:
+        return False, "Espacio insuficiente en Null-Void Cloud"
+    disk = get_disk_info(BASE_CLOUD_ROOT)
+    if disk['free'] < needed_bytes:
+        return False, "Espacio insuficiente en el servidor"
+    return True, None
+
+
 def get_file_info(view, name, subpath, trash_id, owner_id, token):
     base_root = get_user_root(token)
     if not base_root:
@@ -1025,6 +1076,22 @@ def get_file_info(view, name, subpath, trash_id, owner_id, token):
         return None
 
     stat = os.stat(fp)
+
+    # Para carpetas, el st_size es solo el tamaño de la entrada del directorio:
+    # se recorre el contenido real (walk fresco, sin caché para no colisionar).
+    if os.path.isdir(fp):
+        size = 0
+        for dirpath, _, filenames in os.walk(fp):
+            for f in filenames:
+                fpath = os.path.join(dirpath, f)
+                if not os.path.islink(fpath):
+                    try:
+                        size += os.path.getsize(fpath)
+                    except OSError:
+                        pass
+    else:
+        size = stat.st_size
+
     shared_users_info = []
     if not owner_id or str(owner_id) == str(current_uid):
         direct_shares, inherited = repository.get_shares_in_path(current_uid, subpath)
@@ -1035,10 +1102,57 @@ def get_file_info(view, name, subpath, trash_id, owner_id, token):
             shared_users_info.append({'user_id': uid, 'username': uname or 'Usuario'})
 
     return {
-        "name": original_name, "size": stat.st_size, "mtime": stat.st_mtime,
+        "name": original_name, "size": size, "mtime": stat.st_mtime,
         "ctime": stat.st_ctime, "is_dir": os.path.isdir(fp),
         "path": subpath, "owner": username, "owner_id": owner_id or current_uid, "shared_users": shared_users_info,
     }
+
+
+def _pdf_thumbnail(target_path, size, mtime_ns):
+    """Genera una miniatura PNG de la primera página de un PDF, con caché en disco.
+    Renderiza SOLO la página 1 a baja resolución (96 DPI) para no cargar
+    documentos pesados de golpe. Devuelve la ruta del PNG cacheado o None."""
+    thumbs_dir = os.path.join(BASE_CLOUD_ROOT, '.pool', 'thumbs')
+    tmp_prefix = None
+    try:
+        os.makedirs(thumbs_dir, exist_ok=True)
+        key = hashlib.sha256(f"{target_path}:{size}:{mtime_ns}".encode()).hexdigest()[:16]
+        cache_path = os.path.join(thumbs_dir, f"{key}.png")
+        if os.path.exists(cache_path):
+            return cache_path
+
+        tmp_prefix = os.path.join(thumbs_dir, f".tmp_{os.getpid()}_{uuid.uuid4().hex[:8]}")
+        cmd = ['pdftoppm', '-f', '1', '-l', '1', '-png', '-singlefile', '-r', '96', target_path, tmp_prefix]
+        subprocess.run(cmd, capture_output=True, timeout=30, check=True)
+        result = tmp_prefix + '.png'
+        if not os.path.exists(result):
+            return None
+        os.rename(result, cache_path)
+        return cache_path
+    except Exception:
+        return None
+    finally:
+        if tmp_prefix:
+            for leftover in (tmp_prefix, tmp_prefix + '.png'):
+                if os.path.exists(leftover):
+                    try:
+                        os.unlink(leftover)
+                    except OSError:
+                        pass
+
+
+def _preview_placeholder(ext=None):
+    """SVG ligero con icono de documento: evita el icono de imagen rota cuando
+    no se puede generar la miniatura (PDF enorme, timeout, binario ausente...)."""
+    label = (ext or 'PDF').lstrip('.').upper()[:6]
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120">'
+        '<rect width="160" height="120" rx="8" fill="#e8eaf0"/>'
+        '<path d="M60 22 h28 l20 20 v56 a6 6 0 0 1-6 6 H60 a6 6 0 0 1-6-6 V28 a6 6 0 0 1 6-6z" fill="#ffffff" stroke="#c3c8d4"/>'
+        '<path d="M88 22 v20 h20" fill="none" stroke="#c3c8d4"/>'
+        f'<text x="80" y="92" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#8a92a6">{label}</text>'
+        '</svg>'
+    )
 
 
 def preview_file(view, name, subpath, trash_id, owner_id, token):
@@ -1063,7 +1177,11 @@ def preview_file(view, name, subpath, trash_id, owner_id, token):
     if not os.path.exists(target_path):
         return None, None
 
+    preview_exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.pdf', '.mp4', '.webm', '.mov', '.avi', '.mkv')
     if os.path.getsize(target_path) > MAX_FILE_SIZE_PREVIEW:
+        ext = os.path.splitext(name)[1].lower()
+        if ext in preview_exts:
+            return send_file(io.BytesIO(_preview_placeholder(ext).encode()), mimetype='image/svg+xml'), None
         return None, "Archivo demasiado grande para previsualizar de forma directa"
 
     add_activity(sess.get_user(token), sess.get_user_id(token), "act_abrio", name, subpath, owner_id)
@@ -1080,15 +1198,14 @@ def preview_file(view, name, subpath, trash_id, owner_id, token):
                 return send_file(io.BytesIO(result.stdout), mimetype='image/jpeg'), None
             except Exception:
                 continue
-        return None, "Error al generar vista previa de video"
+        return send_file(io.BytesIO(_preview_placeholder(ext).encode()), mimetype='image/svg+xml'), None
 
     if ext == '.pdf':
-        try:
-            cmd = ['pdftoppm', '-f', '1', '-l', '1', '-png', '-singlefile', target_path]
-            result = subprocess.run(cmd, capture_output=True, check=True, timeout=5)
-            return send_file(io.BytesIO(result.stdout), mimetype='image/png'), None
-        except Exception:
-            return None, "Error al generar vista previa"
+        st = os.stat(target_path)
+        thumb = _pdf_thumbnail(target_path, st.st_size, st.st_mtime_ns)
+        if thumb:
+            return send_file(thumb, mimetype='image/png'), None
+        return send_file(io.BytesIO(_preview_placeholder('pdf').encode()), mimetype='image/svg+xml'), None
 
     return None, "Tipo de archivo no previsualizable"
 
@@ -1204,17 +1321,36 @@ def get_folders_tree(view, token):
         if rel_path == '.':
             rel_path = ''
         subdirs = []
+        files = []
         try:
             for entry in os.scandir(path):
-                if entry.is_dir() and not entry.name.startswith('.') and not entry.is_symlink():
+                if entry.name.startswith('.'):
+                    continue
+                if entry.is_dir() and not entry.is_symlink():
                     subtree = build_tree(entry.path, base_path, is_root=False, current_depth=current_depth + 1)
                     if subtree:
                         subdirs.append(subtree)
+                elif entry.is_file() and not entry.is_symlink():
+                    file_path = os.path.join(rel_path, entry.name).replace('\\', '/')
+                    if file_path.startswith('/'):
+                        file_path = file_path.lstrip('/')
+                    try:
+                        info = entry.stat()
+                        size = info.st_size
+                    except OSError:
+                        size = 0
+                    files.append({
+                        "name": entry.name,
+                        "path": file_path,
+                        "size": size,
+                        "ext": os.path.splitext(entry.name)[1].lower(),
+                    })
             subdirs.sort(key=lambda x: x['name'].lower())
+            files.sort(key=lambda x: x['name'].lower())
         except OSError as e:
             sys.stderr.write(f"[OPERATIONAL][WARN] No se pudo listar la rama {path}: {e}\n")
             
-        return {"name": name or "Mi unidad", "path": rel_path, "subdirs": subdirs}
+        return {"name": name or "Mi unidad", "path": rel_path, "subdirs": subdirs, "files": files}
 
     return build_tree(view_root, view_root, is_root=True)
 
@@ -1572,3 +1708,234 @@ def list_shared_by_me(token):
         except ValueError:
             continue
     return files
+
+
+def zip_item(view, name, subpath, token, zip_name=None):
+    user_root = get_view_root(view, token)
+    if not user_root:
+        return None
+        
+    subpath = subpath.strip('/')
+    try:
+        target_path = safe_join(user_root, subpath, name)
+    except ValueError:
+        return None
+        
+    if not os.path.exists(target_path):
+        return "El elemento a zipear no existe"
+        
+    if not zip_name or not str(zip_name).strip():
+        base = os.path.splitext(name)[0] if not os.path.isdir(target_path) else name
+        zip_name = f"{base}.zip"
+    else:
+        zip_name = str(zip_name).strip()
+        if not zip_name.lower().endswith('.zip'):
+            zip_name += '.zip'
+            
+    try:
+        dest_zip_path = safe_join(user_root, subpath, zip_name)
+    except ValueError:
+        return None
+        
+    if os.path.exists(dest_zip_path):
+        return f"Ya existe un archivo llamado '{zip_name}' en esta ubicación"
+
+    # ── Calcular tamaño total y nº de archivos a comprimir ──
+    total_size = 0
+    file_count = 0
+    if os.path.isdir(target_path):
+        for root, dirs, files in os.walk(target_path):
+            for file in files:
+                if file.startswith('.'):
+                    continue
+                fp = os.path.join(root, file)
+                try:
+                    total_size += os.path.getsize(fp)
+                except OSError:
+                    pass
+                file_count += 1
+    else:
+        total_size = os.path.getsize(target_path)
+        file_count = 1
+
+    # Cota superior: el ZIP nunca supera la suma de archivos + cabeceras
+    estimate = total_size + file_count * 64 + 1024
+    ok, err = _check_storage_capacity(token, estimate)
+    if not ok:
+        return err
+
+    # ── Crear el zip en temporal para medir su tamaño real ──
+    pool_dir = os.path.join(BASE_CLOUD_ROOT, '.pool')
+    os.makedirs(pool_dir, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(suffix='.zip', dir=pool_dir)
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(temp_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            if os.path.isdir(target_path):
+                for root, dirs, files in os.walk(target_path):
+                    # Omitir directorios symlink (podrían apuntar fuera del root)
+                    dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(root, d))]
+                    for file in files:
+                        if file.startswith('.'):
+                            continue
+                        abs_file = os.path.join(root, file)
+                        # Omitir archivos symlink (CWE-22: evita incluir contenido externo)
+                        if os.path.islink(abs_file):
+                            continue
+                        rel_in_zip = os.path.relpath(abs_file, os.path.dirname(target_path))
+                        _zip_stream_write(zf, abs_file, rel_in_zip)
+            else:
+                _zip_stream_write(zf, target_path, name)
+
+        real_size = os.path.getsize(temp_path)
+        ok, err = _check_storage_capacity(token, real_size)
+        if not ok:
+            return err
+
+        shutil.move(temp_path, dest_zip_path)
+        temp_path = None
+
+        current_user = sess.get_user(token)
+        current_uid = sess.get_user_id(token)
+        add_activity(current_user, current_uid, "act_creaste_la_carpeta", zip_name, subpath)
+        invalidate_user_index(current_uid)
+        return True
+    except Exception as e:
+        if os.path.exists(dest_zip_path):
+            try: os.unlink(dest_zip_path)
+            except Exception: pass
+        return f"Error al comprimir: {str(e)}"
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try: os.unlink(temp_path)
+            except Exception: pass
+
+
+def _zip_stream_write(zf, abs_file, arc_name):
+    """Escribe un archivo en el ZIP leyendo en chunks fijos y cediendo el
+    event loop, para no bloquear el servidor con archivos/carpetas grandes."""
+    with open(abs_file, 'rb') as src, zf.open(arc_name, 'w') as dst:
+        while True:
+            chunk = src.read(_ZIP_CHUNK_BYTES)
+            if not chunk:
+                break
+            dst.write(chunk)
+            _yield_event_loop()
+
+
+def unzip_item(view, name, subpath, token):
+    user_root = get_view_root(view, token)
+    if not user_root:
+        return None
+        
+    subpath = subpath.strip('/')
+    try:
+        target_path = safe_join(user_root, subpath, name)
+    except ValueError:
+        return None
+        
+    if not os.path.exists(target_path) or os.path.isdir(target_path):
+        return "El archivo a unzipear no existe o es un directorio"
+        
+    if not name.lower().endswith('.zip'):
+        return "El archivo seleccionado no es un archivo .zip"
+
+    MAX_ZIP_FILES = 10000
+    MAX_ZIP_RATIO = 100
+    RESERVED_NAMES = ('.activity.json', '.trash.json', '.starred.json', '.protected.json')
+
+    try:
+        with zipfile.ZipFile(target_path, 'r') as zf:
+            dest_dir = safe_join(user_root, subpath)
+            infolist = zf.infolist()
+
+            # ── Límite de nº de elementos (Zip Bomb) ──
+            if len(infolist) > MAX_ZIP_FILES:
+                return f"El archivo zip contiene demasiados elementos (máximo {MAX_ZIP_FILES})."
+
+            # ── Ratio de compresión agregado (Zip Bomb) ──
+            total_uncompressed = sum(info.file_size for info in infolist)
+            total_compressed = sum(info.compress_size for info in infolist)
+            if total_compressed > 0 and (total_uncompressed / total_compressed) > MAX_ZIP_RATIO:
+                return "El archivo zip tiene un ratio de compresión sospechoso (posible Zip Bomb)."
+
+            # ── Límite de seguridad de tamaño descomprimido (CWE-400) ──
+            if total_uncompressed > _MAX_UNCOMPRESSED_BYTES:
+                return "El archivo comprimido supera la cuota o el límite de seguridad"
+
+            # ── Comprobar cuota del usuario y disco físico con el tamaño real ──
+            ok, err = _check_storage_capacity(token, total_uncompressed)
+            if not ok:
+                return "El archivo comprimido supera la cuota o el límite de seguridad"
+
+            # ── Validar y filtrar todos los miembros antes de extraer ──
+            members = []
+            for info in infolist:
+                name_norm = info.filename.replace('\\', '/')
+
+                # Zip Slip: validar la ruta completa (con '..' intacto) antes de filtrar
+                raw_path = os.path.abspath(os.path.join(dest_dir, name_norm))
+                try:
+                    inside = (os.path.commonpath([dest_dir, raw_path]) == dest_dir)
+                except ValueError:
+                    inside = False
+                if not inside:
+                    logger.error(
+                        f"[SECURITY][ALERT] Zip Slip bloqueado en '{name}': miembro '{info.filename}' "
+                        f"resuelve fuera del destino permitido ({dest_dir})"
+                    )
+                    return "El archivo zip contiene rutas no seguras (Zip Slip detectado)."
+
+                # Ratio de compresión por archivo individual (Zip Bomb por miembro)
+                if (info.compress_size > 0 and info.file_size >= 1024 * 1024
+                        and info.file_size / info.compress_size > MAX_ZIP_RATIO):
+                    logger.error(
+                        f"[SECURITY][ALERT] Zip Bomb sospechosa en '{name}': miembro '{info.filename}' "
+                        f"comprime {info.file_size / max(1, info.compress_size):.0f}:1"
+                    )
+                    return "El archivo zip tiene un ratio de compresión sospechoso (posible Zip Bomb)."
+
+                parts = [p for p in name_norm.split('/') if p not in ('', '.')]
+                if not parts:
+                    continue
+                # Omitir carpeta reservada de macOS
+                if parts[0] == '__MACOSX':
+                    continue
+                # Omitir archivos o carpetas ocultos (empiezan por '.')
+                if any(p.startswith('.') for p in parts):
+                    continue
+                # Omitir archivos reservados del sistema
+                if parts[-1] in RESERVED_NAMES:
+                    continue
+                # Omitir enlaces simbólicos (evita symlink traversal)
+                mode = (info.external_attr >> 16) & 0xFFFF
+                if stat.S_ISLNK(mode):
+                    continue
+
+                member_path = os.path.abspath(os.path.join(dest_dir, *parts))
+                members.append((info, member_path))
+
+            # ── Extracción manual (sin extractall: no crea symlinks ni hardlinks) ──
+            for info, member_path in members:
+                if info.is_dir():
+                    os.makedirs(member_path, exist_ok=True)
+                    continue
+                # Si ya existe, añadir sufijo numérico estilo SO: 'Archivo(1).txt'
+                member_path = _unique_path(member_path)
+                os.makedirs(os.path.dirname(member_path), exist_ok=True)
+                with zf.open(info) as src, open(member_path, 'wb') as dst:
+                    # Descompresión por chunks fijos, cediendo el event loop
+                    while True:
+                        chunk = src.read(_ZIP_CHUNK_BYTES)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+                        _yield_event_loop()
+
+        current_user = sess.get_user(token)
+        current_uid = sess.get_user_id(token)
+        add_activity(current_user, current_uid, "act_subiste", f"Descomprimido: {name}", subpath)
+        invalidate_user_index(current_uid)
+        return True
+    except Exception as e:
+        return f"Error al descomprimir: {str(e)}"

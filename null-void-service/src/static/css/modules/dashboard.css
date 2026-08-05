@@ -1675,7 +1675,6 @@
             padding: 24px;
         }
 
-        #bkp-source-preview:hover,
         #bkp-dest-preview:hover {
             border-color: var(--indigo) !important;
             background: rgba(99, 102, 241, 0.04);

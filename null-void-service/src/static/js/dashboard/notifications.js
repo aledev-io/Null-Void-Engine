@@ -19,27 +19,31 @@ export async function fetchNotificationHistory() {
 
         const pushBtn = document.getElementById('enable-web-push');
         if (pushBtn) {
-            if (!("Notification" in window) || Notification.permission === "denied") {
+            let isEnabled = localStorage.getItem('push_enabled') !== 'false' && localStorage.getItem('nv_notif_push_disabled') !== 'true';
+            
+            if (window.Android) {
+                // En App de Android nativa siempre está soportado el puente FCM
+                pushBtn.style.display = 'flex';
+            } else if (!("Notification" in window) || Notification.permission === "denied") {
                 pushBtn.style.display = 'none';
             } else {
-                pushBtn.style.display = 'inline-block';
+                pushBtn.style.display = 'flex';
                 if (Notification.permission === "granted") {
-                    const isDisabled = localStorage.getItem('nv_notif_push_disabled') === 'true';
-                    const t = window.t_dash || (k => k);
-                    const textSpan = document.getElementById('enable-web-push-text') || pushBtn;
-                    if (isDisabled) {
-                        pushBtn.style.color = '#10b981';
-                        pushBtn.style.background = 'transparent';
-                        pushBtn.style.border = 'none';
-                        textSpan.setAttribute('data-i18n', 'enable_push');
-                        textSpan.innerText = t('enable_push') || 'Activar Notificaciones';
-                    } else {
-                        pushBtn.style.color = '#f87171';
-                        pushBtn.style.background = 'transparent';
-                        pushBtn.style.border = 'none';
-                        textSpan.setAttribute('data-i18n', 'push_disable');
-                        textSpan.innerText = t('push_disable') || 'Desactivar Notificaciones';
-                    }
+                    isEnabled = localStorage.getItem('nv_notif_push_disabled') !== 'true' && localStorage.getItem('push_enabled') !== 'false';
+                }
+            }
+
+            if (pushBtn.style.display !== 'none') {
+                const t = window.t_dash || (k => k);
+                const textSpan = document.getElementById('enable-web-push-text') || pushBtn;
+                if (!isEnabled) {
+                    pushBtn.style.color = '#10b981';
+                    textSpan.setAttribute('data-i18n', 'enable_push');
+                    textSpan.innerText = t('enable_push') || 'Activar Notificaciones';
+                } else {
+                    pushBtn.style.color = '#f87171';
+                    textSpan.setAttribute('data-i18n', 'push_disable');
+                    textSpan.innerText = t('push_disable') || 'Desactivar Notificaciones';
                 }
             }
         }
@@ -58,12 +62,12 @@ export async function fetchNotificationHistory() {
         }
 
         notifList.innerHTML = data.map(n => {
-            let title = n.title;
+            let title = n.title || '';
             if (title.startsWith("Nuevo mensaje de ")) {
-                title = t('notif_new_msg') + title.substring("Nuevo mensaje de ".length);
+                title = title.substring("Nuevo mensaje de ".length);
             } else if (title.startsWith("New message from ")) {
-                title = t('notif_new_msg') + title.substring("New message from ".length);
-            } else {
+                title = title.substring("New message from ".length);
+            } else if (n.category !== 'chat' && title) {
                 title = t(title);
             }
             
@@ -106,27 +110,43 @@ export async function fetchNotificationHistory() {
                 iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
             }
 
+            let bodyText = n.body || '';
+            let formattedBody = bodyText.replace(/\+ (\d+) más/g, (match, count) => {
+                const template = t('notif_more_msgs') || '+ {count} más';
+                return template.replace('{count}', count);
+            }).replace(/\n/g, '<br/>');
+            if (bodyText.length > 150) {
+                formattedBody = formattedBody.substring(0, 147) + '...';
+            }
+
+            const isChatNotif = n.category === 'chat';
+            const senderId = n.sender_id || title;
+            const clickAttr = isChatNotif ? `onclick="window.handleNotificationClick('${senderId.replace(/'/g, "\\'")}', '${title.replace(/'/g, "\\'")}', '${n.id || n.timestamp}')" style="cursor: pointer;"` : '';
+
             return `
-            <div id="notif-item-${n.id || n.timestamp}" class="notif-item ${typeClass} ${isUnread ? 'unread' : ''}">
+            <div id="notif-item-${n.id || n.timestamp}" class="notif-item ${typeClass} ${isUnread ? 'unread' : ''}" ${clickAttr}>
                 <div class="notif-item-icon">${iconSvg}</div>
                 <div class="notif-item-content">
                     <div class="notif-item-title">${title}</div>
-                    ${n.body ? `<div class="notif-item-text">${n.body}</div>` : ''}
+                    ${bodyText ? `<div class="notif-item-text">${formattedBody}</div>` : ''}
+                    ${n.image || n.photo ? `<div style="margin-top: 4px;"><img src="${n.image || n.photo}" alt="Previsualización" style="max-height: 80px; max-width: 100%; border-radius: 6px; object-fit: cover; border: 1px solid var(--border);" /></div>` : ''}
                     <div class="notif-item-time">
                         <span>${displayDate}${t('notif_at')}${displayTime}</span>
-                        <span style="font-weight: 600; opacity: 0.7;">${n.category}</span>
                         ${isUnread ? `<span id="notif-dot-${n.id || n.timestamp}" style="width:6px; height:6px; border-radius:50%; background:var(--primary); display:inline-block;" title="${t('new_notif')}"></span>` : ''}
                     </div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;">
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;" onclick="event.stopPropagation()">
                     <div class="notif-item-close" onclick="deleteNotification('${n.id || n.timestamp}')" title="${t('delete_notif')}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </div>
-                    ${isUnread ? `
-                    <div id="notif-read-btn-${n.id || n.timestamp}" class="notif-item-close" style="color: var(--indigo);" onclick="markNotificationRead('${n.id || n.timestamp}')" title="${t('mark_read')}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        ${n.category ? `<span style="font-size: 11px; font-weight: 600; color: var(--text-muted); opacity: 0.8;">${n.category}</span>` : ''}
+                        ${isUnread ? `
+                        <div id="notif-read-btn-${n.id || n.timestamp}" class="notif-item-close" style="color: var(--indigo);" onclick="markNotificationRead('${n.id || n.timestamp}')" title="${t('mark_read')}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </div>
+                        ` : ''}
                     </div>
-                    ` : ''}
                 </div>
             </div>
             `;
@@ -218,50 +238,92 @@ export async function markAllNotificationsRead() {
 
 export function requestPushPermission() {
     const t = window.t_dash || (k => k);
-    if (!("Notification" in window)) {
-        alert(t('push_not_supported') || "Este navegador no soporta notificaciones");
-        return;
-    }
-    
     const btn = document.getElementById('enable-web-push');
-    const isDisabled = localStorage.getItem('nv_notif_push_disabled') === 'true';
+    const textSpan = document.getElementById('enable-web-push-text') || btn;
 
-    if (Notification.permission === "granted") {
-        if (isDisabled) {
+    if (window.Android || window.togglePushNotifications) {
+        const isCurrentlyEnabled = localStorage.getItem('push_enabled') !== 'false' && localStorage.getItem('nv_notif_push_disabled') !== 'true';
+        const newState = !isCurrentlyEnabled;
+        
+        if (window.togglePushNotifications) {
+            window.togglePushNotifications(newState);
+        } else {
+            localStorage.setItem('push_enabled', newState ? 'true' : 'false');
+        }
+        
+        if (newState) {
             localStorage.removeItem('nv_notif_push_disabled');
-            if (btn) {
-                btn.style.background = 'rgba(248, 113, 113, 0.1)';
-                btn.style.color = '#f87171';
-                btn.style.border = '1px solid rgba(248, 113, 113, 0.2)';
-                btn.innerHTML = `<span data-i18n="push_disable">${t('push_disable') || 'Desactivar Notificaciones'}</span>`;
+            if (btn) btn.style.color = '#f87171';
+            if (textSpan) {
+                textSpan.setAttribute('data-i18n', 'push_disable');
+                textSpan.innerText = t('push_disable') || 'Desactivar Notificaciones';
             }
         } else {
             localStorage.setItem('nv_notif_push_disabled', 'true');
-            if (btn) {
-                btn.style.background = 'rgba(16, 185, 129, 0.1)';
-                btn.style.color = '#10b981';
-                btn.style.border = '1px solid rgba(16, 185, 129, 0.2)';
-                btn.innerHTML = `<span data-i18n="enable_push">${t('enable_push') || 'Activar Notificaciones'}</span>`;
+            if (btn) btn.style.color = '#10b981';
+            if (textSpan) {
+                textSpan.setAttribute('data-i18n', 'enable_push');
+                textSpan.innerText = t('enable_push') || 'Activar Notificaciones';
+            }
+        }
+        return;
+    }
+    
+    const isDisabled = localStorage.getItem('nv_notif_push_disabled') === 'true';
+
+    if ("Notification" in window && Notification.permission === "granted") {
+        if (isDisabled) {
+            localStorage.removeItem('nv_notif_push_disabled');
+            if (btn) btn.style.color = '#f87171';
+            if (textSpan) {
+                textSpan.setAttribute('data-i18n', 'push_disable');
+                textSpan.innerText = t('push_disable') || 'Desactivar Notificaciones';
+            }
+        } else {
+            localStorage.setItem('nv_notif_push_disabled', 'true');
+            if (btn) btn.style.color = '#10b981';
+            if (textSpan) {
+                textSpan.setAttribute('data-i18n', 'enable_push');
+                textSpan.innerText = t('enable_push') || 'Activar Notificaciones';
             }
         }
         return;
     }
 
-    Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-            localStorage.removeItem('nv_notif_push_disabled');
-            if (btn) {
-                btn.style.background = 'rgba(248, 113, 113, 0.1)';
-                btn.style.color = '#f87171';
-                btn.style.border = '1px solid rgba(248, 113, 113, 0.2)';
-                btn.innerHTML = `<span data-i18n="push_disable">${t('push_disable') || 'Desactivar Notificaciones'}</span>`;
+    if ("Notification" in window) {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                localStorage.removeItem('nv_notif_push_disabled');
+                if (btn) btn.style.color = '#f87171';
+                if (textSpan) {
+                    textSpan.setAttribute('data-i18n', 'push_disable');
+                    textSpan.innerText = t('push_disable') || 'Desactivar Notificaciones';
+                }
+            } else if (permission === "denied") {
+                if (btn) btn.style.display = 'none';
             }
-            new Notification("Null-Void Engine", { body: "¡Notificaciones activadas con éxito!", icon: "/static/img/logo.png" });
-        } else if (permission === "denied") {
-            alert("Has bloqueado las notificaciones. Para activarlas, haz clic en el icono del candado en la barra de direcciones de tu navegador y permite las notificaciones.");
-            if (btn) btn.style.display = 'none';
-        }
-    });
+        });
+    }
+}
+
+export function handleNotificationClick(contactId, contactName, notifId) {
+    if (notifId) {
+        markNotificationRead(notifId);
+    }
+    const notifModal = document.getElementById('notif-modal');
+    if (notifModal) notifModal.style.display = 'none';
+
+    localStorage.setItem('nv_chat_contact', JSON.stringify({
+        contact_id: contactId,
+        contact_name: contactName
+    }));
+
+    if (typeof window.openChatWith === 'function') {
+        const isGroup = contactId ? contactId.startsWith('group_') : false;
+        window.openChatWith(contactId, contactName, '', isGroup);
+    } else {
+        window.location.href = '/chat';
+    }
 }
 
 window.fetchNotificationHistory = fetchNotificationHistory;
@@ -270,3 +332,11 @@ window.clearAllNotifications = clearAllNotifications;
 window.markNotificationRead = markNotificationRead;
 window.markAllNotificationsRead = markAllNotificationsRead;
 window.requestPushPermission = requestPushPermission;
+window.handleNotificationClick = handleNotificationClick;
+
+window.addEventListener('languageChanged', () => {
+    const notifModal = document.getElementById('notif-modal');
+    if (notifModal && notifModal.style.display !== 'none') {
+        fetchNotificationHistory();
+    }
+});

@@ -16,6 +16,10 @@
         })();
     </script>
     <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
         body, html {
             margin: 0; padding: 0; height: 100%;
             background: var(--bg);
@@ -142,20 +146,24 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 20px;
+            padding: 20px 24px 20px 22px;
             display: flex;
             flex-direction: column;
             gap: 12px;
             transition: all 0.2s;
-            cursor: pointer;
             position: relative;
             overflow: hidden;
+            cursor: pointer;
         }
 
         .reminder-card:hover {
             border-color: var(--border-hi);
             transform: translateY(-2px);
             box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .btn-open-cal-mobile {
+            display: none !important;
         }
 
         .reminder-card::before {
@@ -230,6 +238,19 @@
         }
 
         @media (max-width: 768px) {
+            .reminder-card {
+                cursor: default;
+                user-select: none;
+                -webkit-user-select: none;
+                -webkit-touch-callout: none;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .reminder-card:hover {
+                transform: none;
+            }
+            .btn-open-cal-mobile {
+                display: inline-flex !important;
+            }
             .sidebar {
                 position: absolute;
                 transform: translateX(-100%);
@@ -243,7 +264,7 @@
                 display: flex !important;
             }
             .reminders-grid {
-                padding: 16px;
+                padding: 20px 24px;
                 grid-template-columns: 1fr;
             }
         }
@@ -370,7 +391,7 @@
                 page_title_all: "Todos los Recordatorios", page_title_upcoming: "Próximos", page_title_important: "Importantes",
                 empty_title: "Todo al día", empty_sub: "No hay recordatorios que coincidan con este filtro.",
                 label_passed: "Pasado", label_today: "Hoy", label_tomorrow: "Mañana", label_upcoming: "Próximamente",
-                no_desc: "Sin descripción", all_day: "Todo el día"
+                no_desc: "Sin descripción", all_day: "Todo el día", view_in_calendar: "Abrir"
             },
             en: {
                 new_reminder: "New Reminder",
@@ -380,7 +401,7 @@
                 page_title_all: "All Reminders", page_title_upcoming: "Upcoming", page_title_important: "Important",
                 empty_title: "All caught up", empty_sub: "No reminders match this filter.",
                 label_passed: "Past", label_today: "Today", label_tomorrow: "Tomorrow", label_upcoming: "Upcoming",
-                no_desc: "No description", all_day: "All day"
+                no_desc: "No description", all_day: "All day", view_in_calendar: "Open"
             }
         };
 
