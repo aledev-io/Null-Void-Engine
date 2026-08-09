@@ -11,10 +11,19 @@
     transition: background 0.2s;
     flex-shrink: 0;
     margin-top: auto;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.sidebar-footer:hover {
-    background: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+.sidebar-footer.active {
+    background: var(--bg-hover, rgba(255,255,255,0.1)) !important;
+}
+
+@media (hover: hover) {
+    .sidebar-footer:hover {
+        background: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+    }
 }
 
 .user-info {
@@ -48,6 +57,10 @@
     flex-direction: column;
     padding: 8px;
     z-index: 100;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
     animation: slideUp 0.2s ease-out;
 }
 

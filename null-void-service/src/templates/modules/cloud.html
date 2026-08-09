@@ -139,28 +139,44 @@
 
     <div id="bkp-source-modal" class="cloud-modal" style="display: none; z-index: 99999;"
         onclick="closeBkpSourceModal()">
-        <div class="modal-content" onclick="event.stopPropagation()"
-            style="max-width: 560px; width: 92%; max-height: 90vh; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px;">
+        <div class="modal-content bkp-source-modal-content" onclick="event.stopPropagation()"
+            style="max-width: 600px; width: min(92%, calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);" data-i18n="bkp_src_modal_multi_title">
                     Seleccionar elementos de la Nube</h2>
                 <button onclick="closeBkpSourceModal()"
-                    style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem;">✕</button>
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem; padding: 4px;">✕</button>
             </div>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;" data-i18n="bkp_src_modal_multi_desc">
                 Marca los archivos y carpetas que deseas respaldar. Puedes combinar elementos de diferentes rutas.</p>
             <div id="bkp-source-tree-container"
-                style="max-height: 52vh; overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                style="max-height: 40vh; overflow-y: auto; padding: 16px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
             </div>
-            <div style="margin-bottom: 16px; font-size: 0.82rem; color: var(--text-secondary);">
-                <span data-i18n="bkp_src_modal_selected">Elementos marcados: </span><span
-                    id="bkp-source-selected-count" style="font-weight: 700; color: var(--indigo);">0</span>
+            <div style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                <span data-i18n="bkp_src_modal_include_title">Lista de elementos a respaldar</span>
+                <span style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: var(--indigo); color: #fff;" id="bkp-source-selected-count">0</span>
             </div>
-            <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+            <div id="bkp-source-inclusion-list"
+                style="max-height: 132px; overflow-y: auto; padding: 10px 12px; background: rgba(0,0,0,0.18); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+            </div>
+            <div id="bkp-source-excluded-block" style="display: none; margin-bottom: 16px;">
+                <div style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #f87171; display: flex; align-items: center; gap: 8px;">
+                    <span data-i18n="bkp_src_modal_excluded_title">Elementos excluidos</span>
+                    <span style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: rgba(248,113,113,0.15); color: #f87171;" id="bkp-source-excluded-count">0</span>
+                </div>
+                <div id="bkp-source-excluded-list"
+                    style="max-height: 110px; overflow-y: auto; padding: 10px 12px; background: rgba(0,0,0,0.18); border: 1px solid rgba(248,113,113,0.25); border-radius: 10px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                </div>
+            </div>
+            <div id="bkp-source-selected-hint"
+                style="display: none; margin-bottom: 16px; padding: 8px 12px; border-radius: 6px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); color: #10b981; font-size: 0.75rem; box-sizing: border-box; width: 100%;">
+            </div>
+            <div class="bkp-modal-actions"
+                style="display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; row-gap: 12px; margin-top: 8px;">
                 <button onclick="clearBkpSourceModalSelection()"
                     style="padding: 10px 18px; border-radius: 8px; background: transparent; border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600;"
                     data-i18n="bkp_src_modal_clear">Limpiar selección</button>
-                <div style="display: flex; gap: 12px;">
+                <div style="display: flex; gap: 12px; flex-wrap: wrap; row-gap: 10px;">
                     <button onclick="closeBkpSourceModal()"
                         style="padding: 10px 20px; border-radius: 8px; background: transparent; border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600;"
                         data-i18n="btn_cancel">Cancelar</button>
@@ -214,16 +230,6 @@
                                 d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
                         </svg>
                         Linux
-                    </button>
-                    <button id="os-btn-mac" onclick="setLinkDeviceOS('mac')"
-                        style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 5px;">
-                        <svg width="14" height="14" viewBox="0 0 814 1000" fill="currentColor">
-                            <path
-                                d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.5-167.2-100.3-93.1-168.6-93.1-168.6c-.6-1.3-.6-1.9-.6-1.9-2.5-57.2 15-108.6 41.4-148.6 25-38.5 65.8-66.8 99-72.8 31-5.6 76.8 10.6 99.8 26.6 22.4 15.6 50.1 36.5 74.3 36.5 16 0 47.1-14.2 82.1-24.2 35.5-10 75.4-15.3 113.6-12.9" />
-                            <path
-                                d="M588.5 8.9c-.6 0-1.3-.6-1.9-.6-43.9 2.5-116.4 29.6-139.1 81.7-11.6 26.8-13.3 58.5-1.9 89.4 1.3 3.2 2.5 6.4 3.8 9.7" />
-                        </svg>
-                        macOS
                     </button>
                     <button id="os-btn-windows" onclick="setLinkDeviceOS('windows')"
                         style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 5px;">
@@ -948,14 +954,10 @@
 
                 #cloud-breadcrumbs {
                     font-size: 0.85rem !important;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
                     flex: 1;
                     min-width: 0;
                     max-width: none;
                     margin-right: 0 !important;
-                    text-align: right !important;
                 }
 
                 .cloud-header>div:last-child {
@@ -970,7 +972,7 @@
                     display: none !important;
                 }
 
-                .cloud-header>div:last-child>div:has(#cloud-search) {
+                #cloud-search-wrapper {
                     display: none !important;
                 }
 
@@ -1099,9 +1101,10 @@
                 .cloud-file-date {
                     grid-column: 2;
                     grid-row: 2;
-                    font-size: 0.75rem !important;
+                    font-size: 0.72rem !important;
                     opacity: 0.6 !important;
-                    text-align: right;
+                    text-align: right !important;
+                    justify-self: end !important;
                     align-self: start;
                     white-space: nowrap;
                 }
@@ -1109,7 +1112,12 @@
                 .cloud-file-actions {
                     grid-column: 2;
                     grid-row: 1;
-                    justify-self: end;
+                    justify-self: end !important;
+                    display: flex !important;
+                    justify-content: flex-end !important;
+                    align-items: center !important;
+                    width: 40px !important;
+                    text-align: right !important;
                 }
 
                 /* --- INFO PANEL --- */
@@ -1176,7 +1184,7 @@
             .bkp-dest-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 14px;
+                gap: 16px;
                 width: 100%;
                 box-sizing: border-box;
             }
@@ -1184,7 +1192,7 @@
             .bkp-type-grid {
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
-                gap: 14px;
+                gap: 16px;
                 width: 100%;
                 box-sizing: border-box;
             }
@@ -1280,7 +1288,7 @@
             .bkp-mode-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 14px;
+                gap: 16px;
                 margin-bottom: 24px;
                 width: 100%;
                 box-sizing: border-box;
@@ -1449,7 +1457,38 @@
                 }
 
                 #cloud-backups-container {
-                    padding: 16px 14px 28px !important;
+                    padding: 16px 20px 32px !important;
+                }
+
+                /* Modal de selección: márgenes laterales seguros y padding
+                   adaptativo para que la jerarquía no choque con los bordes. */
+                .bkp-source-modal-content {
+                    width: calc(100vw - 32px) !important;
+                    max-width: 600px !important;
+                    padding: 20px 16px !important;
+                }
+            }
+
+            @media (max-width: 480px) {
+                /* Acciones del modal en columnas, botones a ancho completo. */
+                .bkp-modal-actions {
+                    flex-direction: column;
+                    align-items: stretch !important;
+                }
+
+                .bkp-modal-actions>div {
+                    width: 100%;
+                    display: flex;
+                    gap: 10px;
+                }
+
+                .bkp-modal-actions button {
+                    flex: 1;
+                    justify-content: center;
+                }
+
+                .bkp-source-modal-content {
+                    border-radius: 12px;
                 }
             }
 
@@ -1479,7 +1518,7 @@
                     class="hide-mobile">
                 </div>
                 <div id="cloud-breadcrumbs"
-                    style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; margin-right: 20px; color: var(--text-main); font-weight: 600; font-size: 1.1rem; text-align: right;">
+                    style="display: flex; align-items: center; justify-content: flex-end; gap: 4px 8px; flex-wrap: wrap; overflow: hidden; flex: 1; min-width: 0; margin-right: 20px; color: var(--text-main); font-weight: 600; font-size: 1.1rem;">
                     <!-- Se llena con JS -->
                 </div>
             </div>
@@ -1500,7 +1539,7 @@
                         <circle cx="12" cy="11.5" r="1.2" fill="currentColor" stroke="none" />
                     </svg>
                 </button>
-                <div style="position: relative; flex: 1; max-width: 300px; min-width: 100px;">
+                <div id="cloud-search-wrapper" style="position: relative; flex: 1; max-width: 300px; min-width: 100px;">
 
                     <input type="search" id="cloud-search" placeholder="Buscar en Drive..."
                         data-i18n-placeholder="search_drive" class="cloud-search-input"
@@ -1778,10 +1817,36 @@
 
                 <script>
                     function toggleUserMenu(e) {
-                        e.stopPropagation();
+                        if (e) e.stopPropagation();
                         const menu = document.getElementById('user-menu');
-                        menu.classList.toggle('show');
+                        const footerBtn = document.getElementById('sidebar-footer-btn') || (e ? e.currentTarget : null);
+                        if (menu) {
+                            menu.classList.toggle('show');
+                            const isOpen = menu.classList.contains('show');
+                            if (footerBtn) {
+                                if (isOpen) {
+                                    footerBtn.classList.add('active');
+                                } else {
+                                    footerBtn.classList.remove('active');
+                                    if (typeof footerBtn.blur === 'function') footerBtn.blur();
+                                }
+                            }
+                        }
                     }
+
+                    document.addEventListener('click', function (e) {
+                        const menu = document.getElementById('user-menu');
+                        const footerBtn = document.getElementById('sidebar-footer-btn');
+                        if (menu && menu.classList.contains('show')) {
+                            if (!menu.contains(e.target) && (!footerBtn || !footerBtn.contains(e.target))) {
+                                menu.classList.remove('show');
+                                if (footerBtn) {
+                                    footerBtn.classList.remove('active');
+                                    if (typeof footerBtn.blur === 'function') footerBtn.blur();
+                                }
+                            }
+                        }
+                    });
 
                     document.addEventListener('DOMContentLoaded', () => {
                         const nameDisplay = document.getElementById('user-name-display');
@@ -1827,8 +1892,19 @@
                             data-i18n="btn_restore">
                             Restaurar
                         </button>
-                        <button id="btn-cloud-multi-zip" onclick="downloadSelectedAsZip()" class="btn-primary"
+                        <button id="btn-cloud-multi-preview" onclick="openCloudMultiPreview()" class="btn-secondary"
+                            style="display: none; padding: 8px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; align-items: center; transition: all 0.2s;"
+                            onmouseover="this.style.background='rgba(16,185,129,0.2)'"
+                            onmouseout="this.style.background='rgba(16,185,129,0.1)'">
+                            <span id="btn-cloud-multi-preview-text">Previsualizar</span>
+                        </button>
+                        <button id="btn-cloud-multi-download" onclick="downloadSelectedItems()" class="btn-primary"
                             style="padding: 8px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; background: var(--indigo); color: #fff; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(99,102,241,0.3); transition: all 0.2s;"
+                            data-i18n="btn_download">
+                            Descargar
+                        </button>
+                        <button id="btn-cloud-multi-zip" onclick="downloadSelectedAsZip()" class="btn-secondary"
+                            style="padding: 8px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;"
                             data-i18n="btn_download_zip">
                             Descargar ZIP
                         </button>
@@ -1869,51 +1945,25 @@
                 </script>
                 <div id="cloud-backups-container" style="display: none; flex: 1; overflow-y: auto; padding: 20px 24px 32px; box-sizing: border-box; width: 100%; max-width: 100%;">
                     <div style="max-width: 900px; width: 100%; margin: 0 auto;">
-                        <!-- Selector de modo: manual vs automatización -->
-                        <div class="bkp-mode-grid">
-                            <div class="bkp-mode-card active" id="bkp-mode-manual" onclick="switchBkpMode('manual')">
-                                <div class="bkp-mode-icon">
-                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                                        <line x1="12" y1="11" x2="12" y2="17"></line>
-                                        <line x1="9" y1="14" x2="15" y2="14"></line>
-                                    </svg>
-                                </div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <div class="bkp-mode-title" data-i18n="bkp_mode_manual">Backup Manual / Único</div>
-                                    <div class="bkp-mode-desc" data-i18n="bkp_mode_manual_desc">Exporta un ZIP rápido:
-                                        selecciona archivos, destino y
-                                        nivel de respaldo.</div>
-                                </div>
-                                <svg class="bkp-mode-check" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <path d="M9 12l2 2 4-4"></path>
+                        <!-- Selector de modo: manual vs automatización (Tabs) -->
+                        <div class="bkp-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 14px; box-sizing: border-box; width: 100%;">
+                            <button type="button" class="bkp-mode-card active" id="bkp-mode-manual" onclick="switchBkpMode('manual')"
+                                style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--indigo); background: rgba(99, 102, 241, 0.12); color: var(--indigo); font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                    <line x1="12" y1="11" x2="12" y2="17"></line>
+                                    <line x1="9" y1="14" x2="15" y2="14"></line>
                                 </svg>
-                            </div>
-                            <div class="bkp-mode-card" id="bkp-mode-auto" onclick="switchBkpMode('auto')">
-                                <div class="bkp-mode-icon">
-                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <polyline points="12 6 12 12 16 14"></polyline>
-                                    </svg>
-                                </div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <div class="bkp-mode-title" data-i18n="bkp_mode_auto">Automatización y Programación</div>
-                                    <div class="bkp-mode-desc" data-i18n="bkp_mode_auto_desc">Crea tareas periódicas:
-                                        frecuencia, horario, días y
-                                        retención de copias.</div>
-                                </div>
-                                <svg class="bkp-mode-check" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                    stroke-linejoin="round">
+                                <span data-i18n="bkp_mode_manual">Backup Manual / Único</span>
+                            </button>
+                            <button type="button" class="bkp-mode-card" id="bkp-mode-auto" onclick="switchBkpMode('auto')"
+                                style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 10px; border: 2px solid transparent; background: var(--surface-hi); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <circle cx="12" cy="12" r="10"></circle>
-                                    <path d="M9 12l2 2 4-4"></path>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
                                 </svg>
-                            </div>
+                                <span data-i18n="bkp_mode_auto">Automatización y Programación</span>
+                            </button>
                         </div>
 
                         <div id="bkp-manual-panel" class="bkp-panel">
@@ -1940,7 +1990,7 @@
                                     </label>
                                     <label class="dest-card-option inactive" id="bkp-lbl-src-custom"
                                         style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; padding: 18px 16px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface-hi); color: var(--text-secondary); box-sizing: border-box;"
-                                        onclick="document.querySelector('input[name=bkp_source_mode][value=custom]').checked=true; toggleBkpSourceMode()">
+                                        onclick="document.querySelector('input[name=bkp_source_mode][value=custom]').checked=true; toggleBkpSourceMode(); openBkpSourceModal('manual');">
                                         <input type="radio" name="bkp_source_mode" value="custom" autocomplete="off"
                                             style="display: none;">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -1968,27 +2018,16 @@
 
                                 <!-- Modo 'elementos específicos' -->
                                 <div id="bkp-custom-source" style="display: none;">
-                                    <button type="button" onclick="openBkpSourceModal('manual')" class="btn-secondary"
-                                        style="padding: 12px 20px; border-radius: 10px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; width: 100%; box-sizing: border-box; justify-content: center;"
-                                        onmouseover="this.style.borderColor='rgba(99,102,241,0.45)'; this.style.background='rgba(99,102,241,0.04)';"
-                                        onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface-hi)';">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <line x1="12" y1="8" x2="12" y2="16"></line>
-                                            <line x1="8" y1="12" x2="16" y2="12"></line>
-                                        </svg>
-                                        <span data-i18n="bkp_src_select_elements">Seleccionar elementos de la Nube…</span>
-                                    </button>
-                                    <div id="bkp-source-list"
-                                        style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div id="bkp-source-none-hint"
-                                            style="padding: 12px 16px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--text-secondary); font-size: 0.8rem; box-sizing: border-box; width: 100%;"
-                                            data-i18n="bkp_source_none">Sin elementos seleccionados. Elige archivos o
-                                            carpetas de tu nube para respaldar.</div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="font-size: 0.84rem; font-weight: 600; color: var(--text-main);" data-i18n="bkp_src_modal_include_title">Elementos a respaldar</span>
                                     </div>
-                                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px;"
-                                        data-i18n="bkp_src_custom_note">Puedes combinar archivos y carpetas de diferentes
-                                        rutas. Cada elemento se empaquetará conservando su ubicación.</div>
+                                    <div id="bkp-source-list"
+                                        style="margin-top: 4px; display: flex; flex-direction: column; gap: 8px;">
+                                        <div id="bkp-source-none-hint"
+                                            style="padding: 14px 16px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--text-secondary); font-size: 0.82rem; box-sizing: border-box; width: 100%; cursor: pointer;"
+                                            onclick="openBkpSourceModal('manual')"
+                                            data-i18n="bkp_source_none">Sin elementos seleccionados. Haz clic aquí para elegir archivos o carpetas.</div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2053,7 +2092,7 @@
                                 la carpeta de destino para el backup:</p>
 
                             <div id="bkp-folder-tree-container"
-                                style="max-height: 300px; overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                                style="max-height: 300px; overflow-y: auto; padding: 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
                             </div>
 
                             <div style="margin-bottom: 16px;">
@@ -2081,14 +2120,15 @@
                         <!-- Acción principal -->
                         <button class="btn-primary" id="btn-backup" onclick="doBackup()"
                             style="height: 48px; padding: 0 24px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #fff; font-size: 0.95rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35); display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            <span id="btn-backup-label" data-i18n="bkp_btn_create_download">Crear y Descargar
-                                Backup</span>
+                            <span id="btn-backup-icon" style="display: inline-flex; align-items: center;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                            </span>
+                            <span id="btn-backup-label" data-i18n="bkp_btn_create_download">Crear y Descargar ZIP</span>
                         </button>
                         <div id="backup-progress-wrap" style="display: none; margin-top: 16px;">
                             <div
@@ -2360,8 +2400,8 @@
                 <div class="context-item" id="ctx-download-btn">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <span data-i18n="ctx_download">Descargar</span>
                 </div>
-                <div class="context-item" id="ctx-rename-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> <span data-i18n="ctx_rename">Cambiar nombre</span>
+<div class="context-item" id="ctx-rename-btn" style="display: none;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> <span data-i18n="ctx_rename">Renombrar</span>
                 </div>
                 <div class="context-item" id="ctx-share-btn">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> <span data-i18n="ctx_share">Compartir</span>
@@ -2379,7 +2419,7 @@
                             <span id="ctx-star-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span> <span id="ctx-star-text"
                                 data-i18n="ctx_star">Destacar</span>
                         </div>
-                        <div class="context-item" id="ctx-move-btn">
+                        <div class="context-item" id="ctx-move-btn" style="display: none;">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg> <span data-i18n="ctx_move">Mover</span>
                         </div>
                         <div class="context-item" id="ctx-copy-btn">
@@ -2392,6 +2432,9 @@
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"></path><polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline><polyline points="7.5 19.79 7.5 14.6 3 12"></polyline><polyline points="21 12 16.5 14.6 16.5 19.79"></polyline><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> <span data-i18n="ctx_unzip">Descomprimir aquí</span>
                         </div>
                     </div>
+                </div>
+                <div class="context-item" id="ctx-token-btn" style="display: none; color: #818cf8;" onclick="handleGenerateLinkToken()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> <span data-i18n="ctx_generate_link_token">Generar Token de Enlace</span>
                 </div>
                 <div class="context-item" id="ctx-info-btn">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg> <span data-i18n="ctx_info">Información</span>
@@ -2517,6 +2560,7 @@
                 cursor: pointer;
                 opacity: 0.7;
                 transition: opacity 0.2s;
+                white-space: nowrap;
             }
 
             .breadcrumb-item:hover {
@@ -2638,6 +2682,9 @@
     <div id="cloud-preview-modal" onclick="closeCloudPreview()">
         <div class="preview-content" onclick="event.stopPropagation()">
             <span class="preview-close" onclick="closeCloudPreview()">&times;</span>
+            <div id="preview-tabs"
+                style="display: none; overflow-x: auto; margin-bottom: 12px; gap: 6px; padding-bottom: 2px; scrollbar-width: thin;">
+            </div>
             <div id="preview-body" style="overflow: auto; display: flex; justify-content: center; align-items: center;">
             </div>
             <div id="preview-footer"
@@ -2647,6 +2694,16 @@
                         style="font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
                     <span id="preview-owner"
                         style="font-size: 0.75rem; display: none; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+                    <span id="preview-filtered-note"
+                        style="font-size: 0.72rem; display: none; margin-top: 3px; color: var(--text-muted);"></span>
+                </div>
+                <div id="preview-nav" style="display: none; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <button onclick="window._previewNav(-1)" title="Anterior" data-i18n-title="preview_prev"
+                        style="padding: 6px 12px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-size: 1rem; line-height: 1;">‹</button>
+                    <span id="preview-position"
+                        style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">1 / 1</span>
+                    <button onclick="window._previewNav(1)" title="Siguiente" data-i18n-title="preview_next"
+                        style="padding: 6px 12px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-size: 1rem; line-height: 1;">›</button>
                 </div>
                 <button id="preview-download-btn" class="cloud-btn primary" style="padding: 8px 16px; flex-shrink: 0;"
                     data-i18n="ctx_download">Descargar</button>
@@ -2736,6 +2793,11 @@
         <div id="global-upload-details" style="display: block; max-height: 250px; overflow-y: auto; padding: 0;">
         </div>
     </div>
+    <button id="btn-empty-trash-fab" onclick="emptyCloudTrash()" title="Vaciar papelera"
+            data-i18n-title="ctx_empty_trash"
+            style="display: none; position: fixed; bottom: 24px; right: 24px; z-index: 9800; width: 56px; height: 56px; border-radius: 50%; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: transform 0.2s, box-shadow 0.2s, background 0.2s;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
     <style>
         @keyframes slideUpPanel {
             from {

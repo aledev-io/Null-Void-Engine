@@ -1,3 +1,5 @@
 node_modules/
 .idea/
-android/
+android/.gradle/
+android/app/build/
+android/app/keystore/

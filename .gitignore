@@ -34,10 +34,11 @@ certs/
 *.bin
 dist/
 build/
+**/dist/
+**/build/
+**/venv/
 *.spec
 *.exe
-null-void-service/client_agent/dist/
-null-void-service/client_agent/build/
 agent_release.py
 *_release.py
 
@@ -50,3 +51,5 @@ null-void-app/android/app/google-services.json
 .cxx/
 .externalNativeBuild/
 .opencode
+
+client_agent/.build.lock

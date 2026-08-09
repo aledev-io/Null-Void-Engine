@@ -214,8 +214,10 @@ class SessionManager:
         return username in self._user_index and self._user_index[username] in self._sessions
 
     def create(self, username: str, user_id: str = None) -> str:
-        """Genera un nuevo token para el usuario."""
-        # Invalidar sesión anterior si existe
+        """Genera un nuevo token de sesión para el usuario.
+        Invalidación por seguridad: Al iniciar sesión desde un nuevo navegador,
+        la sesión anterior queda invalidada automáticamente.
+        """
         old_token = self._user_index.get(username)
         if old_token and old_token in self._sessions:
             del self._sessions[old_token]

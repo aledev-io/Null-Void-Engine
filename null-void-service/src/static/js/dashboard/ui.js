@@ -54,7 +54,7 @@ export function toggleTheme() {
         saveUISettings('theme', next);
     } else {
         document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('theme', next);
+        try { localStorage.setItem('theme', next); } catch (e) { /* noop */ }
         updateThemeIcon(next);
     }
 }
@@ -96,16 +96,19 @@ export function updateNetStatus() {
 
 
 export async function handleLogout() {
-    const fcmToken = localStorage.getItem('nv_fcm_token');
+    let fcmToken = null;
+    try { fcmToken = localStorage.getItem('nv_fcm_token'); } catch (e) { /* noop */ }
     const body = fcmToken ? JSON.stringify({ fcm_token: fcmToken }) : null;
     await fetch('/api/logout', { 
         method: 'POST', 
         headers: window.HEADERS,
         body: body
     }).catch(() => { });
-    localStorage.removeItem('theme');
-    localStorage.removeItem('nv_chat_contact');
-    localStorage.removeItem('nv_fcm_token');
+    try {
+        localStorage.removeItem('theme');
+        localStorage.removeItem('nv_chat_contact');
+        localStorage.removeItem('nv_fcm_token');
+    } catch (e) { /* noop */ }
     location.href = '/';
 }
 
@@ -136,11 +139,11 @@ export function NV_Alert(text, title = "Null-Void") {
         _nvDialogResolve = null;
 
         document.getElementById('nv-dialog-title').textContent = title;
-        document.getElementById('nv-dialog-text').textContent = text;
+        document.getElementById('nv-dialog-text').innerHTML = text;
         document.getElementById('nv-dialog-text').style.display = text ? 'block' : 'none';
         document.getElementById('nv-dialog-input').style.display = 'none';
         document.getElementById('nv-dialog-cancel').style.display = 'none';
-        document.getElementById('nv-dialog-confirm').textContent = 'Aceptar';
+        document.getElementById('nv-dialog-confirm').textContent = (window.I18n ? window.I18n.t('btn_confirm') : null) || 'OK';
 
         const confirmBtn = document.getElementById('nv-dialog-confirm');
         confirmBtn.onclick = () => {
@@ -160,10 +163,15 @@ export function NV_Alert(text, title = "Null-Void") {
     });
 }
 
-export function NV_Prompt(text, defaultValue = "", title = "Cambiar nombre", confirmText = "Aceptar", cancelText = "Cancelar") {
+export function NV_Prompt(text, defaultValue = "", title = null, confirmText = null, cancelText = null) {
     return new Promise(resolve => {
         NV_CloseDialog();
         _nvDialogResolve = null;
+
+        const _t = (key, fallback) => (window.I18n ? window.I18n.t(key) : null) || fallback;
+        title = title ?? _t('ctx_rename', 'Rename');
+        confirmText = confirmText ?? _t('btn_confirm', 'OK');
+        cancelText = cancelText ?? _t('btn_cancel', 'Cancel');
 
         document.getElementById('nv-dialog-title').textContent = title;
         document.getElementById('nv-dialog-text').textContent = text;
@@ -204,13 +212,18 @@ export function NV_Prompt(text, defaultValue = "", title = "Cambiar nombre", con
     });
 }
 
-export function NV_Confirm(text, title = "Confirmar acción", confirmText = "Confirmar", cancelText = "Cancelar") {
+export function NV_Confirm(text, title = null, confirmText = null, cancelText = null) {
     return new Promise(resolve => {
         NV_CloseDialog();
         _nvDialogResolve = null;
 
+        const _t = (key, fallback) => (window.I18n ? window.I18n.t(key) : null) || fallback;
+        title = title ?? _t('confirm_action_title', 'Confirm');
+        confirmText = confirmText ?? _t('btn_confirm', 'OK');
+        cancelText = cancelText ?? _t('btn_cancel', 'Cancel');
+
         document.getElementById('nv-dialog-title').textContent = title;
-        document.getElementById('nv-dialog-text').textContent = text;
+        document.getElementById('nv-dialog-text').innerHTML = text;
         document.getElementById('nv-dialog-text').style.display = 'block';
         document.getElementById('nv-dialog-input').style.display = 'none';
         document.getElementById('nv-dialog-cancel').style.display = 'inline-block';
@@ -296,9 +309,9 @@ export function initCommonUI() {
     const mainNotes = document.getElementById('main-quick-notes');
     const notesTag = document.getElementById('notes-save-tag');
     if (mainNotes) {
-        mainNotes.value = localStorage.getItem('nv_notes') || '';
+        try { mainNotes.value = localStorage.getItem('nv_notes') || ''; } catch (e) { /* storage no disponible */ }
         mainNotes.addEventListener('input', () => {
-            localStorage.setItem('nv_notes', mainNotes.value);
+            try { localStorage.setItem('nv_notes', mainNotes.value); } catch (e) { /* noop */ }
             if (notesTag) {
                 notesTag.style.opacity = '1';
                 setTimeout(() => { notesTag.style.opacity = '0'; }, 1000);

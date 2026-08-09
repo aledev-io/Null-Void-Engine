@@ -83,7 +83,10 @@ class MyFirebaseService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        notificationManager.notify(0, notificationBuilder.build())
+        // ID único por notificación: así no se sobrescriben y todas se apilan
+        // (aunque se llene el panel de notificaciones).
+        val notificationId = (System.currentTimeMillis() and 0x3FFFFFFF).toInt()
+        notificationManager.notify(notificationId, notificationBuilder.build())
     }
 
     private fun decrypt(encryptedData: String, ivBase64: String): String {

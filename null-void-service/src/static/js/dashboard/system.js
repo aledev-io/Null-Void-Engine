@@ -3,13 +3,38 @@
 export let APPS = [];
 
 export async function fetchApps() {
+    const grid = document.getElementById('sidebar-nav-menu');
+
+    // Skeleton mientras llega la primera respuesta (evita la vista "a medias"
+    // y da feedback visual inmediato en la carga en frío).
+    if (grid && grid.dataset.state !== 'loaded') {
+        grid.innerHTML = '<div class="nav-loading" style="padding: 14px 18px; display: flex; flex-direction: column; gap: 10px;">'
+            + '<div style="height: 10px; border-radius: 6px; background: var(--border); opacity: 0.6; width: 72%;"></div>'
+            + '<div style="height: 10px; border-radius: 6px; background: var(--border); opacity: 0.35; width: 55%;"></div>'
+            + '<div style="height: 10px; border-radius: 6px; background: var(--border); opacity: 0.35; width: 64%;"></div>'
+            + '</div>';
+    }
+
     try {
         const res = await fetch('/api/system/apps', { headers: window.HEADERS });
-        APPS = await res.json();
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error('Formato de respuesta inválido');
+        APPS = data;
         window.APPS = APPS;
+        if (grid) grid.dataset.state = 'loaded';
         renderAppLauncher();
     } catch (err) {
         console.error("Error cargando apps:", err);
+        // Estado de error con botón de reintento: la navegación nunca queda
+        // en blanco ni bloqueada por un fallo de red en el primer arranque.
+        if (grid) {
+            grid.dataset.state = 'error';
+            grid.innerHTML = `<div style="padding: 14px 18px; font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 10px; align-items: flex-start;">
+                <span>${window.t_dash ? window.t_dash('dash_nav_load_error', 'No se pudieron cargar las apps.') : 'No se pudieron cargar las apps.'}</span>
+                <button onclick="window.fetchApps()" style="padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-hi); color: var(--text-main); cursor: pointer; font-weight: 600; font-size: 0.78rem;">${window.t_dash ? window.t_dash('dash_retry', 'Reintentar') : 'Reintentar'}</button>
+            </div>`;
+        }
     }
 }
 

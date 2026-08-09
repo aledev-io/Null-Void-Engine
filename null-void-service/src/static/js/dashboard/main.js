@@ -45,13 +45,17 @@ async function loadUserProfile() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initSettings();
-    initCommonUI();
+function bootDashboard() {
+    // Cada componente se inicializa en su propio try/catch: si uno falla en la
+    // carga en frío (p. ej. localStorage no disponible en un WebView, una
+    // petición lenta o un módulo roto), el resto de la app sigue montándose y
+    // la interfaz nunca se queda a medias ni congelada.
+    try { initSettings(); } catch (e) { console.error('[Init] initSettings falló:', e); }
+    try { initCommonUI(); } catch (e) { console.error('[Init] initCommonUI falló:', e); }
 
     loadUserProfile();
     fetchApps();
-    initCalendarWidget();
+    try { initCalendarWidget(); } catch (e) { console.error('[Init] initCalendarWidget falló:', e); }
 
     const params = new URLSearchParams(location.search);
     let view = params.get('view');
@@ -60,12 +64,38 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (hash && !view) view = hash;
 
     history.replaceState({ view: view || 'menu' }, '', '/app');
-    window.showView('menu', false);
-    window.updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+    try {
+        window.showView('menu', false);
+    } catch (e) {
+        // Fallback: si el módulo de UI no llegó a montarse, activar la vista
+        // base manualmente para no dejar la aplicación congelada.
+        console.error('[Init] showView falló, activando la vista base manualmente:', e);
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const menuView = document.getElementById('view-menu');
+        if (menuView) menuView.classList.add('active');
+        const main = document.getElementById('main');
+        if (main) main.style.display = 'block';
+    }
+    try {
+        window.updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+    } catch (e) { /* noop */ }
 
     if (view) {
         setTimeout(() => {
-            if (typeof window.showView === 'function') window.showView(view);
+            try {
+                if (typeof window.showView === 'function') window.showView(view);
+            } catch (e) {
+                console.error('[Init] No se pudo abrir la vista inicial:', view, e);
+            }
         }, 50);
     }
-});
+}
+
+// Arranque robusto: si el script se evalúa después de que el DOM ya esté
+// listo (carga desde caché, shell nativo, etc.), se ejecuta la inicialización
+// de inmediato en lugar de esperar un evento DOMContentLoaded que ya ocurrió.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootDashboard);
+} else {
+    bootDashboard();
+}

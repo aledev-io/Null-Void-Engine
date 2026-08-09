@@ -1,6 +1,7 @@
 import json
 import os
 import queue
+import re
 import shutil
 import tempfile
 import threading
@@ -298,14 +299,67 @@ def resolve_cloud_sources(user_id, source_paths):
     return resolved
 
 
-def _walk_cloud_source(root_abs, rel_prefix, arc_prefix, depth=0):
+def _excluded_path(rel, exclude_paths):
+    """
+    True si 'rel' (ruta relativa al Cloud, ej. 'Asignaturas/1/apuntes.pdf')
+    coincide con una ruta excluida o vive dentro de una carpeta excluida.
+    """
+    if not exclude_paths:
+        return False
+    parts = rel.split("/") if rel else []
+    for i in range(len(parts), 0, -1):
+        if "/".join(parts[:i]) in exclude_paths:
+            return True
+    return False
+
+
+def _normalize_exclude_paths(value):
+    """
+    Normaliza rutas excluidas (mismas reglas de seguridad que
+    resolve_cloud_sources). Devuelve un conjunto de rutas relativas.
+    La raíz '' no se acepta como exclusión (sería 'no respaldar nada').
+    """
+    if value is None:
+        return set()
+    raw_items = value if isinstance(value, list) else [value]
+    excluded = set()
+    for item in raw_items:
+        p = str(item).strip()
+        if not p:
+            continue
+        if (p.startswith("/") or "\\" in p or ":" in p
+                or "\x00" in p or "~" in p):
+            continue
+        p = p.strip("/")
+        if not p:
+            continue
+        parts = [part.strip() for part in p.split("/") if part.strip() not in ("", ".")]
+        if any(part == ".." or part.startswith(".") for part in parts):
+            continue
+        excluded.add("/".join(parts))
+    return excluded
+
+
+def _walk_cloud_source(root_abs, rel_prefix, arc_prefix, depth=0, exclude_exts=None,
+                       exclude_paths=None):
     """
     Recorre recursivamente una carpeta del Cloud omitiendo ocultos y symlinks
     (un symlink podría apuntar fuera del root). Profundidad acotada.
+
+    exclude_exts: conjunto de extensiones (minúsculas, con punto, ej. {'.tmp'})
+    cuyos archivos se omiten del respaldo.
+
+    exclude_paths: conjunto de rutas relativas al Cloud (ej. {'A/1'}) cuyos
+    archivos y subárboles completos se omiten.
+
+    rel_prefix debe ser la ruta relativa al Cloud del bloque raíz ('' para
+    Mi unidad), para que cada 'rel' generado sea comparable con exclude_paths.
+    Devuelve (entries, skipped_count).
     """
     if depth > MAX_TREE_DEPTH:
-        return []
+        return [], 0
     entries = []
+    skipped = 0
     try:
         for entry in os.scandir(root_abs):
             if entry.name.startswith(".") or entry.is_symlink():
@@ -313,12 +367,22 @@ def _walk_cloud_source(root_abs, rel_prefix, arc_prefix, depth=0):
             rel = os.path.join(rel_prefix, entry.name) if rel_prefix else entry.name
             arc = os.path.join(arc_prefix, entry.name) if arc_prefix else entry.name
             if entry.is_file():
+                if (exclude_exts and os.path.splitext(entry.name)[1].lower() in exclude_exts) \
+                        or _excluded_path(rel, exclude_paths):
+                    skipped += 1
+                    continue
                 entries.append((arc, entry.path))
             elif entry.is_dir():
-                entries.extend(_walk_cloud_source(entry.path, rel, arc, depth + 1))
+                if _excluded_path(rel, exclude_paths):
+                    skipped += 1
+                    continue
+                sub_entries, sub_skipped = _walk_cloud_source(
+                    entry.path, rel, arc, depth + 1, exclude_exts, exclude_paths)
+                entries.extend(sub_entries)
+                skipped += sub_skipped
     except OSError:
         pass
-    return entries
+    return entries, skipped
 
 
 # ---------------------------------------------------------------------------
@@ -415,8 +479,41 @@ def _stream_worker(zip_path, entries, manifest_json, user_id, dest_mode, cloud_p
             pass
 
 
+def _normalize_exclude_exts(value):
+    """
+    Normaliza una lista de extensiones excluidas (defensa en profundidad).
+
+    Acepta: lista o cadena separada por comas. Cada ítem puede venir como
+    ".tmp", "tmp" o "*.tmp". Devuelve un conjunto de extensiones minúsculas
+    con punto ({"", ".tmp"}). Rechaza ítems con separadores, NUL o comodines
+    distintos de un único '*' inicial. Máximo 30 extensiones.
+    """
+    if value is None:
+        return set()
+    raw_items = value if isinstance(value, list) else str(value).split(",")
+    exts = set()
+    for item in raw_items:
+        item = str(item).strip().lower()
+        if not item:
+            continue
+        if item.startswith("*."):
+            item = item[1:]
+        if not item.startswith("."):
+            item = "." + item
+        if len(item) > 13:
+            continue
+        if not re.match(r"^\.[a-z0-9][a-z0-9_-]*$", item):
+            continue
+        exts.add(item)
+        if len(exts) >= 30:
+            break
+    return exts
+
+
 def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_type,
-                         zip_name, q, cancel_event):
+                         zip_name, q, cancel_event, exclude_exts=None, exclude_paths=None):
+    exclude_exts = _normalize_exclude_exts(exclude_exts)
+    exclude_paths = _normalize_exclude_paths(exclude_paths)
     try:
         resolved = resolve_cloud_sources(user_id, source_paths)
         if not resolved:
@@ -442,20 +539,37 @@ def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_ty
             kept.append((rel_path, abs_path))
 
         all_files = []
+        skipped_by_exclusion = 0
         for rel_path, abs_path in kept:
             if cancel_event.is_set():
                 raise _BackupCancelled()
             if os.path.isfile(abs_path):
                 # Archivo individual: conserva su ruta relativa en el ZIP
                 # (Asignaturas/1/apuntes.pdf) para no perder estructura y
-                # evitar colisiones entre archivos homónimos.
+                # evitar colisiones entre archivos homónimos. Los archivos
+                # elegidos uno a uno se incluyen siempre salvo que estén
+                # excluidos explícitamente por el usuario.
+                if _excluded_path(rel_path, exclude_paths):
+                    skipped_by_exclusion += 1
+                    continue
                 all_files.append((rel_path, abs_path))
             elif os.path.isdir(abs_path):
+                if _excluded_path(rel_path, exclude_paths):
+                    skipped_by_exclusion += 1
+                    continue
                 folder_name = "Mi unidad" if rel_path == "" else (os.path.basename(abs_path) or "raiz")
-                all_files.extend(_walk_cloud_source(abs_path, "", folder_name, 0))
+                walked, walked_skipped = _walk_cloud_source(
+                    abs_path, rel_path, folder_name, 0, exclude_exts, exclude_paths)
+                all_files.extend(walked)
+                skipped_by_exclusion += walked_skipped
             else:
                 _qput(q, {"type": "progress", "phase": "scan", "current": 0, "total": 0,
                           "file": f"Saltando: {rel_path}"}, cancel_event)
+
+        if skipped_by_exclusion:
+            _qput(q, {"type": "progress", "phase": "scan", "current": 0, "total": 0,
+                      "file": f"{skipped_by_exclusion} elemento(s) omitido(s) por reglas de exclusión."},
+                  cancel_event)
 
         if len(all_files) > MAX_FILES:
             _qput(q, {"type": "progress", "phase": "scan", "current": MAX_FILES, "total": MAX_FILES,
@@ -661,15 +775,24 @@ def cleanup_old_temp():
         pass
 
 
-def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path, backup_type="full"):
+def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path,
+                               backup_type="full", exclude_exts=None, exclude_paths=None):
     """
     Generador SSE que respalda carpetas/archivos del Cloud del usuario.
+
+    exclude_exts: lista de extensiones (".tmp", "log", "*.zip", ...) que se
+    omitirán del contenido de las carpetas marcadas.
+
+    exclude_paths: lista de rutas relativas al Cloud ('Asignaturas/1') cuyos
+    archivos y subárboles se omiten del respaldo (ganan sobre la inclusión).
 
     Todo el trabajo pesado (recorrido + compresión) ocurre en un hilo
     secundario; este generador solo drena eventos y emite heartbeats, por lo
     que el event loop de gevent/eventlet sigue atendiendo pings y peticiones.
     """
     backup_type = normalize_backup_type(backup_type)
+    exclude_set = _normalize_exclude_exts(exclude_exts)
+    exclude_paths_set = _normalize_exclude_paths(exclude_paths)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_name = f"backup_{backup_type}_{timestamp}.zip"
@@ -680,7 +803,7 @@ def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path, bac
     q = queue.Queue(maxsize=256)
     future = _BACKUP_EXECUTOR.submit(
         _cloud_stream_worker, user_id, source_paths, dest_mode, cloud_path,
-        backup_type, zip_name, q, cancel_event,
+        backup_type, zip_name, q, cancel_event, exclude_set, exclude_paths_set,
     )
     try:
         yield from _consume_job(q, future, cancel_event, zip_path)
@@ -719,7 +842,11 @@ def run_automated_backup(user_id, cfg):
     cloud_path = cfg.get("cloud_path", "")
     backup_type = normalize_backup_type(cfg.get("backup_type", "full"))
     limit = cfg.get("copies_limit", 5)
-    events = list(create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path, backup_type))
+    exclude_exts = cfg.get("exclude_exts")
+    exclude_paths = cfg.get("exclude_paths")
+    events = list(create_cloud_backup_stream(
+        user_id, source_paths, dest_mode, cloud_path, backup_type,
+        exclude_exts, exclude_paths))
     last = events[-1] if events else {"type": "error", "message": "Sin eventos"}
     if last.get("type") == "done" and dest_mode == "cloud":
         _enforce_copies_limit(user_id, cloud_path, limit)

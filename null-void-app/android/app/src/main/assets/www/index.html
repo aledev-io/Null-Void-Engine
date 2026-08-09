@@ -3,6 +3,7 @@
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -124,7 +125,7 @@
     }
 
     .conn-card {
-        background: var(--surface); padding: 18px 24px 18px 56px;
+        background: var(--surface); padding: 18px 24px;
         border-radius: 16px; border: 1px solid var(--border);
         display: flex; justify-content: space-between; align-items: center;
         cursor: pointer; transition: all 0.2s; width: 100%;
@@ -133,7 +134,7 @@
     .conn-card.offline { opacity: 0.6; cursor: not-allowed; border-style: dashed; }
     .conn-card.offline:active { transform: none; }
 
-    .conn-info { display: flex; align-items: center; gap: 18px; min-width: 0; flex: 1; margin-right: 16px; }
+    .conn-info { display: flex; align-items: center; gap: 18px; min-width: 0; flex: 1; margin-right: 24px; }
     .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--text-secondary); opacity: 0.4; }
     .status-dot.ok { background: var(--success); opacity: 1; box-shadow: 0 0 8px var(--success); }
     .status-dot.fail { background: var(--error); opacity: 1; box-shadow: 0 0 8px var(--error); }
@@ -142,12 +143,12 @@
 
     .conn-text { min-width: 0; flex: 1; }
     .conn-text h3 { margin: 0; font-size: 1.05rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .conn-text p { margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary); font-family: ui-monospace, monospace; }
+    .conn-text p { margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary); font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .conn-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .conn-actions { display: flex; gap: 12px; flex-shrink: 0; }
     .icon-btn-small {
         background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
-        width: 42px; height: 42px; border-radius: 12px;
+        width: 44px; height: 44px; border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
     }
     .icon-btn-small:active { background: var(--bg); color: var(--error); }
@@ -272,7 +273,7 @@
         <div class="card">
             <div class="form-group">
                 <label for="conn-name" data-i18n="label-name">Nombre de la conexión</label>
-                <input type="text" id="conn-name" maxlength="40" spellcheck="false" oninput="validateAll()">
+                <input type="text" id="conn-name" maxlength="40" spellcheck="false" oninput="validateAll(false)">
                 <div class="field-error" id="name-error"></div>
             </div>
             <div class="form-group">
@@ -284,12 +285,12 @@
             </div>
             <div class="form-group">
                 <label for="address" data-i18n="label-address">Dirección IP o Dominio</label>
-                <input type="text" id="address" placeholder="100.x.x.x" autocapitalize="none" spellcheck="false" oninput="validateAll()">
+                <input type="text" id="address" placeholder="100.x.x.x" autocapitalize="none" spellcheck="false" oninput="validateAll(false)">
                 <div class="field-error" id="address-error"></div>
             </div>
             <div class="form-group">
                 <label for="port" data-i18n="label-port">Puerto de acceso</label>
-                <input type="number" id="port" placeholder="5000" min="1" max="65535" inputmode="numeric" oninput="validateAll()">
+                <input type="number" id="port" placeholder="5000" min="1" max="65535" inputmode="numeric" oninput="validateAll(false)">
                 <div class="field-error" id="port-error"></div>
             </div>
 
@@ -351,7 +352,7 @@
         } catch { return []; }
     }
 
-    function validateAll() {
+    function validateAll(showErrors = true) {
         const nameEl = document.getElementById('conn-name'), addrEl = document.getElementById('address'), portEl = document.getElementById('port');
         const btnSave = document.getElementById('btn-save-conn'), btnTest = document.getElementById('btn-test-conn');
         const name = nameEl.value.trim(), address = (addrEl.value || "").trim(), port = portEl.value.trim();
@@ -363,17 +364,17 @@
             if (err) err.classList.remove('show');
         });
 
-        if (!name) { markInvalid('conn-name', 'name-error', t('err-empty')); valid = false; }
-        if (!address) { markInvalid('address', 'address-error', t('err-empty')); valid = false; }
-        else if (!isValidHost(address)) { markInvalid('address', 'address-error', t('err-address')); valid = false; }
+        if (!name) { if(showErrors) markInvalid('conn-name', 'name-error', t('err-empty')); valid = false; }
+        if (!address) { if(showErrors) markInvalid('address', 'address-error', t('err-empty')); valid = false; }
+        else if (!isValidHost(address)) { if(showErrors) markInvalid('address', 'address-error', t('err-address')); valid = false; }
 
-        if (!port) { markInvalid('port', 'port-error', t('err-empty')); valid = false; }
-        else if (!isValidPort(port)) { markInvalid('port', 'port-error', t('err-port')); valid = false; }
+        if (!port) { if(showErrors) markInvalid('port', 'port-error', t('err-empty')); valid = false; }
+        else if (!isValidPort(port)) { if(showErrors) markInvalid('port', 'port-error', t('err-port')); valid = false; }
 
         if (valid) {
             const fullUrl = buildSafeUrl(selectedProtocol, address, port).replace(/\/$/, '');
             if (connections.some((c, i) => i !== editingIndex && c.url.replace(/\/$/, '') === fullUrl)) {
-                markInvalid('address', 'address-error', t('err-duplicate')); valid = false;
+                if(showErrors) markInvalid('address', 'address-error', t('err-duplicate')); valid = false;
             }
         }
         btnSave.disabled = btnTest.disabled = !valid;
@@ -439,17 +440,35 @@
 
     function onStartClick() { if (connections.length > 0) showList(); else showForm(); }
     function showList() { renderList(); showView('view-list'); }
-    function showForm() { editingIndex = null; applyI18n(); document.getElementById('conn-name').value = ''; document.getElementById('address').value = ''; document.getElementById('port').value = ''; selectProtocol('http://'); validateAll(); showView('view-form'); }
-
-    function editConn(index) {
-        editingIndex = index; const conn = connections[index]; applyI18n();
-        const match = conn.url.match(/^(https?:\/\/)([^:]+):(\d+)$/i);
-        document.getElementById('conn-name').value = conn.name || '';
-        if (match) { selectProtocol(match[1].toLowerCase()); document.getElementById('address').value = match[2]; document.getElementById('port').value = match[3]; }
-        validateAll(); showView('view-form');
+    function showForm() {
+        editingIndex = null;
+        applyI18n();
+        document.getElementById('conn-name').value = '';
+        document.getElementById('address').value = '';
+        document.getElementById('port').value = '';
+        document.getElementById('test-row').style.visibility = 'hidden';
+        selectProtocol('http://');
+        validateAll(false);
+        showView('view-form');
     }
 
-    function selectProtocol(p) { selectedProtocol = p; document.querySelectorAll('.segmented button').forEach(b => b.classList.toggle('selected', b.dataset.protocol === p)); validateAll(); }
+    function editConn(index) {
+        editingIndex = index;
+        const conn = connections[index];
+        applyI18n();
+        document.getElementById('test-row').style.visibility = 'hidden';
+        const match = conn.url.match(/^(https?:\/\/)([^:]+):(\d+)$/i);
+        document.getElementById('conn-name').value = conn.name || '';
+        if (match) {
+            selectProtocol(match[1].toLowerCase());
+            document.getElementById('address').value = match[2];
+            document.getElementById('port').value = match[3];
+        }
+        validateAll(false);
+        showView('view-form');
+    }
+
+    function selectProtocol(p) { selectedProtocol = p; document.querySelectorAll('.segmented button').forEach(b => b.classList.toggle('selected', b.dataset.protocol === p)); validateAll(false); }
 
     function testConnection() {
         if (!validateAll()) return;

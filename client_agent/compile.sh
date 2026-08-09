@@ -1,40 +1,61 @@
 #!/bin/bash
+# =====================================================================
+# Compilación LOCAL del Agente de Escritorio Null-Void Cloud (PySide6/Qt)
+# Genera el ejecutable nativo en client_agent/dist/:
+#   Linux:  Null-Void-Agent-Linux
+#   macOS:  Null-Void-Agent-Mac
+#   Windows: Null-Void-Agent.exe
+#
+# Build bajo demanda: NO forma parte del arranque de Docker.
+# Requiere Python 3.10+ y conexión a Internet (solo la primera vez).
+# =====================================================================
+set -euo pipefail
 
-# =======================================================
-# Script de Compilación para Null-Void Sync Agent
-# =======================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-echo "Iniciando proceso de compilación del Agente de Sincronización..."
-echo "-------------------------------------------------------"
+log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+die() { log "ERROR: $*"; exit 1; }
 
-# 1. Cambiar al directorio del agente (por si se ejecuta desde fuera)
-cd "$(dirname "$0")" || exit 1
+log "Iniciando build del Agente de escritorio Null-Void Cloud..."
 
-# 2. Comprobar/Crear entorno virtual
+# 1. Entorno virtual --------------------------------------------------------
 if [ ! -d "venv" ]; then
-    echo "Creando entorno virtual (venv)..."
+    log "Creando entorno virtual (venv)..."
     python3 -m venv venv
-    if [ $? -ne 0 ]; then
-        echo " Error al crear el entorno virtual. Asegúrate de tener python3-venv instalado."
-        exit 1
-    fi
+fi
+# shellcheck disable=SC1091
+source venv/bin/activate
+PYREF="$SCRIPT_DIR/venv/bin/python"
+
+# 2. Versión de Python ------------------------------------------------------
+if ! "$PYREF" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+    die "Se requiere Python 3.10+ (versión actual: $("$PYREF" --version 2>&1 | cut -d' ' -f2))"
 fi
 
-# 3. Activar entorno virtual
-echo "Activando entorno virtual..."
-. venv/bin/activate
+# 3. Dependencias (idempotente; PyInstaller acotado a la serie 6) -----------
+# El upgrade de pip es tolerante a fallos: sin red, se continúa con el pip existente.
+"$PYREF" -m pip install --upgrade pip >/dev/null 2>&1 || true
+if ! "$PYREF" -m pip install --quiet --disable-pip-version-check \
+        "pyinstaller>=6,<7" requests watchdog urllib3 PySide6 pywebview; then
+    die "No se pudieron instalar las dependencias. Revisa tu conexión a Internet."
+fi
 
-# 4. Instalar dependencias necesarias
-echo "Verificando e instalando dependencias (PyInstaller, Requests, Watchdog)..."
-pip install --upgrade pip > /dev/null 2>&1
-pip install pyinstaller requests watchdog urllib3 pywebview > /dev/null 2>&1
+# 4. Build y empaquetado (propaga el código de salida real de build_agent.py) --
+"$PYREF" build_agent.py
 
-# 5. Ejecutar el script de construcción inteligente
-echo "Ejecutando el compilador (build_agent.py)..."
-python3 build_agent.py
+# 5. Verificación del artefacto ---------------------------------------------
+case "$(uname -s)" in
+    Darwin)      ARTIFACT="dist/Null-Void-Agent-Mac" ;;
+    MINGW*|MSYS*|CYGWIN*) ARTIFACT="dist/Null-Void-Agent.exe" ;;
+    *)           ARTIFACT="dist/Null-Void-Agent-Linux" ;;
+esac
 
-# 6. Desactivar entorno
-deactivate
+[ -f "$ARTIFACT" ] || die "El build reportó éxito pero no se encontró el artefacto: $ARTIFACT"
+chmod +x "$ARTIFACT" 2>/dev/null || true
+SIZE="$(du -h "$ARTIFACT" | cut -f1)"
 
-echo "-------------------------------------------------------"
-echo "Proceso completado. Si todo ha ido bien, tu binario 'nv-agent' está en la carpeta 'client_agent/dist/'"
+log "============================================================="
+log "Build completado con éxito."
+log "Artefacto: client_agent/$ARTIFACT ($SIZE)"
+log "============================================================="

@@ -42,7 +42,11 @@ export function initCalendarWidget() {
         
         const prevLastDay = new Date(year, month, 0).getDate();
         
-        const lang = window.currentLang || localStorage.getItem('lang') || (navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en');
+        let lang = window.currentLang;
+        if (!lang) {
+            try { lang = localStorage.getItem('lang'); } catch (e) { /* noop */ }
+        }
+        if (!lang) lang = navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en';
         const rawMonthName = new Date(year, month, 1).toLocaleString(lang, { month: 'long' });
         const finalMonthName = rawMonthName.charAt(0).toUpperCase() + rawMonthName.slice(1);
         
@@ -148,6 +152,8 @@ export function initCalendarWidget() {
     }
 
     let currentTaskFilter = 'upcoming';
+    let _eventsLoaded = false;
+    let _eventsError = false;
 
     function isEventPassed(ev, todayStr, currentTimeStr) {
         if (!ev.date) return false;
@@ -195,6 +201,16 @@ export function initCalendarWidget() {
         pendingList.innerHTML = '';
 
         if (filteredEvents.length === 0) {
+            // Estados de carga/error explícitos: el widget nunca queda en
+            // blanco ni "a medias" mientras llega la respuesta del servidor.
+            if (!_eventsLoaded) {
+                pendingList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.85rem; display:flex; flex-direction:column; align-items:center; gap:10px;"><div style="width:22px; height:22px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:dashSpin 0.8s linear infinite;"></div>${window.t_dash ? window.t_dash('dash_loading', 'Cargando…') : 'Cargando…'}</div>`;
+                return;
+            }
+            if (_eventsError) {
+                pendingList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.85rem; display:flex; flex-direction:column; align-items:center; gap:10px;"><span>${window.t_dash ? window.t_dash('dash_load_error', 'No se pudieron cargar los eventos.') : 'No se pudieron cargar los eventos.'}</span><button onclick="window.dashRetryEvents()" style="padding:7px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface-hi); color:var(--text-main); cursor:pointer; font-weight:600; font-size:0.78rem;">${window.t_dash ? window.t_dash('dash_retry', 'Reintentar') : 'Reintentar'}</button></div>`;
+                return;
+            }
             const noEventsMsg = window.t_dash ? window.t_dash('dash_no_events', 'Nada aquí') : 'Nada aquí';
             pendingList.innerHTML = `<p style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 0.9rem; margin: auto;">${noEventsMsg}</p>`;
             return;
@@ -246,6 +262,11 @@ export function initCalendarWidget() {
     }
 
     async function fetchEventsImmediately() {
+        // Timeout: si el servidor tarda demasiado en el primer arranque, la
+        // petición se aborta y el widget pasa a un estado de error visible con
+        // reintento, en vez de quedarse bloqueado indefinidamente.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
         try {
             const tokenValue = `; ${document.cookie}`;
             const parts = tokenValue.split('; token=');
@@ -253,7 +274,8 @@ export function initCalendarWidget() {
             if (parts.length === 2) token = parts.pop().split(';').shift();
 
             const res = await fetch('/api/events', {
-                headers: { 'Content-Type': 'application/json', 'X-Token': token }
+                headers: { 'Content-Type': 'application/json', 'X-Token': token },
+                signal: controller.signal
             });
             if (res.ok) {
                 const events = await res.json();
@@ -266,13 +288,31 @@ export function initCalendarWidget() {
                 if (incoming !== localStorage.getItem(key)) {
                     localStorage.setItem(key, incoming);
                 }
+                _eventsLoaded = true;
+                _eventsError = false;
                 renderCalendar();
+                renderPendingTasks();
+            } else {
+                _eventsLoaded = true;
+                _eventsError = true;
                 renderPendingTasks();
             }
         } catch (err) {
+            _eventsLoaded = true;
+            _eventsError = true;
             console.warn('[Calendar Widget] Fetch failed:', err);
+            renderPendingTasks();
+        } finally {
+            clearTimeout(timeout);
         }
     }
+
+    window.dashRetryEvents = function () {
+        _eventsLoaded = false;
+        _eventsError = false;
+        renderPendingTasks();
+        fetchEventsImmediately();
+    };
 
     renderCalendar();
     renderPendingTasks();

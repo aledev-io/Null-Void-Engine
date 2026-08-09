@@ -4,7 +4,82 @@ import time
 from flask import request, jsonify, send_file
 
 ACTIVE_DEVICES = {}
+# AGENT_TOKENS: mantenido por compatibilidad con código que lo importa directamente,
+# pero las operaciones reales usan la DB para sobrevivir a múltiples workers.
 AGENT_TOKENS = {}
+
+
+def _db_store_link_token(token, original_token, username, expires, target_device=""):
+    """Persiste un token de enlace en la base de datos."""
+    from src.core.database import get_db
+    with get_db() as conn:
+        conn.execute("DELETE FROM agent_link_tokens WHERE expires < ?", (time.time(),))
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, target_device, expires, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (token, original_token, username, str(target_device or ''), expires, time.time())
+            )
+        except Exception:
+            # Fallback si la columna target_device aún no existe en la tabla
+            try:
+                conn.execute("ALTER TABLE agent_link_tokens ADD COLUMN target_device TEXT DEFAULT ''")
+                conn.execute(
+                    "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, target_device, expires, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (token, original_token, username, str(target_device or ''), expires, time.time())
+                )
+            except Exception:
+                conn.execute(
+                    "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, expires, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (token, original_token, username, expires, time.time())
+                )
+        conn.commit()
+
+
+def _db_get_link_token(token, consume=False):
+    """Obtiene y opcionalmente consume (elimina) un token de enlace de la DB."""
+    from src.core.database import get_db
+    with get_db() as conn:
+        row = None
+        try:
+            row = conn.execute(
+                "SELECT token, original_token, username, target_device, expires FROM agent_link_tokens WHERE token = ?",
+                (token,)
+            ).fetchone()
+        except Exception:
+            row = conn.execute(
+                "SELECT token, original_token, username, expires FROM agent_link_tokens WHERE token = ?",
+                (token,)
+            ).fetchone()
+
+        if not row:
+            return None
+        if row['expires'] < time.time():
+            conn.execute("DELETE FROM agent_link_tokens WHERE token = ?", (token,))
+            conn.commit()
+            return None
+        if consume:
+            conn.execute("DELETE FROM agent_link_tokens WHERE token = ?", (token,))
+            conn.commit()
+        
+        row_keys = row.keys() if hasattr(row, 'keys') else []
+        return {
+            "original_token": row['original_token'],
+            "username": row['username'],
+            "target_device": row['target_device'] if 'target_device' in row_keys else '',
+            "expires": row['expires'],
+        }
+
+
+def _sanitize_device_name(device):
+    """Limpia el nombre de dispositivo y rechaza intentos de path traversal
+    ('..', prefijo '.') que escaparían del sandbox `.computers`."""
+    raw = str(device or '').strip()
+    safe = "".join([c for c in raw if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+    if not safe:
+        safe = "PC"
+    if '..' in safe or safe.startswith('.'):
+        raise ValueError("Nombre de dispositivo inválido")
+    return safe
 
 
 def get_server_fingerprint(username="", os_name=""):
@@ -44,9 +119,10 @@ def handle_ping(token, username, data):
     os_name = data.get('os', 'Unknown')
     ip = request.remote_addr
 
-    safe_device = "".join([c for c in device if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-    if not safe_device:
-        safe_device = "PC"
+    try:
+        safe_device = _sanitize_device_name(device)
+    except ValueError:
+        return jsonify(error="Acceso denegado"), 403
 
     user_root = _get_user_root_by_username(username)
     if not user_root:
@@ -86,9 +162,10 @@ def handle_ping(token, username, data):
 
 def handle_disconnect(token, username, data):
     device = data.get('device', 'Mi Dispositivo').strip()
-    safe_device = "".join([c for c in device if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-    if not safe_device:
-        safe_device = "PC"
+    try:
+        safe_device = _sanitize_device_name(device)
+    except ValueError:
+        return jsonify(error="Acceso denegado"), 403
 
     from src.core.database import get_db
     with get_db() as conn:
@@ -104,14 +181,18 @@ def handle_disconnect(token, username, data):
 def handle_changes(token, username, data):
     device = data.get('device', 'Mi Dispositivo').strip()
     os_name = data.get('os', 'Unknown')
-    safe_device = "".join([c for c in device if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-    if not safe_device:
-        safe_device = "PC"
+    try:
+        safe_device = _sanitize_device_name(device)
+    except ValueError:
+        return jsonify(error="Acceso denegado"), 403
 
     user_root = _get_user_root_by_username(username)
     if not user_root:
         return jsonify(error="User not found"), 404
-    device_dir = os.path.normpath(os.path.join(user_root, '.computers', safe_device))
+    computers_root = os.path.realpath(os.path.join(user_root, '.computers'))
+    device_dir = os.path.realpath(os.path.join(computers_root, safe_device))
+    if os.path.commonpath([computers_root, device_dir]) != computers_root:
+        return jsonify(error="Acceso denegado"), 403
 
     if not os.path.exists(device_dir):
         return jsonify(files={}, dirs=[])
@@ -138,17 +219,21 @@ def handle_changes(token, username, data):
 
 
 def handle_download(token, username):
-    device = request.args.get('device', '').strip()
-    safe_device = "".join([c for c in device if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+    try:
+        safe_device = _sanitize_device_name(request.args.get('device', ''))
+    except ValueError:
+        return jsonify(error="Acceso denegado"), 403
     rel_path = request.args.get('path', '').replace('\\', '/').lstrip('/')
 
     user_root = _get_user_root_by_username(username)
     if not user_root:
         return jsonify(error="User not found"), 404
-    device_dir = os.path.normpath(os.path.join(user_root, '.computers', safe_device))
-    target = os.path.normpath(os.path.join(device_dir, rel_path))
-
-    if not target.startswith(device_dir):
+    computers_root = os.path.realpath(os.path.join(user_root, '.computers'))
+    device_dir = os.path.realpath(os.path.join(computers_root, safe_device))
+    if os.path.commonpath([computers_root, device_dir]) != computers_root:
+        return jsonify(error="Acceso denegado"), 403
+    target = os.path.realpath(os.path.join(device_dir, rel_path))
+    if os.path.commonpath([device_dir, target]) != device_dir:
         return jsonify(error="Acceso denegado"), 403
     if not os.path.isfile(target):
         return jsonify(error="Archivo no encontrado"), 404
@@ -156,36 +241,154 @@ def handle_download(token, username):
     return send_file(target, as_attachment=True, download_name=os.path.basename(target))
 
 
-def handle_generate_token(token, username):
-    temp_token = secrets.token_hex(16)
-    current_time = time.time()
-    expired = [k for k, v in AGENT_TOKENS.items() if v["expires"] < current_time]
-    for k in expired:
-        del AGENT_TOKENS[k]
+def handle_list_devices(data):
+    """Dado un temp_token válido (no consumido), devuelve los PCs registrados del usuario."""
+    import logging
+    temp_token = data.get("temp_token")
+    if not temp_token:
+        return jsonify(error="Token inválido o expirado."), 401
 
-    AGENT_TOKENS[temp_token] = {"original_token": token, "expires": current_time + 300, "username": username}
-    return jsonify(temp_token=temp_token)
+    token_data = _db_get_link_token(temp_token, consume=False)
+    if not token_data:
+        return jsonify(error="Token inválido o expirado."), 401
+
+    username = token_data["username"]
+    target_device = token_data.get("target_device", "")
+    from src.core.database import get_db
+    try:
+        with get_db() as conn:
+            user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (username,)).fetchone()
+            if not user_row:
+                return jsonify(devices=[], username=username, target_device=target_device), 200
+            uid = user_row['user_id']
+            rows = conn.execute(
+                "SELECT name, os, last_seen FROM cloud_devices WHERE user_id = ? ORDER BY last_seen DESC",
+                (uid,)
+            ).fetchall()
+            devices = [{"name": r["name"], "os": r["os"] or "Unknown", "last_seen": r["last_seen"]} for r in rows]
+    except Exception as exc:
+        logging.exception("handle_list_devices error")
+        return jsonify(error=f"Error interno: {exc}"), 500
+    return jsonify(devices=devices, username=username, target_device=target_device)
+
+
+def _db_get_user_from_device_token(token):
+    """Resuelve (user_id, username) desde el token Bearer de un dispositivo vinculado."""
+    from src.core.database import get_db
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT u.user_id, u.username FROM cloud_device_tokens t "
+            "JOIN cloud_devices d ON t.device_id = d.id "
+            "JOIN users u ON d.user_id = u.user_id WHERE t.token = ?",
+            (token,)
+        ).fetchone()
+
+
+def handle_my_devices(bearer_token):
+    """Lista los dispositivos del usuario autenticado por el token de dispositivo (Bearer).
+
+    A diferencia de handle_list_devices (que exige un temp_token de enlace), este
+    endpoint usa el token persistente que el agente ya guarda en su configuración,
+    permitiendo refrescar la lista de PCs sin pedir un token nuevo.
+    """
+    if not bearer_token:
+        return jsonify(error="No autorizado"), 401
+    row = _db_get_user_from_device_token(bearer_token)
+    if not row:
+        return jsonify(error="No autorizado"), 401
+    uid, username = row["user_id"], row["username"]
+    from src.core.database import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT name, os, last_seen FROM cloud_devices WHERE user_id = ? ORDER BY last_seen DESC",
+            (uid,)
+        ).fetchall()
+    devices = [{"name": r["name"], "os": r["os"] or "Unknown", "last_seen": r["last_seen"]} for r in rows]
+    return jsonify(devices=devices, username=username, target_device="")
+
+
+def handle_generate_token(token, username, target_device=""):
+    from src.core.database import get_db
+    now = time.time()
+    
+    # Buscar si ya existe un token activo vigente para este usuario y target_device
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT token, expires, target_device FROM agent_link_tokens WHERE username = ? AND expires > ? AND target_device = ? ORDER BY expires DESC LIMIT 1",
+            (username, now, str(target_device or ''))
+        ).fetchone()
+        
+        if not row:
+            # Si no hay uno específico, buscar si hay cualquier token activo del usuario
+            row = conn.execute(
+                "SELECT token, expires, target_device FROM agent_link_tokens WHERE username = ? AND expires > ? ORDER BY expires DESC LIMIT 1",
+                (username, now)
+            ).fetchone()
+
+        if row:
+            remaining = int(row['expires'] - now)
+            if remaining > 5:
+                return jsonify(
+                    temp_token=row['token'],
+                    remaining_seconds=remaining,
+                    reused=True,
+                    target_device=row['target_device']
+                )
+
+    # Si no hay ningún token activo válido, crear uno nuevo con 300s (5 minutos)
+    temp_token = secrets.token_hex(16)
+    expires = now + 300
+    _db_store_link_token(temp_token, token, username, expires, target_device=target_device)
+    AGENT_TOKENS[temp_token] = {"original_token": token, "expires": expires, "username": username, "target_device": target_device}
+    return jsonify(temp_token=temp_token, remaining_seconds=300, reused=False, target_device=target_device)
+
+
+USED_TOKENS = {}
+
+def handle_check_token_status(data):
+    """Comprueba si un temp_token específico o su target_device ya fue consumido por la app."""
+    temp_token = data.get("temp_token")
+    target_device = data.get("target_device", "")
+    
+    if temp_token and temp_token in USED_TOKENS:
+        return jsonify(used=True, active=False, device_name=USED_TOKENS[temp_token].get("device_name", ""))
+    
+    # Comprobar si hay algún consumo reciente registrado para target_device o por cualquier token en los últimos 3 minutos
+    now = time.time()
+    for tok, info in list(USED_TOKENS.items()):
+        if now - info.get("used_at", 0) < 180:
+            dev_n = info.get("device_name", "")
+            if target_device and dev_n.lower() == target_device.lower():
+                return jsonify(used=True, active=False, device_name=dev_n)
+
+    token_data = _db_get_link_token(temp_token, consume=False)
+    if not token_data:
+        # Si el token ya no existe en la DB y tampoco está activo, es porque fue consumido
+        return jsonify(used=True, active=False, device_name=target_device or "")
+    return jsonify(used=False, active=True)
 
 
 def handle_register(data):
     temp_token = data.get("temp_token")
-    if not temp_token or temp_token not in AGENT_TOKENS:
-        return jsonify(error="Token temporal inválido o expirado. Vuelve a generar el comando desde la interfaz."), 401
+    if not temp_token:
+        return jsonify(error="Token de enlace inválido o no proporcionado."), 401
 
-    token_data = AGENT_TOKENS.pop(temp_token)
-    if token_data["expires"] < time.time():
-        return jsonify(error="Token temporal expirado."), 401
+    token_data = _db_get_link_token(temp_token, consume=True)
+    if not token_data:
+        return jsonify(error="El token de enlace ha expirado o es inválido. Genera uno nuevo desde el panel web."), 401
 
-    original_token = token_data["original_token"]
     user_name = token_data["username"]
 
-    device = data.get('device', 'Mi Dispositivo').strip()
+    # Si el cliente envía un device_name explícito (seleccionado desde la lista), usarlo directamente
+    explicit_device = data.get('device_name', '').strip()
+    device = explicit_device or data.get('device', 'Mi Dispositivo').strip()
     os_name = data.get('os', 'Unknown')
     ip = request.remote_addr
 
-    safe_device = "".join([c for c in device if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-    if not safe_device:
-        safe_device = "PC"
+    try:
+        safe_device = _sanitize_device_name(device)
+    except ValueError:
+        return jsonify(error="Acceso denegado"), 403
 
     device_token = secrets.token_urlsafe(32)
     
@@ -195,10 +398,19 @@ def handle_register(data):
         if user_row:
             uid = user_row['user_id']
             
-            count_row = conn.execute("SELECT COUNT(*) as c FROM cloud_devices WHERE user_id = ?", (uid,)).fetchone()
-            pc_count = count_row['c'] if count_row else 0
-            safe_device = f"{user_name}-PC{pc_count + 1}"
+            if explicit_device:
+                # Usar nombre exacto solicitado por el cliente
+                pass
+            elif device and device != 'Mi Dispositivo' and device.startswith(f"{user_name}-PC"):
+                safe_device = device
+            else:
+                count_row = conn.execute("SELECT COUNT(*) as c FROM cloud_devices WHERE user_id = ?", (uid,)).fetchone()
+                pc_count = count_row['c'] if count_row else 0
+                safe_device = f"{user_name}-PC{pc_count + 1}"
             
+            # Guardar estado de token usado para notificar a la web
+            USED_TOKENS[temp_token] = {"device_name": safe_device, "used_at": time.time()}
+
             dev = conn.execute("SELECT id FROM cloud_devices WHERE user_id = ? AND name = ?", (uid, safe_device)).fetchone()
             if dev:
                 device_id = dev['id']
@@ -213,7 +425,7 @@ def handle_register(data):
                 (device_token, device_id, time.time()))
             conn.commit()
 
-    return jsonify(device_token=device_token, device_name=safe_device, server_fingerprint=get_server_fingerprint(user_name, os_name))
+    return jsonify(device_token=device_token, device_name=safe_device, username=user_name, server_fingerprint=get_server_fingerprint(user_name, os_name))
 
 
 def _build_agent_script(server_url, token, device_name):

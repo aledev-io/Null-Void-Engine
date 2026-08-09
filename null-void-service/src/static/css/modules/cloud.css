@@ -106,6 +106,25 @@
     white-space: nowrap;
 }
 
+/* Contenedor de iconos SVG: caja cuadrada 1:1 que nunca se comprime ni se
+   recorta (la regla anterior aplicaba overflow:hidden a TODOS los span y, al
+   estrecharse la columna en móvil, aplastaba el icono hasta una franja). */
+.cloud-file-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+}
+
+.cloud-file-icon svg {
+    display: block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+}
+
 .cloud-info-panel {
     width: 320px;
     background: var(--bg-card);
@@ -393,6 +412,8 @@
     transition: opacity 0.2s, transform 0.2s;
     border-radius: 4px;
     border: 1.5px solid var(--text-muted);
+    flex-shrink: 0;
+    transform-origin: left center;
 }
 
 .cloud-file-row:hover .cloud-file-checkbox,
@@ -480,7 +501,19 @@
 .cloud-folder-row-icon {
     font-size: 1.25rem;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25em;
+    height: 1.25em;
     line-height: 1;
+}
+
+.cloud-folder-row-icon svg {
+    display: block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
 }
 
 .cloud-folder-row-name {
@@ -571,7 +604,19 @@
 .cloud-file-card-icon {
     font-size: 1.1rem;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1em;
+    height: 1.1em;
     line-height: 1;
+}
+
+.cloud-file-card-icon svg {
+    display: block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
 }
 
 .cloud-file-card-name {

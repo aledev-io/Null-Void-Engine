@@ -12,11 +12,16 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <!-- PERMISSIONS -->
+    <!-- SOLO lo necesario: cámara y micro sólo si la web los pide (voz del chat/AI). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- NOTA: sin permisos de almacenamiento/medios. El selector de archivos usa
+         el SAF de Android, que concede acceso por documento sin permisos. -->
 
     <application
         android:allowBackup="true"

@@ -1,10 +1,14 @@
 import os
 import sys
+import glob
+import logging
 from functools import wraps
 from flask import Blueprint, jsonify, request, send_file
 from modules.session import session as sess
 from core.socket_ext import socketio
 from . import services, repository
+
+logger = logging.getLogger("NullVoidCloud")
 
 service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
 if service_dir not in sys.path:
@@ -12,7 +16,10 @@ if service_dir not in sys.path:
 
 import sync_agent
 
+from core.limiter import limiter
+
 cloud_bp = Blueprint('cloud', __name__, url_prefix='/api/cloud')
+limiter.exempt(cloud_bp)
 
 
 def get_user_from_token(token):
@@ -95,7 +102,8 @@ def upload_file():
     if size > MAX_SIZE:
         return jsonify(error="El archivo supera el límite de 50GB"), 413
         
-    ok, err = services.upload_file(view, subpath, request.user_token, file)
+    overwrite = request.form.get('overwrite') == 'true' or request.args.get('overwrite') == 'true'
+    ok, err = services.upload_file(view, subpath, request.user_token, file, overwrite_existing=overwrite)
     if ok is None:
         return jsonify(error="Acceso denegado"), 403
     if err:
@@ -281,7 +289,7 @@ def toggle_protect():
     
     ok, is_prot = services.toggle_protect(name, subpath, view, request.user_token)
     if not ok:
-        return jsonify(error="Error"), 400
+        return jsonify(error=is_prot if isinstance(is_prot, str) else "Error al cambiar el estado de protección"), 400
     return jsonify(ok=True, is_protected=is_prot)
 
 
@@ -317,7 +325,10 @@ def quota_manager():
 @cloud_bp.route('/admin/quota_requests', methods=['GET', 'POST'])
 @login_required
 def admin_quota_requests():
-    if request.username != 'admin':
+    # Autorización por rol/permiso explícito (columna `role` de users),
+    # no por coincidencia del nombre de usuario.
+    if not repository.is_admin(request.user_id):
+        logger.warning(f"[SECURITY][ALERT] Acceso admin denegado para user_id={request.user_id}")
         return jsonify(error="No autorizado"), 403
         
     if request.method == 'GET':
@@ -402,8 +413,13 @@ def search_files():
 @login_required
 def get_folders_tree():
     view = request.args.get('view', 'drive')
-    tree = services.get_folders_tree(view, request.user_token)
-    return jsonify(tree=tree)
+    path = (request.args.get('path', '') or '').strip('/')
+    tree = services.get_folders_tree(view, request.user_token, path=path or None)
+    resp = jsonify(tree=tree)
+    # El árbol se construye por niveles (carga perezosa); nunca cachear la
+    # respuesta o el navegador podría servir un árbol antiguo incompleto.
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @cloud_bp.route('/get_token', methods=['POST'])
@@ -441,6 +457,22 @@ def download_file():
     resp, err = services.download_file(dl_token)
     if resp is None:
         return err or "Token inválido", 403
+    return resp
+
+
+@cloud_bp.route('/stream_video', methods=['GET'])
+def stream_video():
+    dl_token = request.args.get('t')
+    quality = request.args.get('quality', 'original').lower()
+    status_only = request.args.get('status') == '1'
+    available_only = request.args.get('available') == '1'
+    resp, err = services.stream_video(dl_token, quality, status_only, available_only)
+    if resp is None:
+        return err or "Token inválido", 403
+    if isinstance(resp, dict):
+        # available=1: lista de calidades generadas; si no, transcodificación
+        # en curso (el frontend hará polling hasta que el cache esté listo).
+        return jsonify(resp), 200 if available_only else 202
     return resp
 
 
@@ -591,38 +623,44 @@ def download_client_agent():
             '/client_agent'
         ]
         client_agent_dir = next((p for p in possible_paths if os.path.exists(p)), possible_paths[0])
-        
+
         dist_dir = os.path.join(client_agent_dir, 'dist')
-        
         user_agent = request.headers.get('User-Agent', '').lower()
         is_windows = any(w in user_agent for w in ['windows', 'win32', 'win64'])
         is_mac = any(m in user_agent for m in ['macintosh', 'mac os', 'darwin'])
 
-        exe_path = os.path.join(dist_dir, 'Null-Void-Agent.exe')
-        if not os.path.exists(exe_path): exe_path = os.path.join(dist_dir, 'nv-agent.exe')
+        def _first_existing(paths):
+            for p in paths:
+                if p and os.path.exists(p):
+                    return p
+            return None
 
-        mac_path = os.path.join(dist_dir, 'Null-Void-Agent-Mac')
-        if not os.path.exists(mac_path): mac_path = os.path.join(dist_dir, 'nv-agent-mac')
-
-        linux_path = os.path.join(dist_dir, 'Null-Void-Agent-Linux')
-        if not os.path.exists(linux_path): linux_path = os.path.join(dist_dir, 'nv-agent')
-
-        if is_windows and os.path.exists(exe_path):
-            return send_file(exe_path, as_attachment=True, download_name='Null-Void-Agent.exe')
-        elif is_mac and os.path.exists(mac_path):
-            return send_file(mac_path, as_attachment=True, download_name='Null-Void-Agent-Mac')
-        elif os.path.exists(linux_path):
-            dl_name = 'Null-Void-Agent.exe' if is_windows else ('Null-Void-Agent-Mac' if is_mac else 'Null-Void-Agent-Linux')
-            return send_file(linux_path, as_attachment=True, download_name=dl_name)
-        elif os.path.exists(exe_path):
-            return send_file(exe_path, as_attachment=True, download_name='Null-Void-Agent.exe')
+        # Ejecutable nativo de escritorio (PySide6/Qt): nv-agent en Linux,
+        # nv-agent.exe en Windows y nv-agent-mac en macOS. Se compila bajo
+        # demanda con client_agent/compile.sh (no forma parte de Docker).
+        if is_windows:
+            exe = _first_existing([
+                os.path.join(dist_dir, 'Null-Void-Agent.exe'),
+                os.path.join(dist_dir, 'nv-agent.exe')
+            ])
+            if exe:
+                return send_file(exe, as_attachment=True, download_name='Null-Void-Agent.exe')
         else:
-            py_script = os.path.join(client_agent_dir, 'agent.py')
-            if os.path.exists(py_script):
-                return send_file(py_script, as_attachment=True, download_name='nullvoid_sync_agent.py')
+            linux = _first_existing([
+                os.path.join(dist_dir, 'Null-Void-Agent-Linux'),
+                os.path.join(dist_dir, 'nv-agent')
+            ])
+            if linux:
+                return send_file(linux, as_attachment=True, download_name='Null-Void-Agent-Linux')
+
+        # Último recurso: el script del agente (ejecución desde Python).
+        py_script = os.path.join(client_agent_dir, 'agent.py')
+        if os.path.exists(py_script):
+            return send_file(py_script, as_attachment=True, download_name='nullvoid_sync_agent.py')
         return jsonify(error="Agent file not found"), 404
     except Exception as e:
-        return jsonify(error=str(e)), 500
+        logger.error(f"Error sirviendo el cliente de sync: {e}", exc_info=True)
+        return jsonify(error="Error interno al preparar el cliente"), 500
 
 
 @cloud_bp.route('/sync-agent/generate-token', methods=['POST'])
@@ -631,7 +669,42 @@ def sync_agent_generate_token():
     uid, username = get_user_from_token(token)
     if not username:
         return jsonify(error="Unauthorized"), 401
-    return sync_agent.handle_generate_token(token, username)
+    data = request.get_json(silent=True) or {}
+    target_device = data.get("target_device", "")
+    return sync_agent.handle_generate_token(token, username, target_device=target_device)
+
+
+@cloud_bp.route('/sync-agent/check-token-status', methods=['POST'])
+def sync_agent_check_token_status():
+    try:
+        data = request.get_json(silent=True) or {}
+        return sync_agent.handle_check_token_status(data)
+    except Exception as e:
+        import traceback
+        logger.error(f"check-token-status error: {traceback.format_exc()}")
+        return jsonify(used=False, active=False)
+
+
+@cloud_bp.route('/sync-agent/list-devices', methods=['POST'])
+def sync_agent_list_devices():
+    try:
+        data = request.get_json(silent=True) or {}
+        return sync_agent.handle_list_devices(data)
+    except Exception as e:
+        import traceback
+        logger.error(f"list-devices error: {traceback.format_exc()}")
+        return jsonify(error=f"Error interno: {e}"), 500
+
+
+@cloud_bp.route('/sync-agent/my-devices', methods=['POST'])
+def sync_agent_my_devices():
+    """Lista los PCs del usuario autenticado por el token de dispositivo (Bearer)."""
+    try:
+        return sync_agent.handle_my_devices(sync_agent.get_agent_token())
+    except Exception as e:
+        import traceback
+        logger.error(f"my-devices error: {traceback.format_exc()}")
+        return jsonify(error=f"Error interno: {e}"), 500
 
 
 @cloud_bp.route('/sync-agent/register', methods=['POST'])

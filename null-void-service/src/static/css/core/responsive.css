@@ -4,6 +4,7 @@
         left: -260px;
         top: 0;
         height: 100%;
+        height: 100vh;
         height: 100dvh;
         transition: left 0.3s ease;
         z-index: 1000;
@@ -259,8 +260,8 @@
 }
 
 @media (max-width: 900px) {
-    .cloud-sidebar {
-        display: none !important;
+    html, body {
+        overflow-x: hidden !important;
     }
 
     .cloud-table-header,
@@ -314,10 +315,13 @@
 
 @media (max-width: 560px) {
     #notif-modal>div {
-        width: 92% !important;
-        max-width: 360px !important;
-        max-height: 90vh !important;
+        width: 95% !important;
+        max-width: 420px !important;
+        height: auto !important;
+        max-height: 85vh !important;
+        max-height: 85dvh !important;
         border-radius: 12px !important;
+        margin: auto !important;
     }
 }
 

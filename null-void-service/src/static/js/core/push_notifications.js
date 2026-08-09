@@ -118,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if user already granted permission, if so, we just subscribe quietly
     // unless they explicitly disabled it in settings
     if (Notification.permission === 'granted') {
-        const isDisabled = localStorage.getItem('nv_notif_push_disabled') === 'true';
+        let isDisabled = false;
+        try { isDisabled = localStorage.getItem('nv_notif_push_disabled') === 'true'; } catch (e) { /* noop */ }
         if (!isDisabled) {
             PushNotifications.init();
         }

@@ -26,7 +26,7 @@ def get_contact_ids(viewer_id: str) -> list[str]:
             FROM chat_group_members
             WHERE user_id = ?
         """, (viewer_id, viewer_id, viewer_id, viewer_id, viewer_id, viewer_id, viewer_id)).fetchall()
-        return [r['contact_id'] for r in rows]
+        return [r['contact_id'] for r in rows if r['contact_id'] and r['contact_id'] != viewer_id]
 
 
 def get_contact_info(contact_id: str):

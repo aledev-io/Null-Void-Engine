@@ -6,6 +6,8 @@ def get_conversations(user_id):
     contact_ids = repository.get_contact_ids(user_id)
     conversations = []
     for cid in contact_ids:
+        if cid == user_id:
+            continue
         contact = repository.get_contact_info(cid)
         if not contact:
             continue
@@ -60,6 +62,8 @@ def get_messages(user_id, contact_id, before, limit):
 def send_message(user_id, receiver_id, message, file_path=None, file_name=None, file_size=None):
     if not receiver_id:
         return None, "receiver_id requerido"
+    if receiver_id == user_id:
+        return None, "No puedes enviarte mensajes a ti mismo"
     if not message and not file_path:
         return None, "Mensaje vacío"
     if message and len(message) > 65536:

@@ -162,11 +162,12 @@ def _send_message_impl():
                     if member_id != user_id and not repository.is_muted(member_id, receiver_id):
                         notifier.notify_chat_message(f"{sender_name} @ {group_info['username']}", member_id, message, file_name, sender_id=receiver_id, image_url=file_url)
         else:
-            socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{result['receiver_id']}")
+            if receiver_id != user_id:
+                socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{result['receiver_id']}")
             socketio.emit('new_message', result, room=f"user_{user_id}")
             
-            # Only notify if the receiver hasn't muted the sender
-            if not repository.is_muted(receiver_id, user_id):
+            # Only notify if receiver is not self and hasn't muted sender
+            if receiver_id != user_id and not repository.is_muted(receiver_id, user_id):
                 file_url = file_path if (file_name and file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))) else None
                 notifier.notify_chat_message(sender_name, receiver_id, message, file_name, sender_id=user_id, image_url=file_url)
     except Exception as ex:

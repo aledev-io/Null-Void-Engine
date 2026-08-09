@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import sys
 import shutil
 import subprocess
 import tempfile
@@ -13,8 +12,9 @@ import fcntl
 import logging
 import hashlib
 import stat
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from flask import request, send_file, after_this_request
+from flask import request, send_file, jsonify, after_this_request
 from modules.session import session as sess
 from config.config import CONFIG
 from . import repository
@@ -29,6 +29,31 @@ os.makedirs(BASE_CLOUD_ROOT, exist_ok=True)
 
 MAX_FILE_SIZE_PREVIEW = 100 * 1024 * 1024
 
+# Transcodificación de vídeo ASÍNCRONA: los archivos grandes (cientos de MB)
+# tardan minutos en transcodificar; hacerlo síncrono en la petición colgaba el
+# worker (Worker graceful timeout) y, al superar el timeout de 120s, caía en
+# silencio al original — el selector de calidad "no cambiaba de resolución".
+# Ahora el trabajo corre en un hilo de fondo, el endpoint responde al instante
+# con 202 {status: processing} y el frontend hace polling hasta que el cache
+# está listo.
+_VIDEO_TRANSCODE_TIMEOUT = int(os.environ.get("VIDEO_TRANSCODE_TIMEOUT", "900"))
+# Límite del caché de vídeo transcodificado (LRU). Al superarlo se eliminan
+# las versiones más antiguas (por mtime); el archivo ORIGINAL de la nube nunca
+# se toca.
+VIDEO_CACHE_MAX_MB = int(os.environ.get("VIDEO_CACHE_MAX_MB", "5120"))
+# Calidad que se genera automáticamente en segundo plano al abrir un vídeo
+# (solo UNA, para no saturar CPU); el resto se genera bajo demanda.
+VIDEO_PREWARM_QUALITY = os.environ.get("VIDEO_PREWARM_QUALITY", "720p").lower()
+VIDEO_QUALITIES = ('2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p')
+VIDEO_HEIGHTS = {'2160p': 2160, '1440p': 1440, '1080p': 1080, '720p': 720,
+                 '480p': 480, '360p': 360, '240p': 240, '144p': 144}
+# 2 workers: si el usuario cambia de calidad rápidamente (p. ej. 360p y luego
+# 720p), ambas transcodificaciones avanzan en paralelo en vez de encolarse.
+_video_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="nv-video")
+_video_jobs = {}
+_video_jobs_lock = threading.Lock()
+_video_cache_checked_at = 0.0
+
 user_size_cache = {}
 cache_lock = threading.Lock()
 CACHE_TTL = 10
@@ -41,7 +66,7 @@ class FileLock:
         self.fd = None
 
     def __enter__(self):
-        self.fd = open(self.path, "w")
+        self.fd = open(self.path, "a")
         try:
             fcntl.flock(self.fd, fcntl.LOCK_EX)
         except OSError:
@@ -99,22 +124,28 @@ def _yield_event_loop():
 
 
 def safe_join(base, *paths):
-    base_abs = os.path.abspath(base)
+    """Une rutas bajo `base` de forma segura. Cada segmento se limpia y
+    normaliza por completo; las secuencias relativas ('.'/'..') que intenten
+    escapar de la base o navegar a carpetas hermanas se rechazan con ValueError."""
+    base_abs = os.path.realpath(os.path.abspath(base))
     current = base_abs
 
     for p in paths:
-        clean_p = str(p).replace('\\', '/').strip('/')
-        if not clean_p or clean_p in ('.', '..'):
-            continue
-            
-        next_path = os.path.abspath(os.path.join(current, clean_p))
-        real_next = os.path.realpath(next_path)
-        
-        if os.path.commonpath([base_abs, real_next]) != base_abs:
-            logger.error(f"[SECURITY][ALERT] Intento de escape perimetral hacia: {real_next}")
-            raise ValueError("Acceso denegado: Violación de aislamiento de ruta lúdica")
-            
-        current = real_next
+        for seg in str(p).replace('\\', '/').split('/'):
+            seg = seg.strip()
+            if not seg:
+                continue
+            if seg in ('.', '..'):
+                logger.error(f"[SECURITY][ALERT] Intento de escape perimetral hacia: {seg}")
+                raise ValueError("Acceso denegado: Violación de aislamiento de ruta lúdica")
+
+            next_path = os.path.realpath(os.path.abspath(os.path.join(current, seg)))
+
+            if os.path.commonpath([base_abs, next_path]) != base_abs:
+                logger.error(f"[SECURITY][ALERT] Intento de escape perimetral hacia: {next_path}")
+                raise ValueError("Acceso denegado: Violación de aislamiento de ruta lúdica")
+
+            current = next_path
 
     return current
 
@@ -138,34 +169,78 @@ def _unique_path(path):
 def require_access(user_id, owner_id=None, file_name=None):
     if owner_id and str(owner_id) != str(user_id):
         if not file_name or not repository.is_shared_with_user(owner_id, user_id, file_name):
-            sys.stderr.write(f"[SECURITY][WARN] IDOR Interceptado: Usuario {user_id} intentó acceder a recurso de {owner_id}\n")
+            logger.warning(f"[SECURITY][WARN] IDOR Interceptado: Usuario {user_id} intentó acceder a recurso de {owner_id}")
             raise PermissionError("Acceso denegado a este recurso")
 
 
+def _reject_relative_segments(subpath, name):
+    """Rechaza secuencias relativas ('.'/'..') en rutas de recursos compartidos."""
+    for seg in (subpath or '').replace('\\', '/').split('/'):
+        if seg in ('.', '..'):
+            raise PermissionError("Acceso denegado a este recurso")
+    if name:
+        for seg in str(name).replace('\\', '/').split('/'):
+            if seg in ('.', '..'):
+                raise PermissionError("Acceso denegado a este recurso")
+
+
+def _join_shared_child(shared_base, subpath, name):
+    """Resuelve un descendiente del recurso compartido garantizando que el
+    resultado quede estrictamente dentro del sandbox del recurso (shared_base)."""
+    if not os.path.isdir(shared_base):
+        raise PermissionError("Acceso denegado a este recurso")
+    _reject_relative_segments(subpath, name)
+    try:
+        return safe_join(shared_base, subpath, name)
+    except ValueError:
+        raise PermissionError("Acceso denegado a este recurso")
+
+
 def resolve_shared_path(current_uid, owner_id, name, subpath):
-    parts = subpath.strip('/').split('/') if subpath else []
+    _reject_relative_segments(subpath, name)
+
+    clean_subpath = (subpath or '').strip('/')
+    parts = clean_subpath.split('/') if clean_subpath else []
     if parts and parts[0]:
         top_name = parts[0]
         rest_path = '/'.join(parts[1:])
     else:
         top_name = name
         rest_path = ''
-        
+
+    owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, str(owner_id)))
+
+    # 1) Recurso compartido = el archivo EXACTO solicitado (p. ej. se compartió
+    #    'Subcarpeta/video.mp4'): el registro guarda el nombre del archivo y su
+    #    ruta; se verifica AMBOS (normalizados sin slashes iniciales/finales).
+    exact = repository.get_shared_item(owner_id, current_uid, name)
+    if exact:
+        exact_path = (exact.get('file_path') or '').strip('/')
+        if exact_path == clean_subpath:
+            base = owner_root
+            if exact.get('view') == 'computers':
+                base = os.path.realpath(os.path.join(owner_root, '.computers'))
+            return safe_join(base, exact_path, exact['file_name'])
+
+    # 2) Recurso compartido = la carpeta (primer segmento de la ruta): el
+    #    receptor navega dentro del sandbox de esa carpeta compartida.
     shared_item = repository.get_shared_item(owner_id, current_uid, top_name)
     if not shared_item:
-        sys.stderr.write(f"[SECURITY][WARN] IDOR Interceptado: Usuario {current_uid} intentó acceder a recurso de {owner_id}\n")
+        logger.warning(f"[SECURITY][WARN] IDOR Interceptado: Usuario {current_uid} intentó acceder a recurso de {owner_id}")
         raise PermissionError("Acceso denegado a este recurso")
-        
-    owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, owner_id))
+
     if shared_item['view'] == 'computers':
         owner_root = os.path.realpath(os.path.join(owner_root, '.computers'))
-        
+
+    # Raíz canónica del recurso compartido: único sandbox al que tiene acceso el receptor
+    shared_base = safe_join(owner_root, (shared_item.get('file_path') or '').strip('/'), shared_item['file_name'])
+
     if rest_path:
-        return safe_join(owner_root, shared_item['file_path'], shared_item['file_name'], rest_path, name)
+        return _join_shared_child(shared_base, rest_path, name)
     elif top_name == name:
-        return safe_join(owner_root, shared_item['file_path'], shared_item['file_name'])
+        return shared_base
     else:
-        return safe_join(owner_root, shared_item['file_path'], shared_item['file_name'], name)
+        return _join_shared_child(shared_base, '', name)
 
 def get_token():
     if hasattr(request, 'user_token'):
@@ -180,13 +255,13 @@ def get_token():
 
 def _resolve_shared_or_recent_path(current_uid, owner_id, name, subpath, view):
     if view in ('home', 'recent'):
+        _reject_relative_segments(subpath, name)
         owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, str(owner_id)))
-        fp = safe_join(owner_root, subpath, name)
         shared_in_path, inherited = repository.get_shares_in_path(owner_id, subpath)
         combined = shared_in_path.get(name, list(inherited))
         if not any(str(s['shared_with']) == str(current_uid) for s in combined):
             raise PermissionError("Acceso denegado")
-        return fp
+        return safe_join(owner_root, subpath, name)
     return resolve_shared_path(current_uid, owner_id, name, subpath)
 
 
@@ -214,6 +289,44 @@ def get_user_root(token=None):
     if not safe_uid:
         safe_uid = "unknown"
     return safe_join(BASE_CLOUD_ROOT, safe_uid)
+
+
+def find_protected_ancestor(protected_data, view, subpath, name):
+    """ Devuelve la carpeta protegida más cercana que contiene al elemento (o None). """
+    if not protected_data:
+        return None
+    subpath = (subpath or '').strip('/')
+    parts = (subpath.split('/') if subpath else []) + [name]
+    for i in range(len(parts)):
+        entry = {"name": parts[i], "path": '/'.join(parts[:i]), "view": view}
+        if entry in protected_data:
+            return entry
+    return None
+
+
+def is_item_protected(protected_data, view, subpath, name):
+    """ Un elemento está protegido si lo está él mismo o cualquiera de sus carpetas padre. """
+    if not protected_data:
+        return False
+    subpath = (subpath or '').strip('/')
+    parts = (subpath.split('/') if subpath else []) + [name]
+    for i in range(len(parts)):
+        ancestor = {"name": parts[i], "path": '/'.join(parts[:i]), "view": view}
+        if ancestor in protected_data:
+            return True
+    return False
+
+
+def resolve_protect_view(base_root, view, subpath, name):
+    """ Normaliza vistas ambiguas (home/starred/recent/'') a la vista física real. """
+    if view in ('home', 'starred', 'recent', '', None):
+        subpath = (subpath or '').strip('/')
+        if name and os.path.exists(os.path.join(base_root, subpath, name)):
+            return 'drive'
+        if name and os.path.exists(os.path.join(base_root, '.computers', subpath, name)):
+            return 'computers'
+        return 'drive'
+    return view
 
 
 def get_view_root(view='drive', token=None):
@@ -244,7 +357,6 @@ def get_dir_size(path):
         if cache and now - cache["time"] < CACHE_TTL:
             return cache["value"]
 
-    # Si expiró el TTL, hacemos el walk físico
     total = 0
     if os.path.exists(path):
         for dirpath, _, filenames in os.walk(path):
@@ -259,6 +371,25 @@ def get_dir_size(path):
     with cache_lock:
         user_size_cache[user_id] = {"value": total, "time": now}
         
+    return total
+
+
+def get_folder_size_fast(folder_path):
+    """Calcula recursivamente el tamaño total acumulado de los archivos dentro de una carpeta."""
+    total = 0
+    if os.path.exists(folder_path) and os.path.isdir(folder_path):
+        try:
+            with os.scandir(folder_path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            total += get_folder_size_fast(entry.path)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
     return total
 
 
@@ -280,7 +411,7 @@ def _load_json(user_root, filename):
                 with open(path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
-                sys.stderr.write(f"[OPERATIONAL][ERROR] Error al leer metadatos {filename}: {e}\n")
+                logger.error(f"[OPERATIONAL][ERROR] Error al leer metadatos {filename}: {e}")
                 return []
     return []
 
@@ -296,7 +427,7 @@ def _save_json(user_root, filename, data):
                 json.dump(data, f, ensure_ascii=False, indent=2)
             os.replace(tmp_path, path)
         except OSError as e:
-            sys.stderr.write(f"[OPERATIONAL][CRITICAL] Fallo de IO/Disco al guardar {filename}: {e}\n")
+            logger.error(f"[OPERATIONAL][CRITICAL] Fallo de IO/Disco al guardar {filename}: {e}")
             if os.path.exists(tmp_path):
                 try:
                     os.remove(tmp_path)
@@ -396,12 +527,12 @@ def list_recent(token):
 
         recent_files.append({
             "name": act['name'], "path": act['path'],
-            "is_dir": os.path.isdir(fp), "size": info.st_size,
+            "is_dir": os.path.isdir(fp), "size": get_folder_size_fast(fp) if os.path.isdir(fp) else info.st_size,
             "mtime": info.st_mtime, "ext": os.path.splitext(act['name'])[1].lower(),
             "owner": owner_name, "owner_id": owner_id,
             "action_type": act['action'], "action_time": act['time'],
             "starred": is_item_starred,
-            "protected": {"name": act['name'], "path": act['path'], "view": item_view} in protected_data,
+            "protected": is_item_protected(protected_data, item_view, act['path'], act['name']),
             "view": item_view,
             "shared": len(shared_users) > 0,
             "shared_with": shared_users,
@@ -441,7 +572,7 @@ def list_files(view, subpath, token):
     try:
         entries = os.listdir(target_path)
     except OSError as e:
-        sys.stderr.write(f"[OPERATIONAL][ERROR] No se pudo leer el directorio {target_path}: {e}\n")
+        logger.error(f"[OPERATIONAL][ERROR] No se pudo leer el directorio {target_path}: {e}")
         return None, subpath
 
     shared_in_path, inherited_shares = repository.get_shares_in_path(current_uid, subpath)
@@ -455,7 +586,7 @@ def list_files(view, subpath, token):
                 continue
             is_dir = os.path.isdir(fp)
             info = os.stat(fp)
-            is_protected = {"name": name, "path": subpath, "view": view} in protected_data
+            is_protected = is_item_protected(protected_data, resolve_protect_view(base_root, view, subpath, name), subpath, name)
             active_status = False
             if view == 'computers' and subpath == '':
                 is_protected = True
@@ -479,15 +610,16 @@ def list_files(view, subpath, token):
                         break
 
             shared_users = shared_in_path.get(name, list(inherited_shares))
+            item_size = get_folder_size_fast(fp) if is_dir else info.st_size
             files.append({
-                "name": name, "path": subpath, "is_dir": is_dir, "size": info.st_size,
+                "name": name, "path": subpath, "is_dir": is_dir, "size": item_size,
                 "mtime": info.st_mtime, "owner": "Yo", "owner_id": current_uid,
                 "ext": os.path.splitext(name)[1].lower(),
                 "protected": is_protected, "starred": is_starred, "active": active_status,
                 "shared": len(shared_users) > 0, "shared_with": shared_users,
             })
         except OSError as e:
-            sys.stderr.write(f"[OPERATIONAL][WARN] Error al leer metadatos del archivo {name}: {e}\n")
+            logger.warning(f"[OPERATIONAL][WARN] Error al leer metadatos del archivo {name}: {e}")
             continue
 
     files.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
@@ -518,7 +650,7 @@ def list_trash(token, user_root):
     return files, ''
 
 
-def upload_file(view, subpath, token, file_storage):
+def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
     user_root = get_view_root(view, token)
     if not user_root:
         return None, None
@@ -554,8 +686,14 @@ def upload_file(view, subpath, token, file_storage):
     except ValueError:
         return None, None
 
-    # Si ya existe, añadir sufijo numérico estilo SO: 'Archivo(1).txt'
-    final_file_path = _unique_path(final_file_path)
+    # Si overwrite_existing es True (subida por Agente) o si el archivo ya existe y se permite sobrescribir:
+    if overwrite_existing and os.path.exists(final_file_path):
+        try: os.unlink(final_file_path)
+        except Exception: pass
+
+    # Si ya existe y no se especifica sobrescribir, añadir sufijo numérico estilo SO: 'Archivo(1).txt'
+    if os.path.exists(final_file_path):
+        final_file_path = _unique_path(final_file_path)
     final_filename = os.path.basename(final_file_path)
 
     if current_usage + file_size > limit_bytes:
@@ -639,18 +777,40 @@ def delete_item(view, name, subpath, trash_id, token):
         with get_db() as conn:
             conn.execute("DELETE FROM cloud_devices WHERE user_id = ? AND name = ?", (current_uid, device_name))
             conn.commit()
+
+        base_root = get_user_root(token)
+        trash_base = os.path.join(base_root, '.trash')
+        os.makedirs(trash_base, exist_ok=True)
+
+        # La carpeta real del dispositivo vive en <usuario>/.computers/<nombre>
+        # (a veces con el sufijo legado ' 💻'); en ningún caso en la raíz.
         try:
             target_path = safe_join(user_root, name)
-            if os.path.exists(target_path):
-                shutil.rmtree(target_path)
-            add_activity(current_user, current_uid, "act_desvinculaste_el_dispositivo", name, subpath)
-            return True
+            if not os.path.exists(target_path):
+                target_path = safe_join(user_root, device_name)
         except ValueError:
-            return None
+            target_path = None
+
+        if target_path and os.path.exists(target_path):
+            new_trash_id = str(uuid.uuid4())
+            try:
+                shutil.move(target_path, os.path.join(trash_base, new_trash_id))
+                trash_data = _load_json(base_root, '.trash.json')
+                trash_data.append({"id": new_trash_id, "name": os.path.basename(target_path), "original_path": "", "view": "computers", "deleted_at": time.time()})
+                _save_json(base_root, '.trash.json', trash_data)
+            except Exception:
+                # Si el movimiento falla, no perdemos el dispositivo: la fila ya
+                # se borró, pero la carpeta de datos queda en su sitio (visible).
+                pass
+
+        add_activity(current_user, current_uid, "act_desvinculaste_el_dispositivo", name, subpath)
+        invalidate_user_index(current_uid)
+        return True
 
     base_root = get_user_root(token)
     protected_data = _load_json(base_root, '.protected.json')
-    if {"name": name, "path": subpath, "view": view} in protected_data:
+    view = resolve_protect_view(base_root, view, subpath, name)
+    if is_item_protected(protected_data, view, subpath, name):
         return "Este elemento está protegido contra eliminación"
 
     try:
@@ -785,7 +945,13 @@ def rename_item(view, old_name, new_name, subpath, token):
         return "No puedes renombrar archivos compartidos contigo"
 
     subpath = subpath.strip('/')
-    
+
+    base_root = get_user_root(token)
+    view = resolve_protect_view(base_root, view, subpath, old_name)
+    protected_data = _load_json(base_root, '.protected.json')
+    if is_item_protected(protected_data, view, subpath, old_name):
+        return "Este elemento está protegido: no puede renombrarse"
+
     # Limpiar el nuevo nombre de caracteres de control
     new_name = "".join(c for c in new_name if c.isprintable()).strip()
     
@@ -859,7 +1025,8 @@ def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=No
         else:
             shutil.copy2(old_path, new_path)
     except Exception as e:
-        return f"Error al copiar: {str(e)}"
+        logger.error(f"Error al copiar {old_path} -> {new_path}: {e}")
+        return "Error al copiar el elemento"
 
     invalidate_user_index(current_uid)
     return True
@@ -872,6 +1039,13 @@ def move_item(view, name, old_subpath, new_subpath, token):
 
     old_subpath = old_subpath.strip('/')
     new_subpath = new_subpath.strip('/')
+
+    base_root = get_user_root(token)
+    if view not in ('computers', 'backups', 'business', 'trash'):
+        protected_data = _load_json(base_root, '.protected.json')
+        resolved_view = resolve_protect_view(base_root, view, old_subpath, name)
+        if is_item_protected(protected_data, resolved_view, old_subpath, name):
+            return "Este elemento está protegido: no puede moverse"
 
     try:
         old_path = safe_join(user_root, old_subpath, name)
@@ -934,17 +1108,18 @@ def toggle_protect(name, subpath, view, token):
     if not base_root:
         return None, None
     subpath = subpath.strip('/')
-
-    if view in ('home', 'starred', '', None):
-        if os.path.exists(os.path.join(get_user_root(token), subpath, name)):
-            view = 'drive'
-        elif os.path.exists(os.path.join(get_user_root(token), '.computers', subpath, name)):
-            view = 'computers'
-        else:
-            view = 'drive'
+    view = resolve_protect_view(base_root, view, subpath, name)
 
     protected_data = _load_json(base_root, '.protected.json')
     item_key = {"name": name, "path": subpath, "view": view}
+
+    # El elemento no tiene protección propia: si aparece como protegido es porque
+    # una carpeta superior está bloqueada; sólo la carpeta raíz puede desbloquearse.
+    if item_key not in protected_data:
+        ancestor = find_protected_ancestor(protected_data, view, subpath, name)
+        if ancestor:
+            return False, f'No puedes desbloquear este elemento: está dentro de la carpeta «{ancestor["name"]}», que está protegida. Desprotege primero esa carpeta.'
+
     if item_key in protected_data:
         protected_data.remove(item_key)
         is_prot = False
@@ -1003,7 +1178,7 @@ def list_starred(token):
             "mtime": info.st_mtime, "owner": owner, "owner_id": owner_id,
             "ext": os.path.splitext(item['name'])[1].lower(),
             "starred": True,
-            "protected": {"name": item['name'], "path": item['path'], "view": item_view} in protected_data,
+            "protected": is_item_protected(protected_data, item_view, item['path'], item['name']),
             "view": item_view,
             "is_shared": is_shared
         })
@@ -1184,7 +1359,10 @@ def preview_file(view, name, subpath, trash_id, owner_id, token):
             return send_file(io.BytesIO(_preview_placeholder(ext).encode()), mimetype='image/svg+xml'), None
         return None, "Archivo demasiado grande para previsualizar de forma directa"
 
-    add_activity(sess.get_user(token), sess.get_user_id(token), "act_abrio", name, subpath, owner_id)
+    # Las miniaturas (carga automática del navegador en listados/grid) NO
+    # cuentan como "abriste el archivo": solo el preview intencional lo hace.
+    if request.args.get('thumbnail') != '1':
+        add_activity(sess.get_user(token), sess.get_user_id(token), "act_abrio", name, subpath, owner_id)
 
     ext = os.path.splitext(name)[1].lower()
     if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'):
@@ -1305,54 +1483,113 @@ def search_files(query, token):
     return results[:50]
 
 
-def get_folders_tree(view, token):
+def _safe_child_path(view_root, rel_path):
+    """
+    Resuelve una ruta relativa dentro del root de una vista. Rechaza rutas
+    absolutas, '..', segmentos ocultos y cualquier escape del root.
+    Devuelve la ruta absoluta validada o None.
+    """
+    if not rel_path:
+        return view_root
+    if (rel_path.startswith("/") or "\\" in rel_path or ":" in rel_path
+            or "\x00" in rel_path or "~" in rel_path):
+        return None
+    parts = [p for p in rel_path.split("/") if p not in ("", ".")]
+    if any(p == ".." or p.startswith(".") for p in parts):
+        return None
+    abs_path = os.path.realpath(os.path.join(view_root, *parts))
+    if abs_path != os.path.realpath(view_root) and not abs_path.startswith(
+            os.path.realpath(view_root) + os.sep):
+        return None
+    return abs_path if os.path.isdir(abs_path) else None
+
+
+def get_folders_tree(view, token, path=None):
+    """
+    Árbol de carpetas con carga perezosa: devuelve UN SOLO nivel del árbol.
+
+    - path=None/'' : el nodo raíz de la vista con sus hijos inmediatos.
+    - path='A/B'   : el nodo de esa carpeta con sus hijos inmediatos.
+
+    Cada subcarpeta se devuelve como stub {name, path, has_subdirs,
+    subdirs: [], files: []}; el cliente solicita su contenido al expandirla.
+    Así se evita recorrer y hacer stat() de TODO el drive por cada apertura
+    del selector (antes el árbol completo viajaba en un único JSON y se
+    cortaba a 5 niveles de profundidad).
+    """
     view_root = get_view_root(view, token)
     if not view_root:
         return None
 
-    def build_tree(path, base_path, is_root=False, current_depth=0):
-        if current_depth > 5:
-            return None
-            
-        name = os.path.basename(path)
-        if not is_root and name.startswith('.'):
-            return None
-        rel_path = os.path.relpath(path, base_path).replace('\\', '/')
-        if rel_path == '.':
-            rel_path = ''
-        subdirs = []
-        files = []
-        try:
-            for entry in os.scandir(path):
-                if entry.name.startswith('.'):
-                    continue
-                if entry.is_dir() and not entry.is_symlink():
-                    subtree = build_tree(entry.path, base_path, is_root=False, current_depth=current_depth + 1)
-                    if subtree:
-                        subdirs.append(subtree)
-                elif entry.is_file() and not entry.is_symlink():
-                    file_path = os.path.join(rel_path, entry.name).replace('\\', '/')
-                    if file_path.startswith('/'):
-                        file_path = file_path.lstrip('/')
-                    try:
-                        info = entry.stat()
-                        size = info.st_size
-                    except OSError:
-                        size = 0
-                    files.append({
-                        "name": entry.name,
-                        "path": file_path,
-                        "size": size,
-                        "ext": os.path.splitext(entry.name)[1].lower(),
-                    })
-            subdirs.sort(key=lambda x: x['name'].lower())
-            files.sort(key=lambda x: x['name'].lower())
-        except OSError as e:
-            sys.stderr.write(f"[OPERATIONAL][WARN] No se pudo listar la rama {path}: {e}\n")
-            
-        return {"name": name or "Mi unidad", "path": rel_path, "subdirs": subdirs, "files": files}
+    target = _safe_child_path(view_root, path or "")
+    if target is None:
+        return None
 
-    return build_tree(view_root, view_root, is_root=True)
+    name = os.path.basename(target)
+    rel_path = os.path.relpath(target, view_root).replace('\\', '/')
+    if rel_path == '.':
+        rel_path = ''
+
+    subdirs = []
+    files = []
+    has_subdirs = False
+    has_children = False
+    try:
+        for entry in os.scandir(target):
+            if entry.name.startswith('.'):
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                child_rel = os.path.join(rel_path, entry.name).replace('\\', '/')
+                child_has_subdirs = False
+                child_has_children = False
+                try:
+                    for e in os.scandir(entry.path):
+                        if not e.name.startswith('.') and not e.is_symlink():
+                            child_has_children = True
+                            if e.is_dir():
+                                child_has_subdirs = True
+                            if child_has_subdirs and child_has_children:
+                                break
+                except OSError:
+                    pass
+                subdirs.append({
+                    "name": entry.name,
+                    "path": child_rel,
+                    "has_subdirs": child_has_subdirs,
+                    "has_children": child_has_children,
+                    "subdirs": [],
+                    "files": [],
+                })
+                has_subdirs = True
+                has_children = True
+            elif entry.is_file() and not entry.is_symlink():
+                file_path = os.path.join(rel_path, entry.name).replace('\\', '/')
+                if file_path.startswith('/'):
+                    file_path = file_path.lstrip('/')
+                try:
+                    size = entry.stat().st_size
+                except OSError:
+                    size = 0
+                files.append({
+                    "name": entry.name,
+                    "path": file_path,
+                    "size": size,
+                    "ext": os.path.splitext(entry.name)[1].lower(),
+                })
+                has_children = True
+        subdirs.sort(key=lambda x: x['name'].lower())
+        files.sort(key=lambda x: x['name'].lower())
+    except OSError as e:
+        logger.warning(f"[OPERATIONAL][WARN] No se pudo listar la rama {target}: {e}")
+
+    return {
+        "name": name or "Mi unidad",
+        "path": rel_path,
+        "has_subdirs": has_subdirs,
+        "has_children": has_children,
+        "subdirs": subdirs,
+        "files": files,
+    }
 
 
 def get_download_token(view, name, subpath, owner_id, trash_id, token):
@@ -1467,7 +1704,7 @@ def download_file(dl_token):
                 if os.path.exists(path):
                     os.remove(path)
             except OSError as e:
-                sys.stderr.write(f"[OPERATIONAL][WARN] No se pudo limpiar el archivo temporal de descarga {path}: {e}\n")
+                logger.warning(f"[OPERATIONAL][WARN] No se pudo limpiar el archivo temporal de descarga {path}: {e}")
             return response
 
     if info.get('multi'):
@@ -1534,6 +1771,273 @@ def download_file(dl_token):
     ext = os.path.splitext(clean_single_name)[1].lower()
     is_attachment = force_dl or (ext not in ('.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt'))
     return send_file(target, as_attachment=is_attachment, download_name=clean_single_name), None
+
+
+def _transcode_video_worker(target, target_height, cache_dir, key, quality):
+    """Transcodifica un vídeo a la calidad pedida en un hilo de fondo.
+
+    Escribe primero a un .tmp y renombra al final (nunca se sirve un cache
+    parcial). Si falla el primer intento con '-c:a copy' (audio no compatible
+    con el contenedor mp4) reintenta con AAC.
+    """
+    tmp_target = os.path.join(cache_dir, f".tmp_{key}_{quality}.mp4")
+    cached_file = os.path.join(cache_dir, f"{key}_{quality}.mp4")
+    try:
+        cmd = [
+            'ffmpeg', '-y', '-i', target,
+            '-vf', f'scale=-2:{target_height},format=yuv420p',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:a', 'copy',
+            '-movflags', '+faststart',
+            tmp_target
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=_VIDEO_TRANSCODE_TIMEOUT)
+        if result.returncode != 0:
+            # Fallback si la copia de audio falla (p. ej. audio no-AAC para mp4)
+            cmd_aac = [
+                'ffmpeg', '-y', '-i', target,
+                '-vf', f'scale=-2:{target_height},format=yuv420p',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+                '-c:a', 'aac', '-b:a', '128k',
+                '-movflags', '+faststart',
+                tmp_target
+            ]
+            result = subprocess.run(cmd_aac, capture_output=True, timeout=_VIDEO_TRANSCODE_TIMEOUT)
+
+        if result.returncode == 0 and os.path.exists(tmp_target) and os.path.getsize(tmp_target) > 0:
+            os.replace(tmp_target, cached_file)
+        else:
+            logger.warning(f"[VIDEO][WARN] FFmpeg transcode failed (code {result.returncode}): {result.stderr.decode('utf-8', errors='ignore')}")
+            if os.path.exists(tmp_target):
+                try:
+                    os.unlink(tmp_target)
+                except OSError:
+                    pass
+    except Exception as e:
+        logger.warning(f"[VIDEO][WARN] Error al transcodificar video en calidad {quality}: {e}")
+        if os.path.exists(tmp_target):
+            try:
+                os.unlink(tmp_target)
+            except OSError:
+                pass
+    finally:
+        with _video_jobs_lock:
+            _video_jobs.pop(key, None)
+        # Política LRU: tras cada transcode se comprueba el límite de caché.
+        try:
+            _cleanup_video_cache(cache_dir, force=True)
+        except Exception:
+            pass
+
+
+def _source_video_height(target):
+    """Altura del stream de vídeo del archivo, o 0 si no se puede conocer."""
+    try:
+        probe = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=height', '-of', 'csv=p=0', target],
+            capture_output=True, text=True, timeout=15)
+        if probe.returncode == 0 and probe.stdout.strip():
+            return int(probe.stdout.strip().splitlines()[0])
+    except Exception:
+        pass
+    return 0
+
+
+def _video_cache_key(target, quality):
+    try:
+        st = os.stat(target)
+    except OSError:
+        return None, None
+    key = hashlib.sha256(f"{target}:{st.st_size}:{st.st_mtime_ns}:{quality}".encode()).hexdigest()[:16]
+    return key, st
+
+
+def _cleanup_video_cache(cache_dir, force=False):
+    """Política LRU: si el caché supera VIDEO_CACHE_MAX_MB se eliminan las
+    versiones transcodificadas más antiguas (por mtime) hasta quedar bajo el
+    límite. Nunca toca los .tmp en curso ni los originales de la nube."""
+    global _video_cache_checked_at
+    now = time.time()
+    if not force and now - _video_cache_checked_at < 300:
+        return
+    try:
+        entries = []
+        total = 0
+        for f in os.listdir(cache_dir):
+            if f.startswith('.tmp_'):
+                continue
+            fp = os.path.join(cache_dir, f)
+            try:
+                sz = os.path.getsize(fp)
+                mtime = os.path.getmtime(fp)
+            except OSError:
+                continue
+            entries.append((mtime, fp, sz))
+            total += sz
+        limit = VIDEO_CACHE_MAX_MB * 1024 * 1024
+        if total > limit:
+            entries.sort()  # más antiguos primero (LRU)
+            for _, fp, sz in entries:
+                if total <= limit:
+                    break
+                try:
+                    os.remove(fp)
+                    total -= sz
+                    logger.info(f"[VIDEO][INFO] Cache LRU: eliminado {os.path.basename(fp)} ({sz // 1024 // 1024} MB)")
+                except OSError:
+                    pass
+        _video_cache_checked_at = now
+    except Exception as e:
+        logger.warning(f"[VIDEO][WARN] Limpieza de caché de vídeo falló: {e}")
+
+
+def _maybe_prewarm_video(target):
+    """Genera en segundo plano UNA calidad por defecto al abrir el vídeo, para
+    que el selector tenga versiones disponibles sin procesar las 8 de golpe."""
+    quality = VIDEO_PREWARM_QUALITY
+    if quality not in VIDEO_QUALITIES:
+        return
+    try:
+        cache_dir = os.path.join(BASE_CLOUD_ROOT, '.pool', 'video_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        source_height = _source_video_height(target)
+        target_height = VIDEO_HEIGHTS[quality]
+        if source_height and target_height >= source_height:
+            return  # sin upscaling: no tiene sentido generar esta calidad
+        key, _ = _video_cache_key(target, quality)
+        if not key:
+            return
+        cached_file = os.path.join(cache_dir, f"{key}_{quality}.mp4")
+        if os.path.exists(cached_file) and os.path.getsize(cached_file) > 0:
+            return
+        with _video_jobs_lock:
+            if key in _video_jobs:
+                return
+            _video_jobs[key] = True
+            _video_executor.submit(
+                _transcode_video_worker, target, target_height, cache_dir, key, quality)
+    except Exception as e:
+        logger.warning(f"[VIDEO][WARN] Prewarm de vídeo falló: {e}")
+
+
+def stream_video(dl_token, quality='original', status_only=False, available_only=False):
+    if not dl_token:
+        return None, "Token requerido"
+
+    with tokens_lock:
+        info = download_tokens.get(dl_token)
+        if not info:
+            return None, "Token inválido o expirado"
+            
+        current_uid = sess.get_user_id(request.user_token) if hasattr(request, 'user_token') and request.user_token else None
+        if not current_uid:
+            token = request.cookies.get('token') or request.headers.get('X-Token')
+            current_uid = sess.get_user_id(token) if token else None
+            
+        if info.get('bound_user_id') and str(info['bound_user_id']) != str(current_uid):
+            return None, "Acceso denegado: Token no vinculado a su sesión"
+            
+        if time.time() > info['expires']:
+            download_tokens.pop(dl_token, None)
+            return None, "Token expirado"
+
+    target = info['path']
+    if not os.path.exists(target) or os.path.isdir(target):
+        return None, "Archivo no encontrado"
+
+    if not _is_safe_path(BASE_CLOUD_ROOT, target):
+        return None, "Acceso denegado: Violación de aislamiento"
+
+    ext = os.path.splitext(target)[1].lower()
+    if ext not in ('.mp4', '.webm', '.mov', '.avi', '.mkv'):
+        return send_file(target, conditional=True), None
+
+    cache_dir = os.path.join(BASE_CLOUD_ROOT, '.pool', 'video_cache')
+
+    # Verificación inteligente: devuelve las calidades ya generadas (cache) y
+    # las que están transcodificándose, para que el selector solo muestre lo
+    # que puede servirse al instante y no lance trabajo innecesario.
+    if available_only:
+        available = []
+        processing = []
+        skipped = []  # nunca se generarán (sin upscaling): el frontend no debe ofrecerlas
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            source_height = _source_video_height(target)
+            for q in VIDEO_QUALITIES:
+                if source_height and VIDEO_HEIGHTS[q] >= source_height:
+                    skipped.append(q)
+                    continue
+                key, _ = _video_cache_key(target, q)
+                if not key:
+                    continue
+                cached_file = os.path.join(cache_dir, f"{key}_{q}.mp4")
+                if os.path.exists(cached_file) and os.path.getsize(cached_file) > 0:
+                    available.append(q)
+                else:
+                    with _video_jobs_lock:
+                        if key in _video_jobs:
+                            processing.append(q)
+        except Exception as e:
+            logger.warning(f"[VIDEO][WARN] Listado de calidades disponibles falló: {e}")
+        return {"available": available, "processing": processing, "skipped": skipped}, None
+
+    if quality == 'original':
+        # Pre-warm: al abrir el vídeo se genera en segundo plano la calidad
+        # por defecto (una sola; el resto se pide bajo demanda).
+        _maybe_prewarm_video(target)
+        return send_file(target, conditional=True), None
+
+    if quality not in VIDEO_QUALITIES:
+        return send_file(target, conditional=True), None
+
+    target_height = VIDEO_HEIGHTS[quality]
+
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        key, _ = _video_cache_key(target, quality)
+        cached_file = os.path.join(cache_dir, f"{key}_{quality}.mp4")
+
+        if os.path.exists(cached_file) and os.path.getsize(cached_file) > 0:
+            return send_file(cached_file, mimetype='video/mp4', conditional=True), None
+
+        if not shutil.which('ffmpeg'):
+            return send_file(target, conditional=True), None
+
+        # Sin upscaling: si la altura del origen es <= a la calidad pedida,
+        # se sirve el original (transcodificar "hacia arriba" no aporta nada).
+        source_height = _source_video_height(target)
+        if source_height and target_height >= source_height:
+            return send_file(target, conditional=True), None
+
+        # Limpieza LRU (con throttling) antes de generar más caché.
+        _cleanup_video_cache(cache_dir)
+
+        # Lanza (o reutiliza) el trabajo de transcodificación en segundo plano.
+        with _video_jobs_lock:
+            if key not in _video_jobs:
+                _video_jobs[key] = True
+                _video_executor.submit(
+                    _transcode_video_worker, target, target_height, cache_dir, key, quality)
+
+        # Solo la primera petición espera un rato por si el archivo es pequeño
+        # (UX ágil). El polling del frontend (status=1) responde al instante.
+        if not status_only:
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                if os.path.exists(cached_file) and os.path.getsize(cached_file) > 0:
+                    break
+                time.sleep(0.25)
+
+        if os.path.exists(cached_file) and os.path.getsize(cached_file) > 0:
+            return send_file(cached_file, mimetype='video/mp4', conditional=True), None
+
+        # Aún transcodificando: el frontend hace polling con status_only=1.
+        return {"status": "processing", "quality": quality}, None
+    except Exception as e:
+        logger.warning(f"Error al transcodificar video local en calidad {quality}: {e}")
+        return send_file(target, conditional=True), None
 
 
 def init_user_cloud(user_id):
@@ -1615,32 +2119,37 @@ def list_shared_subpath(subpath, token):
     current_uid = sess.get_user_id(token)
     if not current_uid:
         return None, None
-        
-    parts = subpath.strip('/').split('/')
-    if not parts or not parts[0]:
+
+    subpath = (subpath or '').strip('/')
+    if not subpath:
         return None, None
-        
+
+    try:
+        _reject_relative_segments(subpath, None)
+    except PermissionError:
+        return None, None
+
+    parts = subpath.split('/')
     top_name = parts[0]
     rest_path = '/'.join(parts[1:])
-    sys.stderr.write(f"[DEBUG-CLOUD] top_name={top_name}, rest_path={rest_path}\n")
-    
+
     rows = repository.get_shared_with_me(current_uid)
     shared_item = next((s for s in rows if s['file_name'] == top_name), None)
-    sys.stderr.write(f"[DEBUG-CLOUD] shared_item={shared_item}\n")
     if not shared_item:
         return None, None
-        
+
     owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, shared_item['owner_id']))
     if shared_item['view'] == 'computers':
         owner_root = os.path.realpath(os.path.join(owner_root, '.computers'))
-    sys.stderr.write(f"[DEBUG-CLOUD] owner_root={owner_root}\n")
-        
-    target_path = safe_join(owner_root, shared_item['file_path'], shared_item['file_name'], rest_path)
-    sys.stderr.write(f"[DEBUG-CLOUD] target_path={target_path}, exists={os.path.exists(target_path)}, isdir={os.path.isdir(target_path)}\n")
-    
+
+    try:
+        target_path = safe_join(owner_root, shared_item['file_path'], shared_item['file_name'], rest_path)
+    except ValueError:
+        return None, None
+
     if not os.path.exists(target_path) or not os.path.isdir(target_path):
         return None, None
-        
+
     starred_data = []
     base_root = get_user_root(token)
     if base_root:
@@ -1649,34 +2158,34 @@ def list_shared_subpath(subpath, token):
     files = []
     try:
         entries = os.listdir(target_path)
-        sys.stderr.write(f"[DEBUG-CLOUD] entries={entries}\n")
-        for name in entries:
-            if name.startswith('.'):
-                continue
-            fp = os.path.join(target_path, name)
-            if os.path.islink(fp): continue
-            is_dir = os.path.isdir(fp)
-            info = os.stat(fp)
-            
-            is_starred = False
-            for item in starred_data:
-                if item.get('name') == name and item.get('path') == subpath:
-                    item_owner = item.get('owner_id')
-                    if (not item_owner and not shared_item['owner_id']) or str(item_owner) == str(shared_item['owner_id']):
-                        is_starred = True
-                        break
-
-            files.append({
-                "name": name, "path": subpath, "is_dir": is_dir, "size": info.st_size,
-                "mtime": info.st_mtime, "owner": shared_item['owner_name'],
-                "owner_id": shared_item['owner_id'],
-                "ext": os.path.splitext(name)[1].lower(),
-                "view": "shared", "is_shared": True, "starred": is_starred
-            })
-    except Exception as e:
-        sys.stderr.write(f"[DEBUG-CLOUD] Error listing: {e}\n")
+    except OSError as e:
+        logger.error(f"No se pudo listar el directorio compartido: {e}")
         return None, None
-        
+
+    for name in entries:
+        if name.startswith('.'):
+            continue
+        fp = os.path.join(target_path, name)
+        if os.path.islink(fp): continue
+        is_dir = os.path.isdir(fp)
+        info = os.stat(fp)
+
+        is_starred = False
+        for item in starred_data:
+            if item.get('name') == name and item.get('path') == subpath:
+                item_owner = item.get('owner_id')
+                if (not item_owner and not shared_item['owner_id']) or str(item_owner) == str(shared_item['owner_id']):
+                    is_starred = True
+                    break
+
+        files.append({
+            "name": name, "path": subpath, "is_dir": is_dir, "size": info.st_size,
+            "mtime": info.st_mtime, "owner": shared_item['owner_name'],
+            "owner_id": shared_item['owner_id'],
+            "ext": os.path.splitext(name)[1].lower(),
+            "view": "shared", "is_shared": True, "starred": is_starred
+        })
+
     files.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
     return files, subpath
 
@@ -1804,7 +2313,8 @@ def zip_item(view, name, subpath, token, zip_name=None):
         if os.path.exists(dest_zip_path):
             try: os.unlink(dest_zip_path)
             except Exception: pass
-        return f"Error al comprimir: {str(e)}"
+        logger.error(f"Error al comprimir {dest_zip_path}: {e}")
+        return "Error al comprimir el elemento"
     finally:
         if temp_path and os.path.exists(temp_path):
             try: os.unlink(temp_path)
@@ -1938,4 +2448,5 @@ def unzip_item(view, name, subpath, token):
         invalidate_user_index(current_uid)
         return True
     except Exception as e:
-        return f"Error al descomprimir: {str(e)}"
+        logger.error(f"Error al descomprimir {name} en {subpath}: {e}")
+        return "Error al descomprimir el archivo"

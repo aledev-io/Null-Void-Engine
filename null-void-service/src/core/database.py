@@ -35,7 +35,8 @@ def init_db() -> None:
                 quota_gb          INTEGER DEFAULT 10,
                 modules           TEXT DEFAULT '["monitor", "calendar", "admin", "marketplace", "cloud"]',
                 gmail_address     TEXT,
-                gmail_app_password TEXT
+                gmail_app_password TEXT,
+                role              TEXT DEFAULT 'member'
             );
 
             CREATE TABLE IF NOT EXISTS events (
@@ -211,6 +212,15 @@ def init_db() -> None:
                 FOREIGN KEY (device_id) REFERENCES cloud_devices(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS agent_link_tokens (
+                token          TEXT PRIMARY KEY,
+                original_token TEXT NOT NULL,
+                username       TEXT NOT NULL,
+                target_device  TEXT DEFAULT '',
+                expires        REAL NOT NULL,
+                created_at     REAL NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS quota_requests (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id      TEXT NOT NULL,
@@ -247,6 +257,16 @@ def init_db() -> None:
         """)
 
         # ─── Migraciones post-creación ───
+
+        # Migrar columna 'role' en users (control de acceso administrativo por rol)
+        users_cols = {c[1] for c in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if 'role' not in users_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'member'")
+        conn.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND (role IS NULL OR role != 'admin')")
+
+        alt_cols = {c[1] for c in conn.execute("PRAGMA table_info(agent_link_tokens)").fetchall()}
+        if 'target_device' not in alt_cols:
+            conn.execute("ALTER TABLE agent_link_tokens ADD COLUMN target_device TEXT DEFAULT ''")
 
         # Migrar credenciales legacy de Gmail a la nueva tabla
         conn.execute("""
@@ -359,6 +379,7 @@ def migrate_users_to_db(credentials_dict: dict):
                     "INSERT INTO users (user_id, username, password, email) VALUES (?, ?, ?, ?)",
                     (uid, username, hashed, email)
                 )
+        conn.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND (role IS NULL OR role != 'admin')")
         conn.commit()
 
 

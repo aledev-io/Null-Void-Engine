@@ -76,6 +76,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 html {
@@ -88,6 +89,7 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
   line-height: 1.5;
+  height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
@@ -124,6 +126,7 @@ textarea {
 
 .app-container {
   display: flex;
+  height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }

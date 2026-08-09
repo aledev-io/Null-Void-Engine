@@ -311,6 +311,10 @@
             flex-direction: column;
             align-items: stretch;
             z-index: 1000;
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            transform: translateZ(0);
             animation: slideUp 0.2s ease-out;
         }
 
@@ -1929,9 +1933,12 @@
 
             /* Modal de notificaciones ultra-compacto para móvil */
             #notif-modal>div {
-                max-height: 90vh !important;
+                height: auto !important;
+                max-height: 85vh !important;
+                max-height: 85dvh !important;
                 width: 95% !important;
                 border-radius: 12px !important;
+                margin: auto !important;
             }
 
             #notif-modal>div>div:first-child {
@@ -3342,6 +3349,12 @@
             background: var(--indigo);
             color: white;
             font-weight: 700;
+        }
+
+        @keyframes dashSpin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         /* Statistics */

@@ -10,11 +10,18 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
     <script>
         (function () {
-            let theme = localStorage.getItem('theme');
-            if (!theme) {
-                theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            // localStorage puede lanzar en shells nativos / WebViews con
+            // almacenamiento restringido; sin este try/catch el atributo
+            // data-theme no se aplicaba y los estilos rompían en frío.
+            try {
+                let theme = localStorage.getItem('theme');
+                if (!theme) {
+                    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
             }
-            document.documentElement.setAttribute('data-theme', theme);
         })();
     </script>
     <script src="{{ url_for('static', filename='js/mobile-drag-drop.min.js') }}"></script>
@@ -445,14 +452,14 @@
                             </svg>
                         </button>
                         <button class="btn-icon" id="btn-notifications-history" title="Historial de notificaciones"
-                            data-i18n-title="notif_title" style="width: 32px; height: 32px; position: relative;">
+                            data-i18n-title="notif_title" style="width: 32px; height: 32px; position: relative; overflow: visible; flex-shrink: 0; margin-right: 2px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                             </svg>
                             <span id="notif-badge-count"
-                                style="display: none; position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: bold; width: 16px; height: 16px; border-radius: 50%; align-items: center; justify-content: center; border: 2px solid var(--surface); box-sizing: content-box;"></span>
+                                style="display: none; position: absolute; top: -3px; right: -3px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: bold; min-width: 16px; height: 16px; border-radius: 10px; padding: 0 3px; align-items: center; justify-content: center; border: 2px solid var(--bg-secondary, #111827); box-sizing: border-box; z-index: 2;"></span>
                         </button>
                     </div>
                 </div>

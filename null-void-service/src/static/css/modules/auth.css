@@ -9,6 +9,7 @@
 
 html,
 body {
+    min-height: 100vh;
     min-height: 100dvh;
     background: var(--bg);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -19,6 +20,7 @@ body {
 /* ─── ROOT LAYOUT ─────────────────────────────────────────── */
 #root {
     display: flex;
+    height: 100vh;
     height: 100dvh;
     width: 100vw;
 }
@@ -37,7 +39,12 @@ body {
 #panel-left::after {
     content: '';
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
     background: var(--overlay);
     transition: background 0.35s;
 }
@@ -131,7 +138,8 @@ body {
     padding: 0 48px;
     display: flex;
     flex-direction: column;
-    animation: fadeUp 0.4s ease both;
+    animation: cardEnter 0.9s cubic-bezier(0.22, 1.12, 0.4, 1) both;
+    will-change: transform, opacity;
 }
 
 .card-icon {
@@ -389,51 +397,69 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
 }
 
-html[data-theme="light"] .btn-lang-float {
-    background: rgba(15, 23, 42, 0.06);
-    /* Fondo oscuro sutil o el que prefieras */
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    /* Borde más visible */
-    color: #0f172a;
-    /* Color del icono oscuro */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    /* Sombra más suave para fondos claros */
-}
-
-html[data-theme="light"] .btn-lang-float:hover {
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
-}
-
-.btn-theme-float:hover {
-    transform: scale(1.08);
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
-}
-
+html[data-theme="light"] .btn-lang-float,
 html[data-theme="light"] .btn-theme-float {
-    background: rgba(15, 23, 42, 0.06);
-    /* Fondo oscuro sutil o el que prefieras */
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    /* Borde más visible */
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.95);
     color: #0f172a;
-    /* Color del icono oscuro */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    /* Sombra más suave para fondos claros */
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(12px);
 }
 
+html[data-theme="light"] .btn-lang-float:hover,
 html[data-theme="light"] .btn-theme-float:hover {
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+    background: #ffffff;
+    color: #4f46e5;
+    transform: scale(1.08);
+    box-shadow: 0 4px 20px rgba(79, 70, 229, 0.35);
 }
 
 /* ─── ANIMATIONS ──────────────────────────────────────────── */
-@keyframes fadeUp {
+@keyframes kenburns {
+    from {
+        opacity: 0.35;
+        transform: scale(1.14);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes riseIn {
     from {
         opacity: 0;
-        transform: translateY(18px);
+        transform: translateY(16px);
     }
 
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@keyframes cardEnter {
+    from {
+        opacity: 0;
+        transform: translateY(38px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes floatIn {
+    from {
+        opacity: 0;
+        transform: translateY(-16px) scale(0.92);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
     }
 }
 
@@ -461,38 +487,159 @@ html[data-theme="light"] .btn-theme-float:hover {
     }
 }
 
+/* ─── ENTRADA APP (splash profesional) ────────────────────── */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: var(--bg);
+    pointer-events: none;
+    animation: cardUpReveal 0.9s cubic-bezier(0.7, 0, 0.3, 1) both;
+}
+
+@keyframes cardUpReveal {
+    0% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    65% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-100%);
+        visibility: hidden;
+    }
+}
+
+#app-login-bg-img {
+    transform-origin: 50% 42%;
+    animation: kenburns 2.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity;
+}
+
+#panel-right {
+    animation: riseIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity;
+}
+
+#card>*:not(#login-form):not(#register-form) {
+    opacity: 0;
+    animation: riseIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+#card .card-icon {
+    animation-delay: 0.30s;
+}
+
+#card .card-title {
+    animation-delay: 0.36s;
+}
+
+#card .card-sub {
+    animation-delay: 0.42s;
+}
+
+#login-form .field-group:nth-of-type(1) {
+    animation-delay: 0.50s;
+}
+
+#login-form .field-group:nth-of-type(2) {
+    animation-delay: 0.58s;
+}
+
+#login-form .msg-area {
+    animation-delay: 0.64s;
+}
+
+#login-form .form-btn {
+    animation-delay: 0.68s;
+}
+
+#login-form .toggle-link {
+    animation-delay: 0.76s;
+}
+
+#register-form .field-group:nth-of-type(1) {
+    animation-delay: 0.50s;
+}
+
+#register-form .field-group:nth-of-type(2) {
+    animation-delay: 0.58s;
+}
+
+#register-form .field-group:nth-of-type(3) {
+    animation-delay: 0.66s;
+}
+
+#register-form .msg-area {
+    animation-delay: 0.72s;
+}
+
+#register-form .form-btn {
+    animation-delay: 0.76s;
+}
+
+#register-form .toggle-link {
+    animation-delay: 0.84s;
+}
+
+.btn-lang-float,
+.btn-theme-float {
+    animation: floatIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity;
+}
+
+.btn-lang-float {
+    animation-delay: 0.8s;
+}
+
+.btn-theme-float {
+    animation-delay: 0.9s;
+}
+
 /* ─── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 860px) {
 
     html,
     body {
         overflow: auto;
+        background-color: #07090f;
+        background-image: url('../../img/login-bg.jpg');
+        background-image: url('/static/img/login-bg.jpg');
+        background-image: var(--login-bg-image, url('/static/img/login-bg.jpg'));
+        background-size: cover;
+        background-position: center center;
+        background-repeat: no-repeat;
+    }
+
+    [data-theme="light"] body {
+        background-color: #f9fafb;
+        background-image: url('../../img/login-bg.jpg');
+        background-image: url('/static/img/login-bg.jpg');
+        background-image: var(--login-bg-image, url('/static/img/login-bg.jpg'));
+        background-size: cover;
+        background-position: center center;
+        background-repeat: no-repeat;
     }
 
     #root {
         flex-direction: column;
-        background-image: var(--login-bg-image);
-        background-size: cover;
-        background-position: center;
+        position: relative;
         height: auto;
+        min-height: 100vh;
         min-height: 100dvh;
         justify-content: center;
         align-items: center;
+        background: rgba(7, 9, 15, 0.45);
     }
 
-    #root::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-    }
-
-    [data-theme="dark"] #root::before {
-        background: rgba(7, 9, 15, 0.62);
-    }
-
-    [data-theme="light"] #root::before {
-        background: rgba(15, 20, 35, 0.28);
+    [data-theme="light"] #root {
+        background: rgba(240, 243, 249, 0.35);
     }
 
     #panel-left {
@@ -501,7 +648,7 @@ html[data-theme="light"] .btn-theme-float:hover {
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 24px 24px 32px;
+        padding: clamp(70px, 10vh, 90px) 16px clamp(6px, 1.5vh, 16px);
         z-index: 1;
         width: 100%;
     }
@@ -518,38 +665,40 @@ html[data-theme="light"] .btn-theme-float:hover {
 
     .badge {
         display: inline-block;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
     }
 
     .main-title {
-        font-size: 1.6rem;
+        font-size: clamp(1rem, 5vw, 1.4rem);
+        word-break: break-word;
         color: #ffffff !important;
         text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5) !important;
         margin-bottom: 4px;
     }
 
     .main-desc {
-        font-size: 0.78rem;
+        font-size: clamp(0.72rem, 3vw, 0.78rem);
         color: rgba(255, 255, 255, 0.80) !important;
-        margin-bottom: 0;
-        line-height: 1.5;
+        margin: 0 auto;
+        max-width: 340px;
+        line-height: 1.45;
     }
 
     #panel-right {
-        width: calc(100% - 32px);
+        width: calc(100% - 24px);
         max-width: 400px;
         flex: none;
         background: rgba(30, 41, 59, 0.65);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 24px;
+        border-radius: 20px;
         z-index: 1;
         display: flex;
         align-items: flex-start;
         justify-content: center;
-        padding: 32px 0 40px;
-        margin: 0 auto;
+        padding: clamp(20px, 3vh, 30px) 0 clamp(20px, 3.5vh, 32px);
+        margin: 0 auto 20px;
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
     }
 
@@ -563,9 +712,8 @@ html[data-theme="light"] .btn-theme-float:hover {
         background: transparent;
         border: none;
         border-radius: 0;
-        padding: 0 28px;
+        padding: 0 clamp(16px, 5vw, 28px);
         max-width: 440px;
-        /* Centrado en tablets */
         margin: 0 auto;
         width: 100%;
         height: auto;
@@ -573,45 +721,55 @@ html[data-theme="light"] .btn-theme-float:hover {
     }
 
     .card-icon {
-        font-size: 1.5rem;
-        margin-bottom: 8px;
+        font-size: clamp(1.25rem, 4vw, 1.45rem);
+        margin-bottom: 6px;
     }
 
     .card-title {
-        font-size: 1.4rem;
+        font-size: clamp(1.2rem, 4.5vw, 1.35rem);
     }
 
     .card-sub {
-        font-size: 0.72rem;
-        margin-bottom: 20px;
+        font-size: clamp(0.68rem, 2.5vw, 0.72rem);
+        margin-bottom: clamp(12px, 2.5vh, 18px);
     }
 
     .field-group {
-        margin-bottom: 12px;
+        margin-bottom: clamp(8px, 1.8vh, 12px);
+    }
+
+    .field-label {
+        font-size: 0.6rem;
+        margin-bottom: 6px;
     }
 
     .field-input {
-        height: 44px;
-        font-size: 0.88rem;
+        height: clamp(38px, 5.5vh, 44px);
+        font-size: 0.86rem;
     }
 
     .form-btn {
-        height: 46px;
-        margin-top: 10px;
+        height: clamp(40px, 6vh, 46px);
+        margin-top: clamp(8px, 1.5vh, 12px);
     }
 
     .toggle-link {
-        margin-top: 14px;
+        margin-top: clamp(10px, 1.8vh, 14px);
+        font-size: clamp(0.68rem, 2.5vw, 0.72rem);
     }
 
     .btn-theme-float {
-        top: 14px;
-        right: 14px;
+        top: 10px;
+        right: 10px;
+        width: 36px;
+        height: 36px;
     }
 
     .btn-lang-float {
-        top: 14px;
-        right: 62px;
+        top: 10px;
+        right: 52px;
+        width: 36px;
+        height: 36px;
     }
 }
 
@@ -625,6 +783,7 @@ html[data-theme="light"] .btn-theme-float:hover {
 
     #root {
         flex-direction: row;
+        height: 100vh;
         height: 100svh;
         min-height: 0;
         background-image: var(--login-bg-image);
@@ -639,6 +798,7 @@ html[data-theme="light"] .btn-theme-float:hover {
         flex: 1;
         background: none;
         padding: 0 40px;
+        margin-top: 20px;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -765,5 +925,25 @@ html[data-theme="light"] .btn-theme-float:hover {
         right: 52px;
         width: 34px;
         height: 34px;
+    }
+}
+/* ─── ENTRADA ZOOM PANEL IZQUIERDO (solo pantallas amplias) ─ */
+@media (min-width: 861px) {
+    #panel-left {
+        animation: kenburns 2.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+        will-change: transform, opacity;
+    }
+}
+
+/* ─── ACCESIBILIDAD: sin movimiento reducido ──────────────── */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }

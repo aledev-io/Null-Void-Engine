@@ -40,19 +40,20 @@
         b.style.cssText = [
             'position: fixed; top: 0; left: 0; right: 0; z-index: 999999;',
             'display: none; align-items: center; justify-content: center; gap: 10px;',
-            'padding: 10px 16px;',
-            'background: rgba(249, 115, 22, 0.12);',
-            'border-bottom: 1px solid rgba(249, 115, 22, 0.45);',
-            'backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);',
-            'color: #fbbf24; font-family: inherit; font-size: 0.85rem; font-weight: 600;',
-            'text-align: center; letter-spacing: 0.01em; box-shadow: 0 4px 20px rgba(0,0,0,0.25);'
+            'padding: 10px 18px;',
+            'background: var(--surface-hi, rgba(15, 23, 42, 0.92));',
+            'border-bottom: 1px solid var(--indigo, #6366f1);',
+            'backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);',
+            'color: var(--text-main, #f8fafc); font-family: inherit; font-size: 0.85rem; font-weight: 600;',
+            'text-align: center; letter-spacing: 0.02em; box-shadow: 0 4px 20px rgba(0,0,0,0.3);',
+            'transition: all 0.3s ease;'
         ].join('');
 
         var spinner = document.createElement('span');
         spinner.style.cssText = [
             'width: 14px; height: 14px; flex-shrink: 0;',
-            'border: 2px solid rgba(251, 191, 36, 0.3);',
-            'border-top-color: #fbbf24; border-radius: 50%;',
+            'border: 2px solid var(--border, rgba(99, 102, 241, 0.3));',
+            'border-top-color: var(--indigo, #6366f1); border-radius: 50%;',
             'display: inline-block; animation: nvConnSpin 0.8s linear infinite;'
         ].join('');
 
@@ -103,15 +104,16 @@
                 return;
             }
         } catch (e) { /* noop */ }
-        // Toast mínimo autocontenido
+        // Toast adaptado al tema activo del usuario
         var toast = document.createElement('div');
         toast.textContent = t('conn_reconnected', 'Conexión restablecida');
         toast.style.cssText = [
             'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);',
-            'z-index: 999999; padding: 10px 18px; border-radius: 10px;',
-            'background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.5);',
-            'color: #10b981; font-weight: 600; font-size: 0.85rem;',
-            'box-shadow: 0 6px 24px rgba(0,0,0,0.3);'
+            'z-index: 999999; padding: 10px 20px; border-radius: 12px;',
+            'background: var(--surface-hi, rgba(15, 23, 42, 0.95)); border: 1px solid var(--indigo, #6366f1);',
+            'color: var(--text-main, #f8fafc); font-weight: 600; font-size: 0.85rem;',
+            'backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);',
+            'box-shadow: 0 8px 32px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 8px;'
         ].join('');
         document.body.appendChild(toast);
         setTimeout(function () {
@@ -131,6 +133,19 @@
             wasOffline = false;
             hideReconnecting();
             showRestoredToast();
+
+            // Al restablecer la conexión, refrescar automáticamente la vista y archivos
+            try {
+                if (typeof window.loadCloudFiles === 'function') {
+                    window.loadCloudFiles();
+                } else if (typeof window.fetchCloudFiles === 'function') {
+                    window.fetchCloudFiles(window.currentCloudPath || '', window.currentCloudView || 'drive');
+                } else {
+                    window.location.reload();
+                }
+            } catch (e) {
+                window.location.reload();
+            }
         }
     }
 

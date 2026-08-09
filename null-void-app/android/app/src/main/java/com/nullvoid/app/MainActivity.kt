@@ -2,6 +2,7 @@ package com.nullvoid.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
@@ -9,33 +10,52 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
 import android.view.Gravity
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.webkit.*
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.*
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.google.firebase.messaging.FirebaseMessaging
 import java.net.URLEncoder
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val TAG = "NullVoidApp"
+    }
+
     private lateinit var webView: WebView
     private lateinit var toolbar: Toolbar
+    private lateinit var loadingBar: android.widget.ProgressBar
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    // Petición web (cámara/micrófono) esperando a que el usuario acepte el permiso nativo
+    private var pendingPermissionRequest: PermissionRequest? = null
+
+    // Decisiones de permisos web por origen (persistidas: se pregunta una sola vez)
+    private val webPermissionPrefs by lazy {
+        getSharedPreferences("web_permissions", Context.MODE_PRIVATE)
+    }
 
     // Receptor para tokens FCM
     private val tokenReceiver = object : BroadcastReceiver() {
@@ -47,19 +67,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Solicitud de permisos generales
+    // Solicitud de permisos del sistema (notificaciones, micro/cámara para la web)
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> }
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        // Si había una petición web en espera (micro/cámara), resolverla ahora
+        pendingPermissionRequest?.let { req ->
+            if (allGranted) req.grant(req.resources) else req.deny()
+            pendingPermissionRequest = null
+        }
+    }
 
-    // Selector de archivos para la web
+    // Selector de archivos para múltiples (la web pide modo múltiple)
     private val fileChooserLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val data: Intent? = result.data
-            val results = if (data == null || data.data == null) null else arrayOf(data.data!!)
-            filePathCallback?.onReceiveValue(results)
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris != null && uris.isNotEmpty()) {
+            filePathCallback?.onReceiveValue(uris.toTypedArray())
+        } else {
+            filePathCallback?.onReceiveValue(null)
+        }
+        filePathCallback = null
+    }
+
+    // Selector de archivos para un único documento (modo por defecto de las web)
+    private val singleFileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            filePathCallback?.onReceiveValue(arrayOf(uri))
         } else {
             filePathCallback?.onReceiveValue(null)
         }
@@ -70,7 +107,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        setFullScreenMode()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -81,8 +118,33 @@ class MainActivity : AppCompatActivity() {
         
         setContentView(R.layout.activity_main)
 
+        val rootLayout = findViewById<View>(R.id.rootLayout)
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+            view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
+
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
+
+        loadingBar = findViewById(R.id.loadingBar)
+
+        // Back moderno: gestiona la pila de navegación de la web y cierra la app desde el shell local.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val currentUrl = webView.url ?: ""
+                if (currentUrl.contains("android_asset/www/index.html")) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                } else if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         webView = findViewById(R.id.webView)
         
@@ -90,30 +152,37 @@ class MainActivity : AppCompatActivity() {
             @JavascriptInterface
             @Suppress("unused")
             fun closeApp() {
+                // Solo se permite desde el shell local de la app,
+                // nunca desde una web remota abierta en el WebView.
+                if (!isLocalOrigin()) return
                 finishAffinity()
             }
-
 
             @JavascriptInterface
             @Suppress("unused")
             fun getFcmToken() {
-                FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        val token = task.result
-                        notifyWebAboutToken(token)
+                if (!isLocalOrigin()) return
+                // El usuario está conectándose a una instancia: momento apropiado
+                // para pedir el permiso de notificaciones (Android 13+).
+                runOnUiThread { requestNotificationPermission() }
+                FirebaseMessaging.getInstance().token
+                    .addOnSuccessListener { token -> notifyWebAboutToken(token) }
+                    .addOnFailureListener { e ->
+                        Log.w(TAG, "FCM: no se pudo obtener el token", e)
                     }
-                }
             }
         }, "Android")
         
         setupWebView()
+
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+
+        updateWebViewTheme()
         createNotificationChannel()
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionsLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-            }
-        }
+
+        // La petición de POST_NOTIFICATIONS ya no se hace al arrancar:
+        // se pide justo cuando el usuario abre una instancia (ver getFcmToken).
 
         // Registrar receptor de tokens (ajustado para API 34+)
         val filter = IntentFilter("com.nullvoid.app.FCM_TOKEN")
@@ -123,7 +192,22 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(tokenReceiver, filter)
         }
 
-        webView.loadUrl("file:///android_asset/www/index.html")
+        // Si Android destruyó la Activity (falta de memoria, giro...), restaurar la página web;
+        // si no, arrancamos por el shell local de la app.
+        val restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null
+        if (!restored) {
+            webView.loadUrl("file:///android_asset/www/index.html")
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        // Solo pedimos lo imprescindible para FCM (Android 13+).
+        // Nada de cámara/micrófono/ubicación/almacenamiento al arrancar.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionsLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+        }
     }
 
     private fun createNotificationChannel() {
@@ -148,7 +232,21 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        // Batería: pausar timers y render del WebView cuando la app no es visible
+        webView.onPause()
+        webView.pauseTimers()
         CookieManager.getInstance().flush()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.resumeTimers()
+        webView.onResume()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
     }
 
     override fun onDestroy() {
@@ -156,67 +254,96 @@ class MainActivity : AppCompatActivity() {
         unregisterReceiver(tokenReceiver)
     }
 
-    private fun setFullScreenMode() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+    private fun setFullScreenMode(enable: Boolean) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (enable) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     @Suppress("SetJavaScriptEnabled")
     private fun setupWebView() {
+        // User-Agent real del WebView + marca propia (sin suplantar otro dispositivo).
+        val defaultUA = webView.settings.userAgentString
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
             allowFileAccess = true
             allowContentAccess = true
-            userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
+            // Nunca permitir que una web remota (o local) lea otros ficheros file://
+            allowFileAccessFromFileURLs = false
+            allowUniversalAccessFromFileURLs = false
+
+            // Nada de identidad falsa: UA del dispositivo + marca de la app.
+            userAgentString = if (defaultUA.contains("NVMobile")) defaultUA else "$defaultUA NVMobile/2.0"
             textZoom = 100
             useWideViewPort = true
-            loadWithOverviewMode = true 
+            loadWithOverviewMode = true
             layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            
-            @Suppress("DEPRECATION")
-            allowUniversalAccessFromFileURLs = false
-            @Suppress("DEPRECATION")
-            allowFileAccessFromFileURLs = false
-            
+            cacheMode = WebSettings.LOAD_DEFAULT
             setGeolocationEnabled(false)
         }
 
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+            // Nota: estrategia de oscurecimiento web. Con FORCE_DARK_OFF apenas influye,
+            // pero dejamos el ajuste en su valor por defecto para no sorprender a la web.
+            WebSettingsCompat.setForceDarkStrategy(webView.settings, WebSettingsCompat.DARK_STRATEGY_WEB_THEME_DARKENING_ONLY)
+        }
+
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                loadingBar.visibility = View.VISIBLE
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                loadingBar.visibility = View.GONE
                 
-                if (url != null && url.startsWith("file:///android_asset/")) {
+                val isLocal = url != null && url.startsWith("file:///android_asset/")
+                if (isLocal) {
                     toolbar.visibility = View.GONE
+                    setFullScreenMode(false)
                 } else {
                     toolbar.visibility = View.VISIBLE
                     val uri = url?.toUri()
                     val netName = uri?.getQueryParameter("nv_name")
-                    supportActionBar?.title = netName ?: "Null-Void"
+                    if (netName != null) {
+                        supportActionBar?.title = netName
+                    }
+                    setFullScreenMode(true)
                 }
-                setFullScreenMode()
             }
 
             @Deprecated("Deprecated in Java")
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                view.loadUrl(url)
-                return true
+                return false
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                view.loadUrl(request.url.toString())
-                return true
+                return false
             }
 
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-                // TEMPORAL: Permitir cualquier certificado SSL (incluido autofirmado)
-                // Peligro de MITM, pero necesario por ahora para el desarrollo.
-                handler?.proceed()
+                val host = error?.url?.let { Uri.parse(it).host }
+                // Solo toleramos certificados no confiables en hosts PRIVADOS/locales
+                // (LAN, CGNAT, localhost). En internet el error bloquea la conexión.
+                if (host != null && isPrivateAddress(host) && error.isSelfSignedLike()) {
+                    handler?.proceed()
+                } else {
+                    handler?.cancel()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Conexión no segura ($host). Revisa el certificado SSL del servidor.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -230,32 +357,164 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webChromeClient = object : WebChromeClient() {
+// Permisos web (cámara, micrófono...): ya no se conceden automáticamente.
+            // Primera vez se pregunta al usuario y la decisión se recuerda por origen.
             override fun onPermissionRequest(request: PermissionRequest?) {
-                // request?.grant(request.resources) // PELIGRO: Concesión automática desactivada
+                runOnUiThread {
+                    if (request == null) return@runOnUiThread
+                    val host = request.origin?.host ?: "sitio web"
+
+                    // Si la web pide micro/cámara, primero hay que tener el permiso
+                    // nativo de la app (lo pide el sistema una única vez).
+                    val appPerms = mutableListOf<String>()
+                    if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE) &&
+                        ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        appPerms.add(Manifest.permission.RECORD_AUDIO)
+                    }
+                    if (request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE) &&
+                        ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        appPerms.add(Manifest.permission.CAMERA)
+                    }
+
+                    if (appPerms.isNotEmpty()) {
+                        pendingPermissionRequest = request
+                        requestPermissionsLauncher.launch(appPerms.toTypedArray())
+                        return@runOnUiThread
+                    }
+
+                    when (webPermissionPrefs.getString("host:$host", null)) {
+                        "yes" -> request.grant(request.resources)
+                        "no" -> request.deny()
+                        else -> showWebPermissionDialog(request, host)
+                    }
+                }
             }
 
-            override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
-                // callback?.invoke(origin, true, false) // PELIGRO: Concesión automática desactivada
-            }
+            // Nota: onGeolocationPermissionsShowPrompt se deja por defecto,
+            // así cada web muestra su propio diálogo nativo de ubicación.
 
             override fun onShowFileChooser(
                 webView: WebView?,
                 callback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
+                if (filePathCallback != null) {
+                    filePathCallback?.onReceiveValue(null)
+                }
                 filePathCallback = callback
-                val intent = Intent(Intent.ACTION_GET_CONTENT)
-                intent.addCategory(Intent.CATEGORY_OPENABLE)
-                intent.type = "*/*"
-                val chooserIntent = Intent(Intent.ACTION_CHOOSER)
-                chooserIntent.putExtra(Intent.EXTRA_INTENT, intent)
-                chooserIntent.putExtra(Intent.EXTRA_TITLE, "Seleccionar archivo")
-                fileChooserLauncher.launch(chooserIntent)
+
+                val accepted = fileChooserParams?.acceptTypes.orEmpty().filter { it.isNotBlank() }
+                val mimeTypes = if (accepted.isEmpty()) arrayOf("*/*") else accepted.toTypedArray()
+
+                // Según cómo lo pida la web: selector único o múltiple.
+                val multiple = fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+                if (multiple) {
+                    fileChooserLauncher.launch(mimeTypes)
+                } else {
+                    singleFileChooserLauncher.launch(mimeTypes)
+                }
                 return true
             }
         }
 
         webView.setBackgroundColor(Color.TRANSPARENT)
+
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
+            try {
+                val request = DownloadManager.Request(Uri.parse(url))
+                request.setMimeType(mimetype)
+                
+                val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+                
+                request.addRequestHeader("User-Agent", userAgent)
+                val cookies = CookieManager.getInstance().getCookie(url)
+                request.addRequestHeader("Cookie", cookies)
+                
+                request.setTitle(fileName)
+                request.setDescription("Descargando archivo...")
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                
+                val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                dm.enqueue(request)
+                
+                Toast.makeText(this, "Iniciando descarga...", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                val intent = Intent(Intent.ACTION_VIEW)
+                intent.data = Uri.parse(url)
+                startActivity(intent)
+            }
+        }
+    }
+
+    /** Restringe el puente JS al shell local de la app */
+    private fun isLocalOrigin(): Boolean =
+        webView.url?.startsWith("file:///android_asset/") == true
+
+    /** IPs/rangos privados: LAN, loopback, link-local, CGNAT 100.64/10 */
+    private fun isPrivateAddress(host: String?): Boolean {
+        if (host.isNullOrBlank()) return false
+        val lower = host.lowercase(Locale.ROOT)
+        if (lower == "localhost" ||
+            lower.endsWith(".local") ||
+            lower.endsWith(".internal") ||
+            lower.endsWith(".lan")
+        ) return true
+
+        val parts = lower.split(".")
+        if (parts.size != 4) return false
+        val nums = parts.mapNotNull { it.toIntOrNull() }
+        if (nums.size != 4) return false
+        val (a, b) = nums
+        return when (a) {
+            0, 10, 127 -> true
+            172 -> b in 16..31
+            169 -> b == 254
+            192 -> b == 168
+            198 -> b in 18..19
+            100 -> b in 64..127
+            else -> false
+        }
+    }
+
+    /** Solo errores típicos de certificado autofirmado (no caducado ni pinning) */
+    private fun SslError.isSelfSignedLike(): Boolean = when (primaryError) {
+        SslError.SSL_UNTRUSTED,
+        SslError.SSL_IDMISMATCH,
+        SslError.SSL_INVALID,
+        SslError.SSL_NOTYETVALID,
+        SslError.SSL_DATE_INVALID -> true
+        else -> false
+    }
+
+    private fun showWebPermissionDialog(request: PermissionRequest, host: String) {
+        val labels = request.resources
+            .map { r ->
+                when (r) {
+                    PermissionRequest.RESOURCE_VIDEO_CAPTURE -> "cámara"
+                    PermissionRequest.RESOURCE_AUDIO_CAPTURE -> "micrófono"
+                    PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID -> "medios protegidos"
+                    else -> r
+                }
+            }
+            .distinct()
+            .joinToString(", ")
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Permiso de la web")
+            .setMessage("\"$host\" quiere acceder a: $labels.")
+            .setPositiveButton("Permitir") { _, _ ->
+                webPermissionPrefs.edit().putString("host:$host", "yes").apply()
+                request.grant(request.resources)
+            }
+            .setNegativeButton("Denegar") { _, _ ->
+                webPermissionPrefs.edit().putString("host:$host", "no").apply()
+                request.deny()
+            }
+            .setOnCancelListener { request.deny() }
+            .show()
     }
 
     private fun handleConnectionError(view: WebView?, message: String) {
@@ -272,6 +531,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_refresh -> {
+                Toast.makeText(this, "Recargando...", Toast.LENGTH_SHORT).show()
                 webView.reload()
                 true
             }
@@ -312,11 +572,18 @@ class MainActivity : AppCompatActivity() {
         get() = webView.url ?: ""
         set(value) { webView.loadUrl(value) }
 
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            val currentUrl = webView.url ?: ""
-            if (currentUrl.contains("android_asset/www/index.html")) super.onBackPressed()
-            else webView.goBack()
-        } else super.onBackPressed()
+    private fun updateWebViewTheme() {
+        // El "force dark" de Android reescribe los colores del CSS de la web en WebViews
+        // antiguos (p.ej. Redmi 8/MIUI), aunque la web ya gestione su propio tema oscuro
+        // con data-theme + prefers-color-scheme. Lo desactivamos por completo.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            WebSettingsCompat.setForceDark(webView.settings, WebSettingsCompat.FORCE_DARK_OFF)
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        updateWebViewTheme()
+        webView.invalidate()
     }
 }

@@ -48,6 +48,70 @@ def _sanitize_source_paths(data):
     return cleaned[:20]
 
 
+def _sanitize_exclude_exts(data):
+    """
+    Sanitiza extensiones excluidas del respaldo (defensa en profundidad;
+    la normalización real ocurre en core.backup._normalize_exclude_exts).
+
+    Acepta: lista o cadena separada por comas (".tmp", "log", "*.zip").
+    Devuelve: lista de extensiones minúsculas con punto, máximo 30 ítems.
+    """
+    raw = data.get("exclude_exts")
+    if raw is None:
+        return []
+    items = raw if isinstance(raw, list) else str(raw).split(",")
+    cleaned = []
+    seen = set()
+    for item in items:
+        item = str(item).strip().lower()
+        if not item:
+            continue
+        if item.startswith("*."):
+            item = item[1:]
+        if not item.startswith("."):
+            item = "." + item
+        if len(item) > 13 or not re.match(r"^\.[a-z0-9][a-z0-9_-]*$", item):
+            continue
+        if item in seen:
+            continue
+        seen.add(item)
+        cleaned.append(item)
+        if len(cleaned) >= 30:
+            break
+    return cleaned
+
+
+def _sanitize_exclude_paths(data):
+    """
+    Sanitiza rutas excluidas del respaldo (defensa en profundidad; la
+    normalización real ocurre en core.backup._normalize_exclude_paths).
+
+    Acepta: lista de rutas relativas (ej. ['Asignaturas/1']).
+    Rechaza: absolutas, '..', segmentos ocultos, duplicados. Máximo 20 rutas.
+    """
+    raw = data.get("exclude_paths")
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    seen = set()
+    for p in raw:
+        p = str(p).strip()
+        if not p:
+            continue
+        if (p.startswith("/") or "\\" in p or ":" in p
+                or "\x00" in p or "~" in p):
+            continue
+        p = p.strip("/")
+        if not p or p in seen:
+            continue
+        parts = [x.strip() for x in p.split("/") if x.strip() not in ("", ".")]
+        if any(x == ".." or x.startswith(".") for x in parts):
+            continue
+        seen.add(p)
+        cleaned.append(p)
+    return cleaned[:20]
+
+
 def _extract_token() -> str or None:
     return request.cookies.get("token") or request.headers.get("X-Token")
 
@@ -159,6 +223,8 @@ def api_backup_automation_get():
         "dest_mode": cfg.get("dest_mode", "download"),
         "cloud_path": cfg.get("cloud_path", ""),
         "source_paths": source_paths,
+        "exclude_exts": cfg.get("exclude_exts", []),
+        "exclude_paths": cfg.get("exclude_paths", []),
     }})
 
 
@@ -194,6 +260,8 @@ def api_backup_automation_post():
 
     backup_type = backup_service.normalize_backup_type(data.get("backup_type", "full"))
     source_paths = _sanitize_source_paths(data)
+    exclude_exts = _sanitize_exclude_exts(data)
+    exclude_paths = _sanitize_exclude_paths(data)
 
     cfg = {
         "enabled": bool(data.get("enabled", False)),
@@ -205,6 +273,8 @@ def api_backup_automation_post():
         "dest_mode": dest_mode,
         "cloud_path": str(data.get("cloud_path", "")).strip("/"),
         "source_paths": source_paths,
+        "exclude_exts": exclude_exts,
+        "exclude_paths": exclude_paths,
     }
     backup_service.save_automation_config(user_id, cfg)
     return jsonify({"ok": True, "automation": cfg})
@@ -254,9 +324,13 @@ def api_backup_cloud():
 
     cloud_path = str(data.get("cloud_path", "")).strip("/")
     backup_type = backup_service.normalize_backup_type(data.get("backup_type", "full"))
+    exclude_exts = _sanitize_exclude_exts(data)
+    exclude_paths = _sanitize_exclude_paths(data)
 
     def generate():
-        for evt in backup_service.create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path, backup_type):
+        for evt in backup_service.create_cloud_backup_stream(
+                user_id, source_paths, dest_mode, cloud_path, backup_type,
+                exclude_exts, exclude_paths):
             yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
     return Response(

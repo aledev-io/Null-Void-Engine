@@ -1,16 +1,30 @@
 import { initCloud, updateCloudQuotaInfo, fetchCloudFiles } from './cloud.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
+function bootCloud() {
+    // Cada componente en su propio try/catch: un fallo en frío (localStorage,
+    // clipboard, red lenta) no debe impedir que la nube cargue el resto.
+    try {
+        initCloud();
+    } catch (e) {
+        console.error('[Cloud] initCloud falló:', e);
+    }
+    try {
+        updateCloudQuotaInfo();
+    } catch (e) {
+        console.error('[Cloud] updateCloudQuotaInfo falló:', e);
+    }
+    setInterval(() => {
+        try { updateCloudQuotaInfo(); } catch (e) { /* noop */ }
+    }, 30000);
+
     const urlParams = new URLSearchParams(window.location.search);
     const initialView = urlParams.get('view') || 'home';
     const initialPath = urlParams.get('path') || '';
 
-    initCloud();
-    updateCloudQuotaInfo();
-    setInterval(updateCloudQuotaInfo, 30000);
-
     try {
-        await fetchCloudFiles(initialPath, initialView);
+        fetchCloudFiles(initialPath, initialView).catch(e => {
+            console.error("Error en carga inicial cloud:", e);
+        });
     } catch (e) {
         console.error("Error en carga inicial cloud:", e);
     }
@@ -47,4 +61,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-});
+}
+
+// Arranque robusto: si el script se evalúa con el DOM ya listo (carga desde
+// caché, shell nativo), inicializa de inmediato en vez de esperar un evento
+// DOMContentLoaded que ya ocurrió.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootCloud);
+} else {
+    bootCloud();
+}

@@ -18,6 +18,8 @@ if (!window.__nvFetchCredentialsPatched) {
 let currentCloudPath = '';
 let currentCloudView = 'home';
 let currentCloudContextItem = null;
+let uploadDestinationOverridePath = null;
+let uploadDestinationOverrideView = null;
 let currentCloudInfoItem = null;
 let CLOUD_FILES = [];
 
@@ -54,13 +56,9 @@ async function fetchCloudFiles(path = '', view = 'home') {
         } else {
             url.searchParams.delete('view');
         }
-        if (path) {
-            url.searchParams.set('path', path);
-        } else {
-            url.searchParams.delete('path');
-        }
+        url.searchParams.delete('path');
         window.history.replaceState({}, '', url.pathname + url.search);
-    } catch (e) {}
+    } catch (e) { }
     document.querySelectorAll('#cloud-sidebar-nav .cloud-nav-item').forEach(item => {
         item.classList.remove('active');
     });
@@ -80,6 +78,9 @@ async function fetchCloudFiles(path = '', view = 'home') {
     } else {
         if (backupsContainer) backupsContainer.style.display = 'none';
         if (fileList) fileList.style.display = 'block';
+    }
+    if (fileList && !isBackupsRoot) {
+        fileList.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center; padding: 40px; box-sizing: border-box;"><div class="loading-spinner"></div></div>`;
     }
     updateTableHeaderVisibility(view, path);
 
@@ -214,6 +215,13 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
     const container = document.getElementById('cloud-breadcrumbs');
     if (!container) return;
 
+    // Botón flotante "Vaciar papelera" (estilo widget de chat, abajo a la derecha): solo en raíz de la papelera con contenido
+    const fabTrashBtn = document.getElementById('btn-empty-trash-fab');
+    if (fabTrashBtn) {
+        const showFabTrash = currentCloudView === 'trash' && (!path || path === '') && CLOUD_FILES && CLOUD_FILES.length > 0;
+        fabTrashBtn.style.display = showFabTrash ? 'flex' : 'none';
+    }
+
     if (currentCloudView === 'home' && (!path || path === '')) {
         container.innerHTML = `<span class="breadcrumb-item active hide-desktop">${window.t_cloud('nav_home', 'Home')}</span>`;
         return;
@@ -254,22 +262,13 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
         rootAction = "fetchCloudFiles('', 'shared')";
     }
 
-    // Botón vaciar papelera cuando estamos en la raíz de trash
-    let trashEmptyBtn = '';
-    if (currentCloudView === 'trash' && !path && CLOUD_FILES && CLOUD_FILES.length > 0) {
-        trashEmptyBtn = `
-            <button onclick="emptyCloudTrash()" style="padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.3); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; margin-left: 12px; flex-shrink: 0;" onmouseover="this.style.background='rgba(239,68,68,0.2)'; this.style.borderColor='#f87171';" onmouseout="this.style.background='rgba(239,68,68,0.1)'; this.style.borderColor='rgba(239,68,68,0.3)';">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> ${window.t_cloud('ctx_empty_trash', 'Vaciar papelera')}
-            </button>`;
-    }
-
     // Ocultar botón de vincular dispositivo si estamos en la papelera para ahorrar espacio
     const linkBtn = document.getElementById('btn-link-device-topbar');
     if (linkBtn) {
         linkBtn.style.display = currentCloudView === 'trash' ? 'none' : 'flex';
     }
 
-    let html = `<span class="breadcrumb-item ${!path ? 'active' : ''} ${parts.length > 0 ? 'hide-mobile' : 'hide-desktop'}" onclick="${rootAction}">${rootName}</span>${trashEmptyBtn}`;
+    let html = `<span class="breadcrumb-item ${!path ? 'active' : ''} ${parts.length > 0 ? 'hide-mobile' : 'hide-desktop'}" onclick="${rootAction}">${rootName}</span>`;
 
     let currentAccumulated = '';
     parts.forEach((p, i) => {
@@ -438,7 +437,7 @@ function renderCloudFiles(files, isRecent = false) {
 
         const previewView = f.id ? 'trash' : (f.view || currentCloudView);
 
-        const thumbUrl = `/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}`;
+        const thumbUrl = `/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}&thumbnail=1`;
 
         // Miniaturas: carga diferida (lazy) y, si fallan, se muestra el icono en vez de imagen rota
         const fallbackIcon = `<span style="font-size: 3rem; opacity: 0.25;">${getFileIcon(f.ext)}</span>`;
@@ -489,7 +488,7 @@ function renderCloudFiles(files, isRecent = false) {
 
             let previewContent = `<span style="font-size: 2.5rem;">${getFileIcon(f.ext)}</span>`;
 
-            const cardThumb = `/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}`;
+            const cardThumb = `/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}&thumbnail=1`;
             const cardFallback = `<span style="font-size:2.5rem;">${getFileIcon(f.ext)}</span>`;
 
             if (isImg) {
@@ -611,6 +610,10 @@ function renderCloudFiles(files, isRecent = false) {
             row.setAttribute('draggable', 'true');
 
             row.addEventListener('dragstart', (e) => {
+                if (row.getAttribute('data-protected') === 'true' || SELECTED_CLOUD_ITEMS.some(item => item.row && item.row.getAttribute('data-protected') === 'true')) {
+                    e.preventDefault();
+                    return;
+                }
                 row.classList.add('dragging');
                 const isSelected = SELECTED_CLOUD_ITEMS.some(item => item.row === row);
                 if (!isSelected) {
@@ -732,6 +735,15 @@ function renderCloudFiles(files, isRecent = false) {
     }
 }
 
+function protectSvgIcon(locked, size) {
+    const s = size || 15;
+    const rect = `<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>`;
+    const shackle = locked
+        ? `<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>`
+        : `<path d="M7 11V7a5 5 0 0 1 9.9-1"></path>`;
+    return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${rect}${shackle}</svg>`;
+}
+
 function renderListRow(f, isRecent, getFileTemplateData) {
     const d = getFileTemplateData(f);
     return `
@@ -741,13 +753,13 @@ function renderListRow(f, isRecent, getFileTemplateData) {
          onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
         <div class="cloud-file-name" style="position: relative; ${currentCloudView === 'home' ? 'padding-left: 0;' : ''}">
             ${d.checkboxHtml}
-            <span style="font-size: 1.2rem;">${d.icon}</span>
+            <span class="cloud-file-icon" style="font-size: 1.2rem;">${d.icon}</span>
             <div style="display: flex; flex-direction: column; overflow: hidden;">
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${f.name}</span>
                     ${d.statusBadge}
                     ${f.starred ? '<span style="color: #fbbf24; font-size: 0.8rem;">★</span>' : ''}
-                    ${f.protected ? '<span style="font-size: 0.8rem; opacity: 0.6; cursor: help;" title="Este elemento está protegido contra eliminación">🔒</span>' : ''}
+                    ${f.protected ? `<span title="Este elemento está protegido contra eliminación" style="display: inline-flex; opacity: 0.6; cursor: help;">${protectSvgIcon(true, 13)}</span>` : ''}
                 </div>
                 ${(isRecent || f.path !== undefined) ? `<span style="font-size: 0.65rem; opacity: 0.5;">${window.t_cloud('in_lower', 'en')} ${d.displayPath}</span>` : ''}
             </div>
@@ -760,7 +772,7 @@ function renderListRow(f, isRecent, getFileTemplateData) {
             ${new Date(f.mtime * 1000).toLocaleDateString(window.currentLang, { day: '2-digit', month: 'short', year: 'numeric' })}
         </div>
         <div class="cloud-file-size" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim);">
-            ${f.is_dir ? '--' : formatBytes(f.size)}
+            ${formatBytes(f.size || 0)}
         </div>
         <div class="cloud-file-actions" style="width: 40px; display: flex; justify-content: flex-end;">
              <button onclick="handleCloudAction(event, '${f.name}', ${f.is_dir}, '${d.fpath}')" style="background: none; border: none; color: inherit; cursor: pointer; padding: 5px; opacity: 0.5;">⋮</button>
@@ -906,7 +918,7 @@ async function updateCloudQuotaInfo() {
         const btn = document.getElementById('cloud-quota-request-btn');
         if (btn) {
             if (data.has_pending_request) {
-                btn.innerHTML = window.currentLang === 'en' ? 'Cancel pending request' : 'Cancelar petición pendiente';
+                btn.innerHTML = window.t_cloud('cancel_quota_request', 'Cancelar petición pendiente');
                 btn.style.borderColor = 'rgba(248, 113, 113, 0.3)';
                 btn.style.color = 'var(--cpu)';
                 btn.onclick = cancelCloudQuotaRequest;
@@ -924,7 +936,7 @@ async function updateCloudQuotaInfo() {
 }
 
 async function cancelCloudQuotaRequest() {
-    if (!await NV_Confirm(window.currentLang === 'en' ? 'Are you sure you want to cancel your quota request?' : '¿Seguro que quieres cancelar tu petición de cuota?', window.currentLang === 'en' ? 'Cancel Request' : 'Cancelar petición', window.currentLang === 'en' ? 'Confirm' : 'Confirmar', window.currentLang === 'en' ? 'Back' : 'Volver')) return;
+    if (!await NV_Confirm(window.t_cloud('cancel_quota_confirm'), window.t_cloud('cancel_quota_title'), window.t_cloud('btn_confirm'), window.t_cloud('back'))) return;
     try {
         const res = await fetch('/api/cloud/quota', {
             method: 'DELETE',
@@ -937,14 +949,14 @@ async function cancelCloudQuotaRequest() {
 }
 
 async function requestMoreCloudQuota() {
-    if (!await NV_Confirm(window.currentLang === 'en' ? 'Are you sure you want to request 10GB more from the Admin?' : '¿Seguro que quieres solicitar 10GB más al Administrador?', window.currentLang === 'en' ? 'Request Space' : 'Solicitar espacio', window.currentLang === 'en' ? 'Confirm' : 'Confirmar', window.currentLang === 'en' ? 'Cancel' : 'Cancelar')) return;
+    if (!await NV_Confirm(window.t_cloud('request_10gb_confirm'), window.t_cloud('request_space_title'), window.t_cloud('btn_confirm'), window.t_cloud('btn_cancel'))) return;
     try {
         const res = await fetch('/api/cloud/quota', {
             method: 'POST',
             headers: HEADERS
         });
         if (res.ok) {
-            await NV_Alert(window.currentLang === 'en' ? 'Request sent! Waiting for admin approval.' : '¡Petición enviada! Esperando aprobación del admin.');
+            await NV_Alert(window.t_cloud('request_sent'));
             updateCloudQuotaInfo();
         } else {
             const errData = await res.json();
@@ -1087,7 +1099,7 @@ async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, is
                         }
                     } catch (e) { }
                     console.error(`Upload error for ${file.name}:`, errMsg);
-                    
+
                     if (index < maxDomRows) {
                         const pctEl = document.getElementById(`${rowId}-pct`);
                         const barEl = document.getElementById(`${rowId}-bar`);
@@ -1098,7 +1110,7 @@ async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, is
                         }
                         if (barEl) barEl.style.background = '#ef4444';
                     }
-                    
+
                     if (isQuotaError) {
                         NV_Alert(errMsg, window.currentLang === 'en' ? 'Upload Failed' : 'Error al subir');
                     }
@@ -1162,11 +1174,11 @@ async function handleCloudUpload(e, isFolder = false) {
     if (!input.files || input.files.length === 0) return;
 
     const fileCount = input.files.length;
-    
+
     if (fileCount > 2000) {
         // DO NOT iterate to calculate size, it freezes the browser for 300k+ files!
-        await NV_Alert(window.currentLang === "en" ? 
-            `You are trying to upload a folder with ${fileCount} files. To prevent your browser from crashing, the limit is 2000 files at once. Please compress the folder into a ZIP file first.` : 
+        await NV_Alert(window.currentLang === "en" ?
+            `You are trying to upload a folder with ${fileCount} files. To prevent your browser from crashing, the limit is 2000 files at once. Please compress the folder into a ZIP file first.` :
             `Has intentado subir una carpeta enorme con ${fileCount} archivos. Para evitar colapsar tu navegador, el límite es de 2000 archivos a la vez. Por favor, comprímela en un archivo ZIP primero.`
         );
         input.value = '';
@@ -1195,8 +1207,7 @@ async function handleCloudUpload(e, isFolder = false) {
         return;
     }
 
-    const baseUploadPath = uploadDestinationOverridePath !== null ? uploadDestinationOverridePath : currentCloudPath;
-    const baseUploadView = uploadDestinationOverrideView !== null ? uploadDestinationOverrideView : currentCloudView;
+    const { targetView: baseUploadView, targetPath: baseUploadPath } = getUploadTarget();
 
     await uploadFilesWithProgress(files, baseUploadPath, baseUploadView, isFolder);
 
@@ -1305,14 +1316,14 @@ async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
     panel.style.display = 'flex';
     title.textContent = window.t_cloud('ctx_rename', 'Cambiar nombre');
     const ext = oldName.split('.').pop().toLowerCase();
-    icon.textContent = isDir ? '📁' : getFileIcon('.' + ext);
+    icon.innerHTML = isDir ? getFolderIcon() : getFileIcon('.' + ext);
 
     document.querySelectorAll('.info-tab').forEach(t => t.style.visibility = 'hidden');
 
     body.innerHTML = `
         <div style="padding: 12px; display: flex; flex-direction: column; gap: 12px;">
             <div style="text-align: center; padding: 8px 0;">
-                <span style="font-size: 2rem; opacity: 0.6;">${isDir ? '📁' : getFileIcon('.' + ext)}</span>
+                <span style="font-size: 2rem; opacity: 0.6;">${isDir ? getFolderIcon() : getFileIcon('.' + ext)}</span>
             </div>
             <div>
                 <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; display: block;">${window.t_cloud('rename_new_name', 'Nuevo nombre')}</label>
@@ -1455,6 +1466,9 @@ async function toggleCloudProtect(name, path, fileView = null) {
         if (res.ok) {
             fetchCloudFiles(currentCloudPath, currentCloudView);
             closeCloudInfoPanel();
+        } else {
+            const data = await res.json();
+            await NV_Alert(data.error || (window.currentLang === "en" ? "Cannot change the protection of this item." : "No se puede cambiar el estado de protección de este elemento."));
         }
     } catch (err) {
         await NV_Alert(window.currentLang === "en" ? "Error changing protection state." : "Error al cambiar estado de protección.");
@@ -1506,8 +1520,7 @@ async function handleCreateFolder() {
         return;
     }
 
-    const targetPath = uploadDestinationOverridePath !== null ? uploadDestinationOverridePath : currentCloudPath;
-    const targetView = uploadDestinationOverrideView !== null ? uploadDestinationOverrideView : currentCloudView;
+    const { targetView, targetPath } = getUploadTarget();
 
     uploadDestinationOverridePath = null;
     uploadDestinationOverrideView = null;
@@ -1541,6 +1554,11 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
             body: JSON.stringify({ name, path, view: view, owner_id: ownerId, id: trashId })
         });
         const data = await res.json();
+        if (res.status === 401 || (data.error && String(data.error).toLowerCase().includes('no autorizado'))) {
+            await NV_Alert(window.currentLang === 'en' ? 'Session expired. Please log in again.' : 'Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
+            window.location.href = '/login';
+            return;
+        }
 
         if (!data.t) {
             if (data.error === 'access_revoked') {
@@ -1555,24 +1573,31 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
 
         const url = `/api/cloud/download?t=${data.t}`;
         const ext = name.split('.').pop().toLowerCase();
-        const previewExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'mp4', 'webm', 'mov'];
+        const previewExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'md', 'json', 'mp4', 'webm', 'mov', 'svg'];
 
         if (!forceDownload && previewExts.includes(ext)) {
             openCloudPreview(name, url, path, ownerId, fileView, ownerName, isShared);
         } else {
-            const link = document.createElement('a');
-            link.href = url + (forceDownload ? '&dl=1' : '');
-            link.download = name;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const downloadUrl = url + (forceDownload ? '&dl=1' : '');
+            if (isMobile) {
+                window.location.href = downloadUrl;
+            } else {
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
         }
     } catch (err) {
-        alert("Error de seguridad al acceder al archivo.");
+        console.error('[Cloud] Error generando token de acceso:', err);
+        await NV_Alert(window.t_cloud('err_token_fetch', 'Error al acceder al archivo. Si el problema persiste, recarga la página.'));
     }
 }
 
-window.openPdfBlob = async function(url) {
+window.openPdfBlob = async function (url) {
     const newWindow = window.open('', '_blank');
     if (newWindow) {
         newWindow.document.write('<html style="background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;"><body>Cargando documento... / Loading document...</body></html>');
@@ -1595,9 +1620,25 @@ window.openPdfBlob = async function(url) {
     }
 };
 
+// Cola de previsualización múltiple: cuando hay varios documentos abiertos en
+// el visor, las pestañas y las flechas navegan sobre esta lista.
+let _previewQueue = [];
+let _previewIndex = 0;
+
+// Contador para cancelar cambios de calidad obsoletos: si el usuario pulsa
+// 360p y luego 720p, el polling del 360p debe morir (no escribir la etiqueta
+// ni aplicar su src después del nuevo cambio).
+let _videoQualReqId = 0;
+
+// Orden de calidades para el menú dinámico del reproductor (solo se muestran
+// las versiones ya generadas en el caché + las que se están transcodificando).
+const VIDEO_QUALITY_ORDER = ['2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p'];
+let _previewVideoToken = '';
+
+const PREVIEW_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'md', 'json', 'mp4', 'webm', 'mov'];
+
 function openCloudPreview(name, url, path, ownerId = null, fileView = null, ownerName = null, isShared = false) {
     const modal = document.getElementById('cloud-preview-modal');
-    const body = document.getElementById('preview-body');
     const nameEl = document.getElementById('preview-filename');
     const dlBtn = document.getElementById('preview-download-btn');
     const ext = name.split('.').pop().toLowerCase();
@@ -1619,30 +1660,190 @@ function openCloudPreview(name, url, path, ownerId = null, fileView = null, owne
     nameEl.innerText = name;
     dlBtn.onclick = () => downloadCloudFile(name, path, true, ownerId, fileView);
 
+    _previewQueue = [{ name, url, path, ownerId, fileView, ownerName, isShared, ext }];
+    _previewIndex = 0;
+
+    _renderCloudPreviewBody(ext, url, name, (path ? path + '/' : '') + name);
+    _renderPreviewTabs();
+
+    modal.style.display = 'flex';
+}
+
+// Visor de previsualización múltiple: pestañas + flechas (y teclado ←/→)
+// para saltar entre los documentos seleccionados sin cerrar el modal.
+window.openCloudMultiPreview = async function () {
+    const items = SELECTED_CLOUD_ITEMS.filter(it =>
+        !it.isDir && PREVIEW_EXTS.includes((it.name || '').split('.').pop().toLowerCase()));
+    const skipped = SELECTED_CLOUD_ITEMS.length - items.length;
+
+    if (items.length === 0) {
+        await NV_Alert(window.t_cloud('preview_none', 'Ninguno de los elementos seleccionados se puede previsualizar.'));
+        return;
+    }
+
+    const queue = [];
+    for (const it of items) {
+        try {
+            const path = it.path !== undefined && it.path !== null ? it.path : currentCloudPath;
+            const view = it.fileView || currentCloudView;
+            const res = await fetch('/api/cloud/get_token', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({ name: it.name, path, view, owner_id: it.ownerId || null })
+            });
+            const data = await res.json();
+            if (!data.t) {
+                if (data.error === 'access_revoked') {
+                    await NV_Alert(window.t_cloud('access_revoked', 'Te han quitado el acceso a un archivo.'));
+                }
+                continue;
+            }
+            queue.push({
+                name: it.name,
+                path,
+                url: `/api/cloud/download?t=${data.t}`,
+                ownerId: it.ownerId || null,
+                fileView: view,
+                ownerName: it.ownerName || null,
+                isShared: !!it.isShared,
+                ext: it.name.split('.').pop().toLowerCase()
+            });
+        } catch (err) {
+            console.error('[Cloud] Error generando token de preview:', err);
+        }
+    }
+
+    if (queue.length === 0) {
+        await NV_Alert(window.t_cloud('preview_none', 'Ninguno de los elementos seleccionados se puede previsualizar.'));
+        return;
+    }
+
+    _previewQueue = queue;
+    _previewIndex = 0;
+
+    const note = document.getElementById('preview-filtered-note');
+    if (note) {
+        if (skipped > 0) {
+            note.style.display = 'block';
+            note.textContent = window.t_cloud('preview_skipped', 'Se omitieron {0} elemento(s) no compatibles con la vista previa.').replace('{0}', skipped);
+        } else {
+            note.style.display = 'none';
+            note.textContent = '';
+        }
+    }
+
+    renderCloudPreviewItem(0);
+    document.getElementById('cloud-preview-modal').style.display = 'flex';
+};
+
+function renderCloudPreviewItem(index) {
+    if (!_previewQueue.length) return;
+    index = ((index % _previewQueue.length) + _previewQueue.length) % _previewQueue.length;
+    _previewIndex = index;
+    const item = _previewQueue[index];
+
+    const nameEl = document.getElementById('preview-filename');
+    const dlBtn = document.getElementById('preview-download-btn');
+    const ownerLine = document.getElementById('preview-owner');
+    if (nameEl) nameEl.innerText = item.name;
+    if (dlBtn) dlBtn.onclick = () => downloadCloudFile(item.name, item.path, true, item.ownerId, item.fileView);
+
+    if (ownerLine) {
+        if (item.ownerId && item.ownerId !== window.CURRENT_USER_ID) {
+            ownerLine.textContent = window.t_cloud('shared', 'Compartido');
+            ownerLine.style.color = 'var(--indigo)';
+        } else {
+            ownerLine.textContent = window.t_cloud('nav_drive', 'Mi unidad');
+            ownerLine.style.color = 'var(--text-muted)';
+        }
+        ownerLine.style.display = 'block';
+    }
+
+    _renderCloudPreviewBody(item.ext, item.url, item.name, (item.path ? item.path + '/' : '') + item.name);
+    _renderPreviewTabs();
+
+    const nav = document.getElementById('preview-nav');
+    const pos = document.getElementById('preview-position');
+    if (nav && pos) {
+        if (_previewQueue.length > 1) {
+            nav.style.display = 'flex';
+            pos.innerText = `${index + 1} / ${_previewQueue.length}`;
+        } else {
+            nav.style.display = 'none';
+        }
+    }
+}
+
+window._previewNav = function (dir) {
+    renderCloudPreviewItem(_previewIndex + dir);
+};
+
+window._previewGo = function (index) {
+    renderCloudPreviewItem(index);
+};
+
+function _renderPreviewTabs() {
+    const tabsEl = document.getElementById('preview-tabs');
+    if (!tabsEl) return;
+    if (_previewQueue.length <= 1) {
+        tabsEl.style.display = 'none';
+        tabsEl.innerHTML = '';
+        return;
+    }
+    tabsEl.style.display = 'flex';
+    tabsEl.innerHTML = _previewQueue.map((item, idx) => {
+        const active = idx === _previewIndex;
+        return `<button onclick="window._previewGo(${idx})"
+            style="flex-shrink: 0; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 600; white-space: nowrap; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+            ${active
+                ? 'background: var(--indigo); color: #fff; border: 1px solid var(--indigo);'
+                : 'background: var(--surface-hi); color: var(--text-secondary); border: 1px solid var(--border);'}">
+            <span style="display: inline-flex; align-items: center; font-size: 1.15em;">${getFileIcon('.' + item.ext)}</span>
+            ${item.name.length > 28 ? item.name.slice(0, 26) + '…' : item.name}
+        </button>`;
+    }).join('');
+}
+
+function _renderCloudPreviewBody(ext, url, name, fileKey) {
+    const body = document.getElementById('preview-body');
+
     if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
         body.innerHTML = `<img src="${url}" style="max-width: 100%; max-height: 75vh; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">`;
-    } else if (['mp4', 'webm', 'mov'].includes(ext)) {
+    } else if (['mp4', 'webm', 'mov', 'mkv', 'avi'].includes(ext)) {
+        const token = new URLSearchParams(url.split('?')[1] || '').get('t') || '';
+        const streamUrl = token ? `/api/cloud/stream_video?t=${token}&quality=original` : url;
         body.innerHTML = `
-        <video controls autoplay style="max-width: 100%; max-height: 75vh; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <source src="${url}" type="video/${ext === 'mov' ? 'quicktime' : ext.replace('.', '')}">
-            Tu navegador no soporta la reproducción de video.
-        </video>`;
+        <div style="position: relative; display: inline-block; width: min(80vw, 880px); max-width: 100%; max-height: 75vh; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #000;">
+            <video id="preview-video-player" controls autoplay style="width: 100%; height: auto; max-height: 75vh; border-radius: 8px; display: block; background: #000;">
+                <source src="${streamUrl}" type="video/${ext === 'mov' ? 'quicktime' : ext}">
+                ${window.t_cloud('video_not_supported', 'Tu navegador no soporta la reproducción de video.')}
+            </video>
+            <div style="position: absolute; top: 12px; right: 12px; z-index: 10;">
+                <div style="position: relative; display: inline-block;">
+                    <button type="button" onclick="window.toggleVideoQualityMenu(event)" style="background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; backdrop-filter: blur(8px);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <span id="video-quality-label">Original</span>
+                    </button>
+                    <div id="video-quality-menu" style="display: none; position: absolute; right: 0; top: 36px; background: rgba(18, 18, 26, 0.95); border: 1px solid var(--border); border-radius: 10px; padding: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); min-width: 170px; max-height: 280px; overflow-y: auto; z-index: 100; backdrop-filter: blur(12px);">
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        if (token) {
+            _previewVideoToken = token;
+            _previewVideoKey = fileKey || '';
+            _renderVideoQualityMenu(token);
+        }
+        // Posición de reproducción: restaurar donde se dejó y guardar avance.
+        _initVideoProgressTracking(fileKey || '');
     } else if (ext === 'pdf') {
         const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
             body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 60vh; text-align: center; color: var(--text-muted);">
-                <div style="font-size: 4rem; margin-bottom: 20px;">📄</div>
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 50vh; text-align: center; color: var(--text-muted);">
+                <div style="font-size: 4rem; margin-bottom: 20px; color: #f87171;">${getFileIcon('.pdf')}</div>
                 <h3 style="color: var(--text-main); margin-bottom: 10px; font-size: 1.2rem;">${window.t_cloud('mobile_preview_title', 'Visualización en Móvil')}</h3>
-                <p style="font-size: 0.9rem; margin-bottom: 25px; max-width: 80%;">${window.t_cloud('mobile_preview_desc', 'Los navegadores móviles requieren abrir el documento en una pestaña nueva para poder visualizarlo correctamente.')}</p>
-                <div style="display: flex; gap: 15px;">
-                    <button onclick="window.openPdfBlob('${url}')" style="padding: 12px 24px; border-radius: 8px; border: none; background: var(--indigo); color: white; font-weight: bold; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-                        ${window.t_cloud('mobile_preview_open', 'Abrir en el Navegador')}
-                    </button>
-                    <button onclick="document.getElementById('preview-download-btn').click()" style="padding: 12px 24px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-hi); color: var(--text-main); font-weight: bold; font-size: 1rem; cursor: pointer;">
-                        ${window.t_cloud('mobile_preview_download', 'Descargar')}
-                    </button>
-                </div>
+                <p style="font-size: 0.95rem; max-width: 85%; line-height: 1.5; color: var(--text-muted);">${window.t_cloud('mobile_pdf_desc', 'Descarga este archivo si quieres usarlo o visualizarlo.')}</p>
             </div>`;
         } else {
             body.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 75vh; border: none; border-radius: 8px;"></iframe>`;
@@ -1650,13 +1851,107 @@ function openCloudPreview(name, url, path, ownerId = null, fileView = null, owne
     } else {
         body.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 75vh; border: none; background: #fff; border-radius: 8px;"></iframe>`;
     }
+}
 
-    modal.style.display = 'flex';
+// ---------------------------------------------------------------------------
+// Posición de reproducción de vídeo: se guarda en localStorage por ruta de
+// archivo y se restaura al volver a abrir el mismo vídeo (o al cambiar de
+// calidad se conserva el instante actual).
+// ---------------------------------------------------------------------------
+const _VIDEO_PROGRESS_KEY = 'nv_video_progress_v1';
+let _previewVideoKey = '';
+
+function _getSavedVideoTime(fileKey) {
+    if (!fileKey) return 0;
+    try {
+        const map = JSON.parse(localStorage.getItem(_VIDEO_PROGRESS_KEY)) || {};
+        const t = parseFloat(map[fileKey]);
+        return isFinite(t) && t > 5 ? t : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function _saveVideoTime(fileKey, t) {
+    if (!fileKey || !isFinite(t) || t < 5) return;
+    try {
+        const map = JSON.parse(localStorage.getItem(_VIDEO_PROGRESS_KEY)) || {};
+        map[fileKey] = Math.round(t);
+        const keys = Object.keys(map);
+        if (keys.length > 500) {
+            // Acotar: conservar las 300 entradas con reproducción más reciente.
+            keys.sort((a, b) => (map[b] || 0) - (map[a] || 0));
+            keys.slice(300).forEach(k => delete map[k]);
+        }
+        localStorage.setItem(_VIDEO_PROGRESS_KEY, JSON.stringify(map));
+    } catch (e) { /* noop */ }
+}
+
+function _initVideoProgressTracking(fileKey, restore) {
+    const video = document.getElementById('preview-video-player');
+    if (!video) return;
+    let lastSaved = 0;
+
+    // restore=false cuando se re-enlaza tras un cambio de calidad: la posición
+    // ya se aplicó manualmente en el nuevo elemento y no debe re-buscarse.
+    if (restore !== false) {
+        const saved = _getSavedVideoTime(fileKey);
+        if (saved) {
+            video.addEventListener('loadedmetadata', function h() {
+                try {
+                    if (saved < video.duration - 15) video.currentTime = saved;
+                } catch (e) { /* noop */ }
+                video.removeEventListener('loadedmetadata', h);
+            }, { once: true });
+        }
+    }
+    video.addEventListener('timeupdate', () => {
+        if (!video.duration || video.seeking) return;
+        if (video.currentTime - lastSaved >= 10) {
+            lastSaved = video.currentTime;
+            _saveVideoTime(fileKey, video.currentTime);
+        }
+    });
+    video.addEventListener('pause', () => _saveVideoTime(fileKey, video.currentTime));
+    video.addEventListener('ended', () => {
+        try {
+            const map = JSON.parse(localStorage.getItem(_VIDEO_PROGRESS_KEY)) || {};
+            delete map[fileKey];
+            localStorage.setItem(_VIDEO_PROGRESS_KEY, JSON.stringify(map));
+        } catch (e) { /* noop */ }
+    });
 }
 
 function closeCloudPreview() {
+    // Guardar la posición antes de destruir el reproductor.
+    const video = document.getElementById('preview-video-player');
+    if (video && video.currentTime) {
+        _saveVideoTime(_previewVideoKey, video.currentTime);
+    }
     document.getElementById('cloud-preview-modal').style.display = 'none';
     document.getElementById('preview-body').innerHTML = '';
+    _previewQueue = [];
+    _previewIndex = 0;
+    _previewVideoKey = '';
+    const tabsEl = document.getElementById('preview-tabs');
+    if (tabsEl) {
+        tabsEl.style.display = 'none';
+        tabsEl.innerHTML = '';
+    }
+    const nav = document.getElementById('preview-nav');
+    if (nav) nav.style.display = 'none';
+    const note = document.getElementById('preview-filtered-note');
+    if (note) {
+        note.style.display = 'none';
+        note.textContent = '';
+    }
+}
+
+function setCloudDeleteVisible(visible) {
+    const btn = document.getElementById('ctx-delete-btn');
+    const sep = document.getElementById('ctx-sep-item');
+    if (btn) btn.style.display = visible ? 'block' : 'none';
+    if (sep) sep.style.display = visible ? 'block' : 'none';
 }
 
 function handleCloudAction(e, name, isDir, overridePath = null) {
@@ -1699,7 +1994,30 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
     const itemActions = document.getElementById('ctx-item-actions');
     const creationActions = document.getElementById('ctx-creation-actions');
 
-    if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me') {
+    // RAMA C: Tarjeta de dispositivo/computadora vinculada.
+    // Menú aislado del menú contextual genérico de archivos: únicamente "Información" y "Desvincular" (destructivo).
+    const isComputerCard = currentCloudView === 'computers' && currentCloudPath === '';
+    if (isComputerCard) {
+        const hiddenBtns = ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn', 'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn', 'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn', 'ctx-empty-trash-btn'];
+        hiddenBtns.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+        const tokenBtn = document.getElementById('ctx-token-btn');
+        if (tokenBtn) tokenBtn.style.display = 'block';
+
+        document.getElementById('ctx-info-btn').style.display = 'block';
+
+        const deleteBtn = document.getElementById('ctx-delete-btn');
+        setCloudDeleteVisible(true);
+        deleteBtn.style.color = '#f87171';
+        const deleteText = document.getElementById('ctx-delete-text');
+        if (deleteText) {
+            deleteText.setAttribute('data-i18n', 'btn_unlink');
+            deleteText.innerText = window.t_cloud('btn_unlink', 'Desvincular');
+        }
+    } else if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me') {
         document.getElementById('ctx-download-btn').style.display = 'block';
 
         // Forzamos la traducción por si acaso
@@ -1725,7 +2043,7 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
 
         // Ocultación total de herramientas de propietario comunes
         document.getElementById('ctx-rename-btn').style.display = 'none';
-        document.getElementById('ctx-delete-btn').style.display = 'none';
+        setCloudDeleteVisible(false);
         document.getElementById('ctx-share-btn').style.display = 'none';
         document.getElementById('ctx-protect-btn').style.display = 'none';
         document.getElementById('ctx-restore-btn').style.display = 'none';
@@ -1749,8 +2067,8 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
         document.getElementById('ctx-copy-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
 
         // Gestión de visibilidad según propiedad y contexto
-        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine) ? 'none' : 'block';
-        document.getElementById('ctx-delete-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine) ? 'none' : 'block';
+        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || isProtected) ? 'none' : 'block';
+        setCloudDeleteVisible(currentCloudView !== 'shared_by_me' && isMine && !isProtected);
         document.getElementById('ctx-delete-text').innerText = currentCloudView === 'computers' && currentCloudPath === '' ? window.t_cloud('btn_unlink', 'Desvincular') : window.t_cloud('ctx_trash', 'Mover a la papelera');
         document.getElementById('ctx-share-btn').style.display = (!isMine) ? 'none' : 'block';
         document.getElementById('ctx-restore-btn').style.display = currentCloudView === 'trash' ? 'block' : 'none';
@@ -1774,10 +2092,10 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
             protectText.setAttribute('data-i18n', isProtected ? 'ctx_unprotect' : 'ctx_protect');
             protectText.innerText = isProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
         }
-        if (protectIcon) protectIcon.innerText = isProtected ? '🔓' : '🔒';
+        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!isProtected);
 
         // Movimientos
-        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash') ? 'none' : 'block';
+        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash' || isProtected) ? 'none' : 'block';
     }
 
     // Despliegue del panel del menú
@@ -2090,20 +2408,33 @@ document.addEventListener('contextmenu', function (e) {
 
             const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+            if (isMobile) {
+                if (row) {
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('.cloud-file-actions')) {
+                        if (menu) menu.style.display = 'none';
+                        return;
+                    }
+
+                    const name = row.getAttribute('data-name');
+                    const path = row.getAttribute('data-path');
+                    const isDir = row.getAttribute('data-is-dir') === 'true';
+                    const ownerId = row.getAttribute('data-owner-id');
+                    const checkbox = row.querySelector('.cloud-file-checkbox');
+
+                    const isAlreadySelected = row.classList.contains('selected') || SELECTED_CLOUD_ITEMS.some(item => item.name === name && (item.path || '') === (path || ''));
+
+                    if (checkbox) checkbox.checked = !isAlreadySelected;
+                    toggleCloudFileSelection(checkbox, name, path, isDir, ownerId);
+                }
+                if (menu) menu.style.display = 'none';
+                return;
+            }
+
             if (row) {
                 const name = row.getAttribute('data-name');
                 const path = row.getAttribute('data-path');
                 const isDir = row.getAttribute('data-is-dir') === 'true';
                 const trashId = row.getAttribute('data-trash-id');
-
-                if (isMobile) {
-                    const checkbox = row.querySelector('.cloud-file-checkbox');
-                    if (checkbox) {
-                        checkbox.checked = !checkbox.checked;
-                        toggleCloudFileSelection(checkbox, name, path, isDir, row.getAttribute('data-owner-id'));
-                    }
-                    return;
-                }
 
                 if (name || trashId) {
                     if (isTrashView) {
@@ -2115,7 +2446,7 @@ document.addEventListener('contextmenu', function (e) {
                         document.getElementById('ctx-share-btn').style.display = 'none';
                         document.getElementById('ctx-organize-btn').style.display = 'none';
 
-                        const delBtn = document.getElementById('ctx-delete-btn');
+                        setCloudDeleteVisible(true);
                         document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_delete_perm', 'Eliminar permanentemente');
 
                         const restoreBtn = document.getElementById('ctx-restore-btn');
@@ -2124,16 +2455,24 @@ document.addEventListener('contextmenu', function (e) {
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
                         currentCloudContextItem = { name, path, isDir, trashId, ownerId: row.getAttribute('data-owner-id') };
                     } else if (currentCloudView === 'computers' && currentCloudPath === '') {
-                        document.getElementById('ctx-download-btn').style.display = 'none';
-                        document.getElementById('ctx-rename-btn').style.display = 'none';
-                        document.getElementById('ctx-share-btn').style.display = 'none';
-                        document.getElementById('ctx-organize-btn').style.display = 'none';
-                        document.getElementById('ctx-protect-btn').style.display = 'none';
+                        ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn', 'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn', 'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn', 'ctx-empty-trash-btn'].forEach(hiddenId => {
+                            const hiddenBtn = document.getElementById(hiddenId);
+                            if (hiddenBtn) hiddenBtn.style.display = 'none';
+                        });
+
+                        const tokenBtn = document.getElementById('ctx-token-btn');
+                        if (tokenBtn) tokenBtn.style.display = 'block';
+
                         document.getElementById('ctx-info-btn').style.display = 'block';
 
-                        document.getElementById('ctx-delete-btn').style.display = 'block';
-                        document.getElementById('ctx-delete-text').innerText = window.t_cloud('btn_unlink', 'Desvincular');
-                        document.getElementById('ctx-restore-btn').style.display = 'none';
+                        const deleteBtn = document.getElementById('ctx-delete-btn');
+                        setCloudDeleteVisible(true);
+                        deleteBtn.style.color = '#f87171';
+                        const deleteText = document.getElementById('ctx-delete-text');
+                        if (deleteText) {
+                            deleteText.setAttribute('data-i18n', 'btn_unlink');
+                            deleteText.innerText = window.t_cloud('btn_unlink', 'Desvincular');
+                        }
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
 
                         const fileView = row.getAttribute('data-view');
@@ -2143,7 +2482,8 @@ document.addEventListener('contextmenu', function (e) {
                         document.getElementById('ctx-download-btn').style.display = 'block';
                         document.getElementById('ctx-star-btn').style.display = 'block';
                         const isMineRow = row.getAttribute('data-is-mine') === 'true';
-                        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        const itemProtected = row.getAttribute('data-protected') === 'true';
+                        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow || itemProtected) ? 'none' : 'block';
                         document.getElementById('ctx-protect-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
                         document.getElementById('ctx-share-btn').style.display = (currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
 
@@ -2163,9 +2503,9 @@ document.addEventListener('contextmenu', function (e) {
                         }
 
                         document.getElementById('ctx-organize-btn').style.display = 'block';
-                        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow || itemProtected) ? 'none' : 'block';
                         document.getElementById('ctx-copy-btn').style.display = 'block';
-                        
+
                         const zipBtn = document.getElementById('ctx-zip-btn');
                         const unzipBtn = document.getElementById('ctx-unzip-btn');
                         if (zipBtn) zipBtn.style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'flex';
@@ -2173,7 +2513,7 @@ document.addEventListener('contextmenu', function (e) {
 
                         document.getElementById('ctx-info-btn').style.display = 'block';
 
-                        document.getElementById('ctx-delete-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        setCloudDeleteVisible(!(currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow));
                         document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_trash', 'Mover a la papelera');
                         document.getElementById('ctx-restore-btn').style.display = 'none';
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
@@ -2188,15 +2528,15 @@ document.addEventListener('contextmenu', function (e) {
                         starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
                         starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
 
-                        const isProtected = row.getAttribute('data-protected') === 'true';
+                        setCloudDeleteVisible(!(currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow || itemProtected));
                         const protectText = document.getElementById('ctx-protect-text');
                         const protectIcon = document.getElementById('ctx-protect-icon');
 
                         if (protectText) {
-                            protectText.setAttribute('data-i18n', isProtected ? 'ctx_unprotect' : 'ctx_protect');
-                            protectText.innerText = isProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
+                            protectText.setAttribute('data-i18n', itemProtected ? 'ctx_unprotect' : 'ctx_protect');
+                            protectText.innerText = itemProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
                         }
-                        if (protectIcon) protectIcon.innerText = isProtected ? '🔓' : '🔒';
+                        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!itemProtected);
                     }
                 } else {
                     currentCloudContextItem = null;
@@ -2300,6 +2640,9 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
 let moveTargetName = '';
 let moveTargetOldPath = '';
 let moveTargetNewPath = '';
+let _cloudMoveTree = null;
+let _cloudMoveViewQuery = 'drive';
+let _cloudMoveExpanded = new Set();
 let moveTargetIsDir = false;
 let isMoveAction = true;
 
@@ -2353,28 +2696,74 @@ async function loadCloudFoldersTree() {
         return;
     }
 
-    container.innerHTML = '<div style="text-align: center; opacity: 0.5; padding: 20px;">Cargando directorios...</div>';
+    container.innerHTML = `<div style="text-align: center; opacity: 0.5; padding: 20px;">${window.t_cloud('cloud_loading_dirs')}</div>`;
 
     const viewQuery = (currentCloudView === 'shared') ? 'drive' : currentCloudView;
 
     try {
         const res = await fetch(`/api/cloud/folders?view=${viewQuery}`, { headers: HEADERS });
         if (!res.ok) {
-            container.innerHTML = '<div style="text-align: center; color: #f87171; padding: 20px;">Error al cargar directorios</div>';
+            container.innerHTML = `<div style="text-align: center; color: #f87171; padding: 20px;">${window.t_cloud('cloud_tree_load_error', 'Error al cargar directorios')}</div>`;
             return;
         }
 
         const data = await res.json();
         if (data.tree) {
+            _cloudMoveTree = data.tree;
+            _cloudMoveTree._loaded = true;
+            _cloudMoveViewQuery = viewQuery;
+            _cloudMoveExpanded = new Set(['']);
             container.innerHTML = '';
             container.appendChild(renderFolderNode(data.tree));
         } else {
-            container.innerHTML = '<div style="text-align: center; opacity: 0.5; padding: 20px;">No se encontraron carpetas</div>';
+            container.innerHTML = `<div style="text-align: center; opacity: 0.5; padding: 20px;">${window.t_cloud('cloud_tree_empty', 'No se encontraron carpetas')}</div>`;
         }
     } catch (err) {
         console.error("Error cargando el árbol de carpetas:", err);
-        container.innerHTML = '<div style="text-align: center; color: #f87171; padding: 20px;">Error al cargar carpetas</div>';
+        container.innerHTML = `<div style="text-align: center; color: #f87171; padding: 20px;">${window.t_cloud('cloud_tree_error', 'Error al cargar carpetas')}</div>`;
     }
+}
+
+// Carga perezosa: la primera vez que se expande una rama se pide SOLO ese
+// nivel al servidor y se re-renderiza el árbol desde el nodo raíz en memoria.
+// Así el modal abre al instante y se puede bajar a cualquier profundidad.
+async function _cloudMoveLoadChildren(node) {
+    const res = await fetch(`/api/cloud/folders?view=${_cloudMoveViewQuery}&path=` + encodeURIComponent(node.path || ''),
+        { headers: HEADERS });
+    if (!res.ok) throw new Error('Error al cargar');
+    const data = await res.json();
+    if (!data.tree) throw new Error('Sin datos');
+    node.subdirs = data.tree.subdirs || [];
+    node.files = data.tree.files || [];
+    node.has_subdirs = !!data.tree.has_subdirs;
+    node._loaded = true;
+}
+
+function _cloudMoveRefresh() {
+    const container = document.getElementById('cloud-move-tree-container');
+    if (!container || !_cloudMoveTree) return;
+    container.innerHTML = '';
+    container.appendChild(renderFolderNode(_cloudMoveTree));
+}
+
+async function _cloudMoveToggleExpand(node, childrenContainer, arrow) {
+    const isHidden = childrenContainer.style.display === 'none';
+    if (isHidden && node.has_subdirs && !node._loaded) {
+        arrow.innerText = '…';
+        try {
+            await _cloudMoveLoadChildren(node);
+        } catch (e) {
+            arrow.innerText = '▶';
+            return;
+        }
+        _cloudMoveExpanded.add(node.path);
+        _cloudMoveRefresh();
+        return;
+    }
+    childrenContainer.style.display = isHidden ? 'flex' : 'none';
+    arrow.innerText = isHidden ? '▼' : '▶';
+    if (isHidden) _cloudMoveExpanded.add(node.path);
+    else _cloudMoveExpanded.delete(node.path);
 }
 
 function renderFolderNode(node, depth = 0) {
@@ -2409,8 +2798,8 @@ function renderFolderNode(node, depth = 0) {
     arrow.style.width = '14px';
     arrow.style.display = 'inline-block';
 
-    const hasSubdirs = node.subdirs && node.subdirs.length > 0;
-    const isExpanded = depth < 2;
+    const hasSubdirs = !!node.has_subdirs || (node.subdirs && node.subdirs.length > 0);
+    const isExpanded = _cloudMoveExpanded.has(node.path) || depth < 1;
     if (hasSubdirs) {
         arrow.innerText = isExpanded ? '▼' : '▶';
         arrow.style.cursor = 'pointer';
@@ -2420,7 +2809,9 @@ function renderFolderNode(node, depth = 0) {
     }
 
     const icon = document.createElement('span');
-    icon.innerText = '📁';
+    icon.innerHTML = getFolderIcon();
+    icon.style.display = 'inline-flex';
+    icon.style.alignItems = 'center';
     icon.style.fontSize = '1.05rem';
 
     const label = document.createElement('span');
@@ -2451,13 +2842,7 @@ function renderFolderNode(node, depth = 0) {
     arrow.onclick = (e) => {
         if (!hasSubdirs) return;
         e.stopPropagation();
-        if (childrenContainer.style.display === 'none') {
-            childrenContainer.style.display = 'flex';
-            arrow.innerText = '▼';
-        } else {
-            childrenContainer.style.display = 'none';
-            arrow.innerText = '▶';
-        }
+        _cloudMoveToggleExpand(node, childrenContainer, arrow);
     };
 
     folderRow.onclick = (e) => {
@@ -2902,7 +3287,7 @@ async function openLinkDeviceModal() {
                         linkDevicePollInterval = null;
                         closeLinkDeviceModal();
                         await fetchCloudFiles(newDevice.name, 'computers');
-                        await NV_Alert(window.currentLang === "en" ? `Computer "${newDevice.name.replace('', '')}" linked successfully!` : `¡Computadora "${newDevice.name.replace('', '')}" vinculada con éxito!`);
+                        await NV_Alert(window.currentLang === "en" ? `Computer "${newDevice.name.replace('', '')}" linked successfully.` : `Computadora "${newDevice.name.replace('', '')}" vinculada con éxito.`);
                     }
                 }
             } catch (err) { }
@@ -2912,7 +3297,7 @@ async function openLinkDeviceModal() {
 
 function setLinkDeviceOS(os) {
     _currentLinkDeviceOS = os;
-    const btns = ['os-btn-linux', 'os-btn-mac', 'os-btn-windows'];
+    const btns = ['os-btn-linux', 'os-btn-windows'];
     btns.forEach(id => {
         const btn = document.getElementById(id);
         if (!btn) return;
@@ -3075,12 +3460,22 @@ async function handleLinkDeviceFolderSelect(event) {
     }
 }
 
-let uploadDestinationOverridePath = null;
-let uploadDestinationOverrideView = null;
+function getUploadTarget() {
+    let targetView = uploadDestinationOverrideView !== null ? uploadDestinationOverrideView : currentCloudView;
+    let targetPath = uploadDestinationOverridePath !== null ? uploadDestinationOverridePath : currentCloudPath;
+
+    if (uploadDestinationOverrideView === null && currentCloudView !== 'drive') {
+        targetView = 'drive';
+        targetPath = '';
+    }
+
+    return { targetView, targetPath };
+}
 
 function triggerNewItemAction(action) {
-    document.getElementById('cloud-new-menu').style.display = 'none';
-    
+    const menu = document.getElementById('cloud-new-menu');
+    if (menu) menu.style.display = 'none';
+
     // Close sidebar on mobile if it is open
     const sidebar = document.querySelector('.cloud-sidebar');
     const overlay = document.getElementById('cloud-sidebar-overlay');
@@ -3088,17 +3483,19 @@ function triggerNewItemAction(action) {
         sidebar.classList.remove('mobile-open');
         if (overlay) overlay.classList.remove('active');
     }
-    
-    if (currentCloudView !== 'home' && currentCloudView !== 'computers') {
+
+    if (currentCloudView !== 'drive') {
         uploadDestinationOverridePath = '';
-        uploadDestinationOverrideView = 'home';
-        fetchCloudFiles('', 'home');
-        executeNewItemAction(action);
+        uploadDestinationOverrideView = 'drive';
+        if (typeof fetchCloudFiles === 'function') {
+            fetchCloudFiles('', 'drive');
+        }
     } else {
         uploadDestinationOverridePath = null;
         uploadDestinationOverrideView = null;
-        executeNewItemAction(action);
     }
+
+    executeNewItemAction(action);
 }
 
 function executeNewItemAction(action) {
@@ -3116,14 +3513,41 @@ let isMultiMove = false;
 let multiMoveItems = [];
 
 function toggleCloudFileSelection(checkbox, name, path, isDir, ownerId) {
-    const row = checkbox.closest('.cloud-file-row') || checkbox.closest('.cloud-folder-row') || checkbox.closest('.cloud-file-card');
-    if (checkbox.checked) {
-        row.classList.add('selected');
-        SELECTED_CLOUD_ITEMS.push({ name, path, isDir, ownerId, row });
+    const row = checkbox ? (checkbox.closest('.cloud-file-row') || checkbox.closest('.cloud-folder-row') || checkbox.closest('.cloud-file-card')) : null;
+
+    const matchingRows = Array.from(document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card')).filter(r => {
+        const rName = r.getAttribute('data-name');
+        const rPath = r.getAttribute('data-path') || '';
+        return rName === name && rPath === (path || '');
+    });
+
+    const isChecked = checkbox ? checkbox.checked : false;
+
+    if (isChecked) {
+        matchingRows.forEach(r => {
+            r.classList.add('selected');
+            const chk = r.querySelector('.cloud-file-checkbox');
+            if (chk) chk.checked = true;
+        });
+        if (row && !row.classList.contains('selected')) row.classList.add('selected');
+
+        if (!SELECTED_CLOUD_ITEMS.some(item => item.name === name && (item.path || '') === (path || ''))) {
+            SELECTED_CLOUD_ITEMS.push({ name, path, isDir, ownerId, row: row || matchingRows[0] });
+        }
     } else {
-        row.classList.remove('selected');
-        SELECTED_CLOUD_ITEMS = SELECTED_CLOUD_ITEMS.filter(item => item.row !== row);
+        matchingRows.forEach(r => {
+            r.classList.remove('selected');
+            const chk = r.querySelector('.cloud-file-checkbox');
+            if (chk) chk.checked = false;
+        });
+        if (row) {
+            row.classList.remove('selected');
+            const chk = row.querySelector('.cloud-file-checkbox');
+            if (chk) chk.checked = false;
+        }
+        SELECTED_CLOUD_ITEMS = SELECTED_CLOUD_ITEMS.filter(item => !(item.name === name && (item.path || '') === (path || '')));
     }
+
     updateCloudMultiSelectBar();
 }
 
@@ -3149,13 +3573,36 @@ function updateCloudMultiSelectBar() {
         bar.style.display = 'flex';
         count.innerText = `${SELECTED_CLOUD_ITEMS.length} ` + (SELECTED_CLOUD_ITEMS.length > 1 ? window.t_cloud('selected_plural', 'seleccionados') : window.t_cloud('selected_single', 'seleccionado'));
 
+        const btnDownload = document.getElementById('btn-cloud-multi-download');
         const btnZip = document.getElementById('btn-cloud-multi-zip');
         const btnMove = document.getElementById('btn-cloud-multi-move');
         const btnDelete = document.getElementById('btn-cloud-multi-delete');
         const btnDeleteText = document.getElementById('btn-cloud-multi-delete-text');
         const btnRestore = document.getElementById('btn-cloud-multi-restore');
+        const btnPreview = document.getElementById('btn-cloud-multi-preview');
+        const btnPreviewText = document.getElementById('btn-cloud-multi-preview-text');
+
+        // Previsualizar solo tiene sentido si TODA la selección son archivos
+        // previsualizables (PDF, imágenes, texto, vídeo). Si hay cualquier
+        // carpeta o archivo no compatible, el botón se oculta por completo:
+        // las carpetas no se pueden renderizar en el visor multipestaña.
+        const allPreviewable = SELECTED_CLOUD_ITEMS.length > 0 && SELECTED_CLOUD_ITEMS.every(it =>
+            !it.isDir && PREVIEW_EXTS.includes((it.name || '').split('.').pop().toLowerCase()));
+        const showPreview = allPreviewable
+            && currentCloudView !== 'trash'
+            && !(currentCloudView === 'computers' && currentCloudPath === '');
+        if (btnPreview) {
+            btnPreview.style.display = showPreview ? 'flex' : 'none';
+            if (btnPreviewText) {
+                const base = window.t_cloud('btn_preview_multi', 'Previsualizar');
+                btnPreviewText.textContent = SELECTED_CLOUD_ITEMS.length > 1
+                    ? `${base} (${SELECTED_CLOUD_ITEMS.length})`
+                    : base;
+            }
+        }
 
         if (currentCloudView === 'trash') {
+            if (btnDownload) btnDownload.style.display = 'none';
             if (btnZip) btnZip.style.display = 'none';
             if (btnMove) btnMove.style.display = 'none';
             if (btnRestore) btnRestore.style.display = 'block';
@@ -3166,6 +3613,7 @@ function updateCloudMultiSelectBar() {
                 btnDelete.style.color = '#f87171';
             }
         } else if (currentCloudView === 'computers' && currentCloudPath === '') {
+            if (btnDownload) btnDownload.style.display = 'none';
             if (btnZip) btnZip.style.display = 'none';
             if (btnMove) btnMove.style.display = 'none';
             if (btnRestore) btnRestore.style.display = 'none';
@@ -3176,6 +3624,7 @@ function updateCloudMultiSelectBar() {
                 btnDelete.style.color = '#f87171';
             }
         } else {
+            if (btnDownload) btnDownload.style.display = 'block';
             if (btnZip) btnZip.style.display = 'block';
             if (btnMove) btnMove.style.display = 'block';
             if (btnRestore) btnRestore.style.display = 'none';
@@ -3195,7 +3644,7 @@ function handleCloudRowClick(event, name, path, isDir, ownerId, isTrash, default
 
     if (event.target.classList.contains('cloud-file-checkbox')) return;
     if (event.target.closest('.cloud-file-checkbox')) return;
-    if (event.target.tagName === 'BUTTON') return;
+    if (event.target.tagName === 'BUTTON' || event.target.closest('button') || event.target.closest('.cloud-file-actions')) return;
     if (event.target.tagName === 'INPUT') return;
 
     const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -3284,6 +3733,47 @@ function hideCloudProgressToast() {
             toast.style.display = 'none';
         }, 300);
     }
+}
+
+async function downloadSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+
+    const files = SELECTED_CLOUD_ITEMS.filter(item => !item.isDir);
+    const hasFolders = SELECTED_CLOUD_ITEMS.some(item => item.isDir);
+
+    if (files.length === 0) {
+        await NV_Alert(window.currentLang === "en"
+            ? "Folders can only be downloaded compressed. Please use 'Download ZIP'."
+            : "Las carpetas solo se pueden descargar comprimidas. Utiliza la opción 'Descargar ZIP'.");
+        return;
+    }
+
+    if (hasFolders) {
+        showCloudProgressToast(window.currentLang === "en"
+            ? `Downloading ${files.length} file(s). Folders require 'Download ZIP'.`
+            : `Descargando ${files.length} archivo(s). Las carpetas requieren 'Descargar ZIP'.`);
+    } else if (files.length > 1) {
+        showCloudProgressToast(window.currentLang === "en"
+            ? `Downloading ${files.length} files...`
+            : `Descargando ${files.length} archivos...`);
+    } else {
+        showCloudProgressToast(window.currentLang === "en"
+            ? "Downloading file..."
+            : "Descargando archivo...");
+    }
+
+    for (let i = 0; i < files.length; i++) {
+        const item = files[i];
+        await downloadCloudFile(item.name, item.path, true, item.ownerId, item.fileView || currentCloudView, item.trashId || null);
+        if (i < files.length - 1) {
+            await new Promise(r => setTimeout(r, 250));
+        }
+    }
+
+    setTimeout(() => {
+        hideCloudProgressToast();
+        clearCloudSelection();
+    }, 1200);
 }
 
 async function downloadSelectedAsZip() {
@@ -3582,11 +4072,17 @@ function initMarqueeSelection() {
     });
 }
 
-let currentCloudLayout = localStorage.getItem('nullvoid_cloud_layout') || 'list';
+// Lectura en tiempo de evaluación del módulo: en WebViews/shells con
+// almacenamiento restringido localStorage puede lanzar SecurityError y
+// tumbar TODO el módulo (pantalla en blanco en la carga en frío).
+let currentCloudLayout = 'list';
+try {
+    currentCloudLayout = localStorage.getItem('nullvoid_cloud_layout') || 'list';
+} catch (e) { /* storage no disponible */ }
 
 function setCloudLayout(layout) {
     currentCloudLayout = layout;
-    localStorage.setItem('nullvoid_cloud_layout', layout);
+    try { localStorage.setItem('nullvoid_cloud_layout', layout); } catch (e) { /* noop */ }
 
     const btnList = document.getElementById('btn-cloud-layout-list');
     const btnGrid = document.getElementById('btn-cloud-layout-grid');
@@ -3613,7 +4109,8 @@ function setCloudLayout(layout) {
 }
 
 function initCloudLayout() {
-    const layout = localStorage.getItem('nullvoid_cloud_layout') || 'list';
+    let layout = 'list';
+    try { layout = localStorage.getItem('nullvoid_cloud_layout') || 'list'; } catch (e) { /* noop */ }
     setCloudLayout(layout);
 }
 
@@ -3649,7 +4146,10 @@ function initDragAndDropUpload() {
 
     function updateOverlayTarget(name, isDir) {
         if (targetNameSpan) {
-            const icon = isDir ? '📁' : '☁';
+            // Iconos vectoriales que heredan el color del CSS (.cloud-drop-target-icon)
+            const icon = isDir
+                ? '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'
+                : '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>';
             targetNameSpan.innerHTML = `<span class="cloud-drop-target-icon">${icon}</span> ${name}`;
         }
     }
@@ -3734,7 +4234,7 @@ function initDragAndDropUpload() {
             return;
         }
 
-        const targetFolderName = targetNameSpan ? targetNameSpan.textContent.replace('☁', '').replace('📁', '').trim() : getCurrentFolderName();
+        const targetFolderName = targetNameSpan ? targetNameSpan.textContent.trim() : getCurrentFolderName();
 
 
 
@@ -3797,14 +4297,14 @@ async function handleZipItem() {
     if (!currentCloudContextItem) return;
     const item = currentCloudContextItem;
     const defaultZipName = (item.isDir ? item.name : item.name.substring(0, item.name.lastIndexOf('.')) || item.name) + '.zip';
-    
+
     const zipName = await NV_Prompt(
         window.t_cloud('prompt_zip_name', 'Nombre del archivo .ZIP:'),
         defaultZipName,
         window.t_cloud('title_zip', 'Comprimir en .ZIP')
     );
     if (!zipName) return;
-    
+
     try {
         const res = await fetch('/api/cloud/zip', {
             method: 'POST',
@@ -3831,13 +4331,13 @@ async function handleZipItem() {
 async function handleUnzipItem() {
     if (!currentCloudContextItem) return;
     const item = currentCloudContextItem;
-    
+
     const confirm = await NV_Confirm(
         `¿Deseas descomprimir el archivo "${item.name}" en la carpeta actual?`,
         window.t_cloud('title_unzip', 'Descomprimir .ZIP')
     );
     if (!confirm) return;
-    
+
     try {
         const res = await fetch('/api/cloud/unzip', {
             method: 'POST',
@@ -3860,11 +4360,92 @@ async function handleUnzipItem() {
     }
 }
 
+// Menú de calidades dinámico: consulta el caché del servidor (available=1) y
+// muestra ÚNICAMENTE las versiones ya generadas (+ las que se están
+// transcodificando, como "Preparando…"). Las no generadas quedan ocultas:
+// nada se procesa en segundo plano sin petición explícita (salvo el pre-warm
+// de la calidad por defecto al abrir el vídeo).
+function _renderVideoQualityMenu(token) {
+    const menu = document.getElementById('video-quality-menu');
+    if (!menu || !token) return;
+
+    const itemReady = (quality, label) => `
+        <div onclick="window.changeVideoQuality('${quality}', '${label}', '${token}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between;"><span>${label}</span><span class="v-qual-check" style="display:none;">✓</span></div>`;
+    const itemProcessing = (quality) => `
+        <div style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-muted); border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; opacity: 0.7; cursor: default;"><span>${(window.t_cloud('video_preparing', 'Preparando') || 'Preparando')} ${quality}…</span></div>`;
+
+    fetch(`/api/cloud/stream_video?t=${token}&available=1`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            const ready = data.available || [];
+            const processing = data.processing || [];
+            const skipped = data.skipped || [];
+            const qLabel = (q) => q === '2160p' ? '2160p (4K)' : q;
+
+            let html = `<div onclick="window.changeVideoQuality('original', 'Original', '${token}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;"><span>Original</span><span class="v-qual-check">✓</span></div>`;
+            ready.forEach(q => { html += itemReady(q, qLabel(q)); });
+            processing.forEach(q => { html += itemProcessing(q); });
+
+            // El botón de generar solo aparece si faltan calidades que REALMENTE
+            // puedan generarse (las descartadas por no-upscaling nunca lo harán).
+            // Si el caché se purga (LRU), la calidad vuelve a "faltar" y el
+            // botón reaparece automáticamente al re-consultar.
+            const missing = VIDEO_QUALITY_ORDER.filter(q =>
+                !ready.includes(q) && !processing.includes(q) && !skipped.includes(q));
+            if (missing.length) {
+                html += `<div onclick="window.generateVideoQualities('${token}')" style="padding: 8px 12px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${window.t_cloud('video_generate_all', 'Generar todas las calidades…')}</div>`;
+            }
+            menu.innerHTML = html;
+
+            // Auto-refresh: si hay calidades transcodificándose y el menú sigue
+            // abierto, se re-consulta cada 2.5s para habilitarlas en cuanto
+            // estén listas, sin que el usuario tenga que cerrar y reabrir.
+            if (processing.length && menu.style.display === 'block') {
+                setTimeout(() => {
+                    const m = document.getElementById('video-quality-menu');
+                    if (m && m.style.display === 'block') {
+                        _renderVideoQualityMenu(token);
+                    }
+                }, 2500);
+            }
+        })
+        .catch(() => {
+            menu.innerHTML = `<div onclick="window.changeVideoQuality('original', 'Original', '${token}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;"><span>Original</span><span class="v-qual-check">✓</span></div>`;
+        });
+}
+
+// Genera bajo demanda TODAS las calidades restantes (una petición por calidad;
+// el servidor las transcodifica en segundo plano y el menú las habilita al
+// reabrirse). Solo se lanza si el usuario lo pide explícitamente.
+window.generateVideoQualities = function (token) {
+    if (!token) return;
+    VIDEO_QUALITY_ORDER.forEach(q => {
+        fetch(`/api/cloud/stream_video?t=${token}&quality=${q}&status=1`, { cache: 'no-store' }).catch(() => { });
+    });
+    _renderVideoQualityMenu(token);
+};
+
 function initCloud() {
     initMarqueeSelection();
     initCloudLayout();
     initDragAndDropUpload();
     initClipboardPaste();
+
+    // Navegación por teclado dentro del visor múltiple (←/→ cambian de
+    // documento, Esc cierra).
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('cloud-preview-modal');
+        if (!modal || modal.style.display !== 'flex') return;
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            renderCloudPreviewItem(_previewIndex + 1);
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            renderCloudPreviewItem(_previewIndex - 1);
+        } else if (e.key === 'Escape') {
+            closeCloudPreview();
+        }
+    });
 
     window.addEventListener('language_changed', () => {
         if (typeof fetchCloudFiles === 'function') {
@@ -3879,11 +4460,12 @@ function initCloud() {
         fetchAdminQuotaRequests, resolveQuotaRequest,
         setCloudLayout, handleCloudAction, handleCloudRowClick,
         triggerNewItemAction, openLinkDeviceModal, removeSelectedUser,
-        emptyCloudTrash, downloadCloudFile,
+        emptyCloudTrash, downloadCloudFile, downloadSelectedItems,
         showCloudNewMenu, clearCloudSelection, closeCloudMoveModal,
         confirmCloudMove, closeCloudPreview,
+        openCloudMultiPreview,
         downloadSelectedAsZip, deleteSelectedItems, moveSelectedItems,
-        restoreSelectedItems, closeCloudInfoPanel,
+        restoreSelectedItems, closeCloudInfoPanel, handleGenerateLinkToken,
         loadCloudFoldersTree, openCloudMove,
         openCloudPreview, openCloudShare, executeNewItemAction,
         renderListRow, renderFolderNode,
@@ -3892,10 +4474,303 @@ function initCloud() {
         confirmCloudShare, closeCloudShareModal, handleCreateFolder,
         generateSyncCommand, searchUsersForSharing, handleLinkDeviceFolderSelect,
         selectUserForSharing, refreshCloudInfoPanel, showCloudInfo,
-        handleUnshareItem, revokeCloudShare, toggleCloudFileSelection,
-        handleZipItem, handleUnzipItem
+        handleUnshareItem, revokeCloudShare,
+        toggleCloudFileSelection,
+        handleZipItem, handleUnzipItem,
+        toggleVideoQualityMenu: function (e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('video-quality-menu');
+            if (!menu) return;
+            if (menu.style.display === 'none') {
+                // Re-consulta el caché cada vez que se abre: las calidades que
+                // ya se generaron aparecen listas; las que están transcodificándose
+                // se muestran como "Preparando…"; el resto queda oculto.
+                _renderVideoQualityMenu(_previewVideoToken);
+                menu.style.display = 'block';
+            } else {
+                menu.style.display = 'none';
+            }
+        },
+        changeVideoQuality: function (quality, labelText, token) {
+            // Cada cambio de calidad invalida los pollings anteriores.
+            const reqId = ++_videoQualReqId;
+
+            const menu = document.getElementById('video-quality-menu');
+            if (menu) menu.style.display = 'none';
+
+            const lbl = document.getElementById('video-quality-label');
+
+            const items = document.querySelectorAll('.v-qual-item');
+            items.forEach(el => {
+                const match = el.innerText.includes(labelText);
+                el.style.color = match ? '#fff' : 'var(--text-secondary)';
+                el.style.fontWeight = match ? '600' : '500';
+                const check = el.querySelector('.v-qual-check');
+                if (check) check.style.display = match ? 'inline' : 'none';
+            });
+
+            const video = document.getElementById('preview-video-player');
+            if (!video) return;
+
+            const currentTime = video.currentTime || 0;
+            const isPaused = video.paused;
+            const newSrc = `/api/cloud/stream_video?t=${token}&quality=${quality}`;
+
+            const isStale = () => reqId !== _videoQualReqId;
+
+            // Cambio de calidad SIN parpadeo: la nueva fuente se precarga en un
+            // elemento oculto; cuando ya tiene datos (loadeddata) se reemplaza
+            // el reproductor visible por uno nuevo con la misma posición y
+            // estado de reproducción. El elemento anterior nunca se vacía.
+            const applySrc = function () {
+                if (isStale()) return;
+                if (lbl) lbl.innerText = labelText;
+
+                const wasPlaying = !isPaused && !video.paused;
+                const time = currentTime || video.currentTime || 0;
+
+                let swapped = false;
+                const swap = function () {
+                    if (isStale() || swapped) return;
+                    swapped = true;
+                    const parent = video.parentElement;
+                    if (!parent) return;
+                    const next = document.createElement('video');
+                    next.id = 'preview-video-player';
+                    next.controls = true;
+                    next.style.cssText = 'width: 100%; height: auto; max-height: 75vh; border-radius: 8px; display: block; background: #000;';
+                    next.src = newSrc;
+                    next.addEventListener('loadedmetadata', function h() {
+                        try {
+                            if (time > 0 && time < next.duration) next.currentTime = time;
+                        } catch (e) { }
+                        next.removeEventListener('loadedmetadata', h);
+                    });
+                    if (wasPlaying) {
+                        const tryPlay = () => next.play().catch(() => { });
+                        next.addEventListener('canplay', tryPlay);
+                        next.addEventListener('playing', () => next.removeEventListener('canplay', tryPlay));
+                    }
+                    parent.replaceChild(next, video);
+                    _initVideoProgressTracking(_previewVideoKey, false);
+                    if (next.readyState >= 2 && wasPlaying) next.play().catch(() => { });
+                };
+
+                if (quality === 'original') {
+                    swap();
+                    return;
+                }
+
+                const tmp = document.createElement('video');
+                tmp.preload = 'auto';
+                tmp.muted = true;
+                const onReady = () => { swap(); cleanup(); };
+                const cleanup = () => {
+                    tmp.removeEventListener('loadeddata', onReady);
+                    tmp.removeEventListener('canplay', onReady);
+                    tmp.removeAttribute('src');
+                };
+                tmp.addEventListener('loadeddata', onReady);
+                tmp.addEventListener('canplay', onReady);
+                tmp.addEventListener('error', () => { swap(); cleanup(); });
+                tmp.src = newSrc;
+                tmp.load();
+
+                setTimeout(() => {
+                    if (!swapped) {
+                        swap();
+                        cleanup();
+                    }
+                }, 2500);
+            };
+
+            const pollReady = function (attempt) {
+                if (isStale()) return;
+                if (lbl && attempt > 0) {
+                    lbl.innerText = (window.t_cloud('video_preparing', 'Preparando') || 'Preparando') + ' ' + labelText + '…';
+                }
+                fetch(newSrc + '&status=1', { headers: { 'Range': 'bytes=0-1024' }, cache: 'no-store' })
+                    .then(res => {
+                        if (isStale()) return;
+                        if (res.status === 202) {
+                            setTimeout(() => pollReady(attempt + 1), 1500);
+                            return;
+                        }
+                        // Solo se aplica si el servidor responde un vídeo real
+                        // (2xx); un 403/500 deja el vídeo actual intacto.
+                        if (res.ok) {
+                            applySrc();
+                        } else if (attempt < 8) {
+                            setTimeout(() => pollReady(attempt + 1), 1500);
+                        } else if (lbl) {
+                            lbl.innerText = labelText;
+                        }
+                    })
+                    .catch(() => {
+                        if (isStale()) return;
+                        if (attempt < 60) setTimeout(() => pollReady(attempt + 1), 1500);
+                        else if (lbl) lbl.innerText = labelText;
+                    });
+            };
+            pollReady(0);
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('video-quality-menu');
+        if (menu && !e.target.closest('#video-quality-menu') && !e.target.closest('button')) {
+            menu.style.display = 'none';
+        }
     });
 }
 
-export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud, handleZipItem, handleUnzipItem };
+let _tokenTimerInterval = null;
 
+async function handleGenerateLinkToken() {
+    try {
+        if (_tokenTimerInterval) clearInterval(_tokenTimerInterval);
+
+        const pcName = currentCloudContextItem ? currentCloudContextItem.name : '';
+        const res = await fetch('/api/cloud/sync-agent/generate-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_device: pcName })
+        });
+        const data = await res.json();
+        if (res.ok && data.temp_token) {
+            const introText = window.currentLang === 'en'
+                ? `Enter this token in the desktop app to connect <b style="color: #e8edf8;">${pcName || 'your device'}</b>:`
+                : `Introduce este token en la aplicación de escritorio para conectar <b style="color: #e8edf8;">${pcName || 'tu dispositivo'}</b>:`;
+            const copyToast = window.currentLang === 'en' ? 'Token copied to clipboard' : 'Token copiado al portapapeles';
+            
+            let secondsLeft = data.remaining_seconds !== undefined ? Math.max(0, parseInt(data.remaining_seconds)) : 300;
+            const initialMins = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+            const initialSecs = String(secondsLeft % 60).padStart(2, '0');
+
+            const msg = `
+                <div style="text-align: center; padding: 4px 0;">
+                    <p style="margin-bottom: 14px; font-size: 0.88rem; color: var(--text-muted, #8b95b0); line-height: 1.4;">
+                        ${introText}
+                    </p>
+                    <div id="nv-token-box" style="font-family: monospace; font-size: 1.05rem; font-weight: 700; color: #a5b4fc; background: rgba(99, 102, 241, 0.12); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 10px; padding: 12px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: all; cursor: pointer; transition: all 0.3s ease;"
+                         onmouseover="if(!this.dataset.expired){ this.style.background='rgba(99, 102, 241, 0.25)'; this.style.borderColor='#818cf8'; }"
+                         onmouseout="if(!this.dataset.expired){ this.style.background='rgba(99, 102, 241, 0.12)'; this.style.borderColor='rgba(99, 102, 241, 0.4)'; }"
+                         onclick="if(!this.dataset.expired){ navigator.clipboard.writeText('${data.temp_token}'); const alertToast = document.getElementById('nv-copy-toast'); if(alertToast){ alertToast.style.opacity='1'; setTimeout(()=>alertToast.style.opacity='0', 2000); } }">
+                        <span id="nv-token-text">${data.temp_token}</span>
+                    </div>
+                    <div id="nv-copy-toast" style="opacity: 0; transition: opacity 0.3s; font-size: 0.78rem; color: #34d399; font-weight: 600; margin-top: 6px; height: 18px;">
+                        ${copyToast}
+                    </div>
+                    <div id="nv-timer-badge" style="margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.04); padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s ease;">
+                        <svg id="nv-timer-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        <span id="nv-token-timer" style="font-size: 0.80rem; font-weight: 700; color: #818cf8; font-family: monospace;">${initialMins}:${initialSecs}</span>
+                    </div>
+                    <p id="nv-token-expiry-hint" style="margin-top: 10px; font-size: 0.78rem; color: #8b95b0; font-weight: 500; transition: color 0.3s ease;">
+                        ${window.currentLang === 'en' ? 'Token expires in 5 minutes (one-time use).' : 'Este token es de un solo uso y expira en 5 minutos.'}
+                    </p>
+                </div>
+            `;
+
+            // Iniciar temporizador regresivo y verificación de uso
+            _tokenTimerInterval = setInterval(async () => {
+                secondsLeft--;
+                const timerEl = document.getElementById('nv-token-timer');
+                const tokenBox = document.getElementById('nv-token-box');
+                const expiryHint = document.getElementById('nv-token-expiry-hint');
+                const timerIcon = document.getElementById('nv-timer-icon');
+
+                const mins = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+                const secs = String(secondsLeft % 60).padStart(2, '0');
+
+                if (timerEl && secondsLeft >= 0) {
+                    timerEl.innerText = `${mins}:${secs}`;
+                }
+
+                // Consultar si la app ya usó el token
+                if ((secondsLeft % 2 === 0 && secondsLeft > 0) || secondsLeft === data.remaining_seconds) {
+                    try {
+                        const checkRes = await fetch('/api/cloud/sync-agent/check-token-status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ temp_token: data.temp_token, target_device: pcName })
+                        });
+                        const checkData = await checkRes.json();
+                        if (checkData.used) {
+                            if (_tokenTimerInterval) {
+                                clearInterval(_tokenTimerInterval);
+                                _tokenTimerInterval = null;
+                            }
+
+                            if (tokenBox) {
+                                tokenBox.dataset.expired = 'true';
+                                tokenBox.style.background = 'rgba(16, 185, 129, 0.12)';
+                                tokenBox.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                                tokenBox.style.color = '#34d399';
+                                tokenBox.style.cursor = 'default';
+                            }
+                            if (timerEl) {
+                                timerEl.innerText = window.currentLang === 'en' ? 'Linked' : 'Vinculado';
+                                timerEl.style.color = '#34d399';
+                            }
+                            if (timerIcon) {
+                                timerIcon.setAttribute('stroke', '#34d399');
+                            }
+                            if (expiryHint) {
+                                expiryHint.style.color = '#34d399';
+                                expiryHint.style.fontWeight = '600';
+                                const dName = checkData.device_name || pcName;
+                                expiryHint.innerText = window.currentLang === 'en'
+                                    ? `✔ Vinculado correctamente${dName ? ' (' + dName + ')' : ''}`
+                                    : `✔ Vinculado correctamente${dName ? ' (' + dName + ')' : ''}`;
+                            }
+                            if (typeof fetchCloudFiles === 'function') {
+                                fetchCloudFiles();
+                            }
+                            return;
+                        }
+                    } catch (e) {}
+                }
+
+                if (secondsLeft <= 0) {
+                    clearInterval(_tokenTimerInterval);
+                    _tokenTimerInterval = null;
+
+                    if (timerEl) {
+                        timerEl.innerText = '00:00';
+                        timerEl.style.color = '#8b95b0';
+                    }
+                    if (timerIcon) {
+                        timerIcon.setAttribute('stroke', '#8b95b0');
+                    }
+                    if (tokenBox) {
+                        tokenBox.dataset.expired = 'true';
+                        tokenBox.style.opacity = '0.45';
+                        tokenBox.style.background = 'rgba(255, 255, 255, 0.04)';
+                        tokenBox.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                        tokenBox.style.color = '#8b95b0';
+                        tokenBox.style.cursor = 'default';
+                    }
+                    if (expiryHint) {
+                        expiryHint.style.color = '#8b95b0';
+                        expiryHint.style.fontWeight = '500';
+                        expiryHint.innerText = window.currentLang === 'en'
+                            ? 'Token expired. Generate a new one from the menu.'
+                            : 'Token expirado. Genera uno nuevo desde el menú.';
+                    }
+                }
+            }, 1000);
+
+            await NV_Alert(msg, window.t_cloud('title_token', 'Token de Enlace Generado'));
+            if (_tokenTimerInterval) {
+                clearInterval(_tokenTimerInterval);
+                _tokenTimerInterval = null;
+            }
+        } else {
+            await NV_Alert(data.error || (window.currentLang === 'en' ? 'Could not generate token.' : 'No se pudo generar el token.'));
+        }
+    } catch (e) {
+        await NV_Alert(window.currentLang === 'en' ? 'Connection error generating token.' : 'Error de conexión al generar el token.');
+    }
+}
+
+export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud, handleZipItem, handleUnzipItem };

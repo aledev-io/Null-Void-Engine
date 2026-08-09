@@ -193,9 +193,14 @@ def get_pending_quota_requests():
         """).fetchall()
 
 def resolve_quota_request(req_id, status):
-    # status can be 'approved' or 'rejected'
+    # status can be 'approved' or 'rejected'.
+    # Solo se resuelven peticiones 'pending': cada solicitud solo puede
+    # aprobarse o rechazarse una única vez (protección anti-replay).
     with get_db() as conn:
-        req = conn.execute("SELECT user_id, requested_gb FROM quota_requests WHERE id = ?", (req_id,)).fetchone()
+        req = conn.execute(
+            "SELECT user_id, requested_gb FROM quota_requests WHERE id = ? AND status = 'pending'",
+            (req_id,)
+        ).fetchone()
         if not req: return None
         conn.execute("UPDATE quota_requests SET status = ? WHERE id = ?", (status, req_id))
         
@@ -203,6 +208,13 @@ def resolve_quota_request(req_id, status):
             conn.execute("UPDATE users SET quota_gb = quota_gb + ? WHERE user_id = ?", (req['requested_gb'], req['user_id']))
         conn.commit()
         return req['user_id']
+
+
+def is_admin(user_id):
+    """Verifica autorización administrativa por rol explícito en la base de datos."""
+    with get_db() as conn:
+        row = conn.execute("SELECT role FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        return bool(row and row['role'] == 'admin')
 
 
 

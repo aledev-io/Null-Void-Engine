@@ -91,6 +91,8 @@ async function initChat() {
     initSocketConnection();
     await loadChatConversations();
 
+    const isMobile = window.innerWidth <= 768;
+
     if (!currentChatContact) {
         try {
             const saved = localStorage.getItem('nv_chat_contact');
@@ -98,7 +100,10 @@ async function initChat() {
         } catch (e) { }
     }
 
-    if (currentChatContact && currentChatContact.contact_id) {
+    if (isMobile) {
+        const viewChat = document.getElementById('view-chat');
+        if (viewChat) viewChat.classList.remove('mobile-chat-active');
+    } else if (currentChatContact && currentChatContact.contact_id) {
         openChatWith(currentChatContact.contact_id, currentChatContact.contact_name || '', currentChatContact.last_activity || '', !!currentChatContact.is_group);
     }
 
