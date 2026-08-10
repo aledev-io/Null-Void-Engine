@@ -4,11 +4,31 @@ import { fetchApps } from './system.js';
 import { initCalendarWidget } from './calendar_widget.js';
 
 const _originalFetch = window.fetch;
+let _sessionCheckTimestamp = 0;
+let _sessionCheckResult = null;
+
+async function _isSessionReallyInvalid() {
+    // Verifica rápido (cacheando 3s) si la sesión sigue viva consultando /api/user/me.
+    // Evita echar al login por 401 transitorios (reinicio del servidor, permisos puntuales).
+    const now = Date.now();
+    if (now - _sessionCheckTimestamp < 3000 && _sessionCheckResult !== null) return _sessionCheckResult;
+    _sessionCheckTimestamp = now;
+    try {
+        const r = await _originalFetch('/api/user/me', { headers: window.HEADERS, credentials: 'include' });
+        _sessionCheckResult = !r.ok;
+    } catch (error) {
+        _sessionCheckResult = false;
+    }
+    return _sessionCheckResult;
+}
+
 window.fetch = async function (...args) {
     const response = await _originalFetch.apply(this, args);
     if (response.status === 401 && typeof args[0] === 'string' && args[0].startsWith('/api/')) {
-        console.warn('[Session] Token expirado, redirigiendo a login...');
-        window.location.href = '/';
+        if (await _isSessionReallyInvalid()) {
+            console.warn(window.t ? window.t('sess_expired_redirect') : '[Session] Token expirado, redirigiendo a login...');
+            window.location.href = '/';
+        }
     }
     return response;
 };

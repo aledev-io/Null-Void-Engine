@@ -142,8 +142,10 @@ def _read_network_io() -> dict:
 def _read_disk_space() -> list:
     disks = []
     
-    # Defaults to OS root (/) and the Data Directory (/app/data)
-    env_disks = os.getenv("MONITOR_DISKS", "/, /app/data")
+    # Defaults to OS root (/) and the configured Data Directory (CONFIG.DATA_DIR)
+    from config.config import CONFIG
+    data_dir = CONFIG.DATA_DIR
+    env_disks = os.getenv("MONITOR_DISKS", f"/, {data_dir}")
     target_mounts = [d.strip() for d in env_disks.split(",") if d.strip()]
     
     for mp in target_mounts:
@@ -153,7 +155,7 @@ def _read_disk_space() -> list:
             
         try:
             usage = psutil.disk_usage(mp)
-            device_name = "Sistema (OS)" if mp == "/" else "Almacén (Data)" if mp == "/app/data" else mp
+            device_name = "Sistema (OS)" if mp == "/" else "Almacén (Data)" if os.path.abspath(mp) == os.path.abspath(data_dir) else mp
             
             disks.append({
                 "device": device_name,

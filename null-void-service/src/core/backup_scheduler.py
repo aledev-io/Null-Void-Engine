@@ -48,33 +48,35 @@ class BackupScheduler:
             except (ValueError, IndexError):
                 continue
 
-            try:
-                with open(cfg_path, encoding="utf-8") as f:
-                    cfg = json.load(f)
-            except Exception:
+            from core.backup import load_automations_config, run_automated_backup
+            automations = load_automations_config(user_id)
+            if not automations:
                 continue
 
-            if not cfg.get("enabled"):
-                continue
-            source_paths = cfg.get("source_paths") or []
-            if not source_paths:
-                continue
+            for cfg in automations:
+                try:
+                    if not isinstance(cfg, dict) or not cfg.get("enabled"):
+                        continue
+                    source_paths = cfg.get("source_paths") or []
+                    if not source_paths:
+                        continue
 
-            if not self._should_run(user_id, cfg):
-                continue
+                    if not self._should_run(user_id, cfg):
+                        continue
 
-            print(f"[BackupScheduler] Ejecutando respaldo automático para {user_id}...")
-            try:
-                from core.backup import run_automated_backup
-                result = run_automated_backup(user_id, cfg)
-                if result.get("type") == "done":
-                    print(f"[BackupScheduler] ✓ Backup exitoso para {user_id}: {result.get('zip_name', '?')} ({result.get('count', 0)} archivos)")
-                elif result.get("skipped"):
-                    print(f"[BackupScheduler] - Backup omitido para {user_id}: {result.get('reason')}")
-                else:
-                    print(f"[BackupScheduler] ✗ Error en backup para {user_id}: {result.get('message', 'desconocido')}")
-            except Exception as e:
-                print(f"[BackupScheduler] Error ejecutando backup para {user_id}: {e}")
+                    print(f"[BackupScheduler] Ejecutando respaldo automático para {user_id} ({cfg.get('id', '?')} - {cfg.get('name', '')})...")
+                    try:
+                        result = run_automated_backup(user_id, cfg)
+                        if result.get("type") == "done":
+                            print(f"[BackupScheduler] ✓ Backup exitoso para {user_id}: {result.get('zip_name', '?')} ({result.get('count', 0)} archivos)")
+                        elif result.get("skipped"):
+                            print(f"[BackupScheduler] - Backup omitido para {user_id}: {result.get('reason')}")
+                        else:
+                            print(f"[BackupScheduler] ✗ Error en backup para {user_id}: {result.get('message', 'desconocido')}")
+                    except Exception as e:
+                        print(f"[BackupScheduler] Error ejecutando backup para {user_id}: {e}")
+                except Exception as e:
+                    print(f"[BackupScheduler] Error procesando automatización para {user_id}: {e}")
 
     def _should_run(self, user_id, cfg):
         now = datetime.now()
@@ -101,7 +103,7 @@ class BackupScheduler:
         if now < target:
             return False
 
-        key = user_id
+        key = f"{user_id}|{cfg.get('id', '')}"
         last = self._last_run.get(key)
         if last is not None:
             if last >= target.timestamp() - 60:

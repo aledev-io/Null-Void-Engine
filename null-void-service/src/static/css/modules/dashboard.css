@@ -3100,6 +3100,12 @@
             border-color: var(--indigo, #8ab4f8) !important;
         }
 
+        #nv-dialog-text {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            max-width: 100%;
+        }
+
         /* --- DASHBOARD GRID WIDGETS --- */
         .dashboard-grid {
             display: grid;

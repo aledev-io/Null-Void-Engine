@@ -726,6 +726,17 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
     current_user = sess.get_user(token)
     current_uid = sess.get_user_id(token)
     add_activity(current_user, current_uid, "act_subiste", final_filename, subpath)
+
+    # Organización automática de facturas: cualquier PDF subido a la vista
+    # Facturación se clasifica por su fecha y se mueve a .business/YYYY/MM-MES
+    if view == 'business' and final_filename.lower().endswith('.pdf'):
+        try:
+            from modules.api.invoices.services import organize_uploaded_pdf
+            organize_uploaded_pdf(final_file_path, user_root)
+            invalidate_user_index(current_uid)
+        except Exception as e:
+            logger.error(f"[Cloud] Error organizando factura {final_filename}: {e}")
+
     invalidate_user_index(current_uid)
     return True, None
 
@@ -1118,7 +1129,7 @@ def toggle_protect(name, subpath, view, token):
     if item_key not in protected_data:
         ancestor = find_protected_ancestor(protected_data, view, subpath, name)
         if ancestor:
-            return False, f'No puedes desbloquear este elemento: está dentro de la carpeta «{ancestor["name"]}», que está protegida. Desprotege primero esa carpeta.'
+            return False, ('protected_ancestor', ancestor['name'])
 
     if item_key in protected_data:
         protected_data.remove(item_key)
@@ -1592,7 +1603,7 @@ def get_folders_tree(view, token, path=None):
     }
 
 
-def get_download_token(view, name, subpath, owner_id, trash_id, token):
+def get_download_token(view, name, subpath, owner_id, trash_id, token, is_preview=False):
     user_root = get_view_root(view, token)
     if not user_root:
         return None, None
@@ -1631,7 +1642,10 @@ def get_download_token(view, name, subpath, owner_id, trash_id, token):
             "path": target_path, "name": name, "is_dir": is_dir, "expires": time.time() + 300, "bound_user_id": current_uid
         }
         
-    add_activity(sess.get_user(token), sess.get_user_id(token), "act_descargo", name, subpath, owner_id)
+    if is_preview:
+        add_activity(sess.get_user(token), sess.get_user_id(token), "act_abrio", name, subpath, owner_id)
+    else:
+        add_activity(sess.get_user(token), sess.get_user_id(token), "act_descargo", name, subpath, owner_id)
     return dl_token, None
 
 
@@ -2208,8 +2222,8 @@ def list_shared_by_me(token):
                 info = os.stat(fp)
                 files.append({
                     "id": s['id'], "name": s['file_name'], "path": s['file_path'],
-                    "owner": "Compartido con: " + s['shared_with_name'], "owner_id": current_uid,
-                    "shared_with": s['shared_with'],
+                    "owner": s['shared_with_name'], "owner_id": current_uid,
+                    "shared_with": s['shared_with'], "shared_with_name": s['shared_with_name'],
                     "is_dir": os.path.isdir(fp), "size": info.st_size,
                     "mtime": s['created_at'], "ext": os.path.splitext(s['file_name'])[1].lower(),
                     "view": s['view'], "is_shared": True,

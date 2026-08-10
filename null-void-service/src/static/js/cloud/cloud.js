@@ -3,16 +3,50 @@ import { getCookie, formatBytes, getFileIcon, getFolderIcon, getComputerIcon, ti
 
 // Garantiza que todas las peticiones fetch incluyan credenciales (cookies) para
 // preservar el token de sesión durante operaciones largas de descarga/streaming.
+// Además aplica un timeout automático para evitar peticiones colgadas: se
+// respeta una señal externa si el llamador la proporciona y se excluyen los
+// envíos de archivos (FormData/ReadableStream) y descargas/streams de vídeo.
 if (!window.__nvFetchCredentialsPatched) {
     window.__nvFetchCredentialsPatched = true;
     const _origFetch = window.fetch.bind(window);
+    const _FETCH_TIMEOUT_MS = 120000;
+    const _noTimeout = u => /\/get_token|\/download|stream_video|\/stream\?/.test(String(u || ''));
     window.fetch = function (url, options) {
         options = Object.assign({}, options);
         if (options.credentials === undefined) {
             options.credentials = 'include';
         }
-        return _origFetch(url, options);
+        if (options.signal || _noTimeout(url)) {
+            return _origFetch(url, options);
+        }
+        const body = options.body;
+        if (body instanceof FormData || (body && typeof body.pipe === 'function') ||
+            (body && typeof body.getReader === 'function')) {
+            return _origFetch(url, options);
+        }
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), _FETCH_TIMEOUT_MS);
+        return _origFetch(url, Object.assign({}, options, { signal: ctrl.signal }))
+            .then(res => { clearTimeout(timer); return res; })
+            .catch(err => {
+                clearTimeout(timer);
+                if (err && err.name === 'AbortError') {
+                    console.warn(`[Cloud] Petición agotada (timeout ${_FETCH_TIMEOUT_MS / 1000}s): ${url}`);
+                }
+                throw err;
+            });
     };
+}
+
+// Parseo JSON defensivo: nunca lanza aunque el servidor responda HTML o vacío.
+async function _cloudJson(res, fallback = {}) {
+    if (!res) return fallback;
+    try {
+        const text = await res.text();
+        return text ? JSON.parse(text) : fallback;
+    } catch (e) {
+        return fallback;
+    }
 }
 
 let currentCloudPath = '';
@@ -23,14 +57,96 @@ let uploadDestinationOverrideView = null;
 let currentCloudInfoItem = null;
 let CLOUD_FILES = [];
 
+// ---------------------------------------------------------------------------
+// Helpers de seguridad: escape HTML para contenido y atributos, y saneado de
+// nombres de archivos/carpetas introducidos por el usuario.
+// ---------------------------------------------------------------------------
+
+// Escape HTML básico (texto visible dentro de innerHTML).
+function esc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Escape orientado a atributos HTML (p.ej. onclick="...") y URLs dentro de
+// atributos: también neutraliza backticks y el cierre de atributo.
+function escAttr(v) {
+    return esc(v).replace(/`/g, '&#96;').replace(/\//g, '&#47;');
+}
+
+// Convierte un valor en un literal de string JavaScript SEGURO para interpolar
+// dentro de onclick="...". El truco de los escapes unicode impide que las
+// comillas cierren el literal aunque el atributo se decodifique después.
+function jsStr(v) {
+    return String(v == null ? '' : v)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\u0027")
+        .replace(/"/g, "\\u0022")
+        .replace(/`/g, "\\u0060")
+        .replace(/<\//g, '<\\/');
+}
+
+// Sanedado de nombres de archivo/carpeta: whitelist de caracteres seguros,
+// colapso de espacios, recorte y límite de longitud. Devuelve el nombre
+// limpio (puede quedar vacío si todo era inválido).
+function sanitizeName(v, maxLen = 150) {
+    return String(v == null ? '' : v)
+        .replace(/[^\p{L}\p{N}\s\-_().,\[\]{}@+#%&~!=]/gu, '')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/^[\s.]+|[\s.]+$/g, '')
+        .replace(/[.]+$/g, '')
+        .slice(0, maxLen);
+}
+
+// Fallback de avatar seguro: sustituye la <img> rota por un círculo con la
+// primera letra del usuario. Se construye con createElement/textContent para
+// no interpolar datos del usuario en HTML/strings.
+window.cloudAvatarFallback = function (img, username) {
+    if (!img || !img.parentNode) return;
+    const style = img.getAttribute('style') || '';
+    const size = (style.match(/width:\s*(\d+)px/) || [])[1] || '';
+    const letter = String(username || '').trim().charAt(0).toUpperCase() || 'U';
+    const div = document.createElement('div');
+    div.style.cssText = style.replace(/width:\s*[^;]+;?/, '')
+        .replace(/height:\s*[^;]+;?/, '')
+        .replace(/;?\s*$/, '') +
+        (size ? `; width:${size}px; height:${size}px;` : '; width:32px; height:32px;') +
+        '; border-radius:50%; background:var(--indigo, #6366f1); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:' + Math.max(9, Math.round(parseInt(size || '32') * 0.42)) + 'px;';
+    div.textContent = letter;
+    img.parentNode.replaceChild(div, img);
+};
+
+// ---------------------------------------------------------------------------
+
+// Reintenta peticiones GET fallidas (reinicio del servidor) con backoff.
+// Devuelve null si agota los intentos. NO usar con peticiones que mutan datos.
+async function fetchCloudWithRetry(url, options, retries = 3) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const res = await fetch(url, options);
+            if (res.ok) return res;
+            console.warn(`[Cloud] Respuesta ${res.status} de ${url}, intento ${attempt}/${retries}`);
+        } catch (error) {
+            console.warn(`[Cloud] Red caída en ${url}, intento ${attempt}/${retries}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 1200 * attempt));
+    }
+    return null;
+}
+
 function updateTableHeaderVisibility(targetView = currentCloudView, targetPath = currentCloudPath) {
     const tableHeader = document.querySelector('.cloud-table-header');
     if (!tableHeader) return;
     const isHome = targetView === 'home' && !targetPath;
     const isBackupsRoot = targetView === 'backups' && !targetPath;
+    const isAggregate = targetView === 'recent' || targetView === 'starred' || targetView === 'shared' || targetView === 'shared_by_me';
     const isGrid = (typeof currentCloudLayout !== 'undefined') && currentCloudLayout === 'grid';
 
-    if (isHome || isBackupsRoot || isGrid) {
+    if (isHome || isBackupsRoot || isAggregate || isGrid) {
         tableHeader.style.display = 'none';
     } else {
         tableHeader.style.display = 'grid';
@@ -106,19 +222,21 @@ async function fetchCloudFiles(path = '', view = 'home') {
         }
         if (view === 'shared_by_me') endpoint = '/api/cloud/shared_by_me';
 
-        const res = await fetch(endpoint, {
+        const res = await fetchCloudWithRetry(endpoint, {
             headers: HEADERS,
             credentials: 'include'
         });
 
-        if (!res.ok) {
-            const errText = await res.text();
-            console.error(`[Cloud] Error ${res.status}:`, errText);
-            if (list) list.innerHTML = `<div style="padding:20px;color:#f87171;">Error ${res.status}: ${errText}</div>`;
+        if (!res) {
+            console.error('[Cloud] No se pudo cargar la lista tras reintentos');
+            if (list) list.innerHTML = `<div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; box-sizing: border-box; text-align: center;">
+                <div style="color:#f87171;">${window.t('conn_server_restart')}</div>
+                <button onclick="location.reload()" style="padding: 9px 22px; border-radius: 8px; border: none; background: var(--accent); color: #fff; cursor: pointer; font-size: 0.9rem;">${window.t('btn_retry_now')}</button>
+            </div>`;
             return;
         }
 
-        const data = await res.json();
+        const data = await _cloudJson(res);
         CLOUD_FILES = data.files || [];
 
         renderCloudBreadcrumbs(path, view === 'home' ? null : (view === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (view === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
@@ -153,7 +271,7 @@ async function fetchCloudFiles(path = '', view = 'home') {
                         let refreshEndpoint = `/api/cloud/files?view=computers&path=${encodeURIComponent(path)}`;
                         const refreshRes = await fetch(refreshEndpoint, { headers: HEADERS, credentials: 'include' });
                         if (refreshRes.ok) {
-                            const refreshData = await refreshRes.json();
+                            const refreshData = await _cloudJson(refreshRes);
                             CLOUD_FILES = refreshData.files || [];
                             const queryVal = document.getElementById('cloud-search')?.value.toLowerCase() || '';
                             if (!queryVal && currentCloudView === 'computers' && currentCloudPath === path) {
@@ -172,9 +290,33 @@ async function fetchCloudFiles(path = '', view = 'home') {
             }, 3000);
         }
 
+        // Actividad reciente: refresco periódico para mantenerla al día
+        if (view === 'recent' && path === '') {
+            window.cloudFolderRefreshInterval = setInterval(async () => {
+                if (currentCloudView !== 'recent') {
+                    clearInterval(window.cloudFolderRefreshInterval);
+                    window.cloudFolderRefreshInterval = null;
+                    return;
+                }
+                try {
+                    const refreshRes = await fetch('/api/cloud/recent', { headers: HEADERS, credentials: 'include' });
+                    if (refreshRes.ok) {
+                        const refreshData = await _cloudJson(refreshRes);
+                        const queryVal = document.getElementById('cloud-search')?.value.toLowerCase() || '';
+                        if (!queryVal && SELECTED_CLOUD_ITEMS.length === 0 && currentCloudView === 'recent') {
+                            CLOUD_FILES = refreshData.files || [];
+                            renderCloudFiles(CLOUD_FILES, true);
+                        }
+                    }
+                } catch (e) {
+                    console.error("[Cloud] Error refrescando actividad reciente:", e);
+                }
+            }, 20000);
+        }
+
     } catch (err) {
         console.error("[Cloud] Error de carga:", err);
-        if (list) list.innerHTML = `<div style="padding:20px;color:#f87171;">Error: ${err.message}</div>`;
+        if (list) list.innerHTML = `<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px;text-align:center;"><div style="color:#f87171;">${window.t('conn_server_restart')}</div><button onclick="location.reload()" style="padding:9px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;">${window.t('btn_retry_now')}</button></div>`;
     }
 }
 
@@ -201,7 +343,7 @@ async function filterCloudFiles() {
         try {
             const res = await fetch(`/api/cloud/search?q=${encodeURIComponent(query)}`, { headers: HEADERS });
             if (!res.ok) return;
-            const data = await res.json();
+            const data = await _cloudJson(res);
             const displayQuery = query.length > 15 ? query.substring(0, 15) + '...' : query;
             renderCloudBreadcrumbs(null, `Resultados para "${displayQuery}"`);
             renderCloudFiles(data.files || [], false);
@@ -272,13 +414,16 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
 
     let currentAccumulated = '';
     parts.forEach((p, i) => {
+        let currentAccumulated = '';
+    parts.forEach((p, i) => {
         currentAccumulated += (i === 0 ? '' : '/') + p;
         if (i === 0) {
             html += `<span class="${parts.length > 0 ? 'hide-mobile' : ''}" style="margin: 0 8px; opacity: 0.5;">›</span>`;
         } else {
             html += `<span style="margin: 0 8px; opacity: 0.5;">›</span>`;
         }
-        html += `<span class="breadcrumb-item ${i === parts.length - 1 ? 'active' : ''}" onclick="navigateCloud('${currentAccumulated}')">${p}</span>`;
+        html += `<span class="breadcrumb-item ${i === parts.length - 1 ? 'active' : ''}" onclick="navigateCloud('${jsStr(currentAccumulated)}')">${esc(p)}</span>`;
+    });
     });
 
     container.innerHTML = html;
@@ -405,8 +550,8 @@ function renderCloudFiles(files, isRecent = false) {
         const isMine = (ownerDisplayRaw === 'Yo') || (currentCloudView === 'shared_by_me');
 
         const clickAction = f.is_dir
-            ? `navigateCloud(\`${fullPath.replace(/'/g, "\\'")}\`, '${f.view || currentCloudView}')`
-            : `downloadCloudFile(\`${f.name.replace(/'/g, "\\'")}\`, \`${fpath.replace(/'/g, "\\'")}\`, false, '${f.owner_id || ''}', '${f.view || currentCloudView}', '${currentCloudView === 'trash' ? (f.id || '') : ''}', \`${ownerDisplay}\`, ${f.shared ? 'true' : 'false'})`;
+            ? `navigateCloud(\`${jsStr(fullPath)}\`, '${f.view || currentCloudView}')`
+            : `downloadCloudFile(\`${jsStr(f.name)}\`, \`${jsStr(fpath)}\`, false, '${jsStr(f.owner_id || '')}', '${jsStr(f.view || currentCloudView)}', '${currentCloudView === 'trash' ? jsStr(f.id || '') : ''}', \`${jsStr(ownerDisplay)}\`, ${f.shared ? 'true' : 'false'})`;
 
         let icon = f.is_dir ? getFolderIcon() : getFileIcon(f.ext);
         let statusBadge = '';
@@ -421,9 +566,14 @@ function renderCloudFiles(files, isRecent = false) {
             statusBadge = `<span style="color: #818cf8; display: inline-flex; align-items: center; margin-left: 6px;" title="Compartido"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>`;
         }
 
+        const sharedBadge = (!isMine) ? `<span class="cloud-card-shared-badge" title="${esc(ownerDisplay || '')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>${esc(ownerDisplay || '')}</span>` : '';
+
         const safeClickAction = clickAction.replace(/`/g, "\\`").replace(/'/g, "\\'");
-        const safeName = f.name.replace(/'/g, "\\'");
-        const safePath = fpath.replace(/'/g, "\\'");
+        const safeName = jsStr(f.name);
+        const safePath = jsStr(fpath);
+        const cleanName = esc(f.name);
+        const cleanDisplayPath = esc(displayPath);
+        const sharedWithName = f.shared_with_name || '';
 
         const checkboxHtml = (currentCloudView !== 'home')
             ? `<input type="checkbox" class="cloud-file-checkbox" onclick="event.stopPropagation(); toggleCloudFileSelection(this, \`${safeName}\`, \`${safePath}\`, ${f.is_dir}, '${f.owner_id || ''}')">`
@@ -433,14 +583,14 @@ function renderCloudFiles(files, isRecent = false) {
         const isVid = ['.mp4', '.webm', '.mov'].includes(f.ext);
         const isPdf = f.ext === '.pdf';
 
-        let previewContent = `<span style="font-size: 3rem; opacity: 0.25;">${getFileIcon(f.ext)}</span>`;
+        let previewContent = `<span class="cloud-preview-fallback" style="font-size: 3rem;">${getFileIcon(f.ext)}</span>`;
 
         const previewView = f.id ? 'trash' : (f.view || currentCloudView);
 
         const thumbUrl = `/api/cloud/preview?path=${encodeURIComponent(fpath)}&name=${encodeURIComponent(f.name)}&view=${previewView}&id=${f.id || ''}&owner_id=${f.owner_id || ''}&thumbnail=1`;
 
         // Miniaturas: carga diferida (lazy) y, si fallan, se muestra el icono en vez de imagen rota
-        const fallbackIcon = `<span style="font-size: 3rem; opacity: 0.25;">${getFileIcon(f.ext)}</span>`;
+        const fallbackIcon = `<span class="cloud-preview-fallback" style="font-size: 3rem;">${getFileIcon(f.ext)}</span>`;
 
         if (isImg) {
             previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${fallbackIcon}<img loading="lazy" src="${thumbUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()"></div>`;
@@ -460,14 +610,18 @@ function renderCloudFiles(files, isRecent = false) {
             fullPath,
             displayPath,
             ownerDisplay,
+            sharedWithName,
             isMine,
             icon,
             statusBadge,
             safeClickAction,
             safeName,
             safePath,
+            cleanName,
+            cleanDisplayPath,
             checkboxHtml,
-            previewContent
+            previewContent,
+            sharedBadge
         };
     }
 
@@ -479,17 +633,18 @@ function renderCloudFiles(files, isRecent = false) {
         const suggested = files.slice(0, 4);
         html += `
     <div style="padding: 20px 24px 10px 24px;">
-        <h3 style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('suggested', 'Sugeridos')}</h3>
+        <h3 class="cloud-section-title" style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('suggested', 'Sugeridos')}</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; margin-bottom: 40px;">
             ${suggested.map(f => {
-            const isImg = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(f.ext);
-            const isVid = ['.mp4', '.webm', '.mov'].includes(f.ext);
-            const isPdf = f.ext === '.pdf';
+            const isDir = f.is_dir === true;
+            const isImg = !isDir && ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(f.ext);
+            const isVid = !isDir && ['.mp4', '.webm', '.mov'].includes(f.ext);
+            const isPdf = !isDir && f.ext === '.pdf';
 
-            let previewContent = `<span style="font-size: 2.5rem;">${getFileIcon(f.ext)}</span>`;
+            let previewContent = `<span class="cloud-preview-fallback" style="font-size: 2.5rem;">${isDir ? getFolderIcon() : getFileIcon(f.ext)}</span>`;
 
             const cardThumb = `/api/cloud/preview?path=${encodeURIComponent(f.path)}&name=${encodeURIComponent(f.name)}&view=${f.view || currentCloudView}&owner_id=${f.owner_id || ''}&thumbnail=1`;
-            const cardFallback = `<span style="font-size:2.5rem;">${getFileIcon(f.ext)}</span>`;
+            const cardFallback = `<span class="cloud-preview-fallback" style="font-size:2.5rem;">${isDir ? getFolderIcon() : getFileIcon(f.ext)}</span>`;
 
             if (isImg) {
                 previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${cardFallback}<img loading="lazy" src="${cardThumb}" class="card-preview-img" style="position:absolute;inset:0;" onerror="this.remove()"></div>`;
@@ -504,29 +659,34 @@ function renderCloudFiles(files, isRecent = false) {
                 previewContent = `<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">${cardFallback}<img loading="lazy" src="${cardThumb}" class="card-preview-img" style="position:absolute;inset:0;" onerror="this.remove()"></div>`;
             }
 
+            const suggestedClick = isDir
+                ? `navigateCloud(\`${jsStr([f.path, f.name].filter(Boolean).join('/'))}\`, '${jsStr(f.view || '')}')`
+                : `downloadCloudFile(\`${jsStr(f.name)}\`, \`${jsStr(f.path)}\`, false, '${jsStr(f.owner_id || '')}')`;
+
             return `
                     <div class="cloud-suggested-card" 
-                         data-name="${f.name}" data-path="${f.path}" data-is-dir="false" data-starred="${f.starred}" data-view="${f.view || ''}"
-                         onclick="downloadCloudFile(\`${f.name.replace(/'/g, "\\'")}\`, \`${f.path.replace(/'/g, "\\'")}\`, false, '${f.owner_id || ''}')">
+                         data-name="${escAttr(f.name)}" data-path="${escAttr(f.path)}" data-is-dir="${isDir}" data-starred="${escAttr(f.starred)}" data-view="${escAttr(f.view || '')}"
+                         onclick="${suggestedClick}">
                         <div class="card-preview">
                             ${previewContent}
+                            ${f.view === 'shared' ? `<span class="cloud-card-shared-badge" title="${esc(f.owner || '')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>${esc(f.owner || '')}</span>` : ''}
                         </div>
                         <div class="card-info">
-                            <span class="card-name">${f.name}</span>
+                            <span class="card-name">${esc(f.name)}</span>
                             <span class="card-meta">${window.t_cloud(f.action_type || 'act_abrio', f.action_type || 'Visto')} · ${timeAgo(f.action_time || f.mtime)}</span>
                         </div>
                     </div>
                 `;
         }).join('')}
         </div>
-        <h3 style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('recent_activity', 'Actividad reciente')}</h3>
-        <div class="cloud-table-header" style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); background: transparent; position: static;">
+        ${currentCloudLayout !== 'grid' ? `<h3 class="cloud-section-title" style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('recent_activity', 'Actividad reciente')}</h3>
+        <div class="cloud-table-header" style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; column-gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); background: transparent; position: static;">
             <span>${window.t_cloud('col_name', 'Nombre')}</span>
             <span>${window.t_cloud('col_owner', 'Propietario')}</span>
             <span>${window.t_cloud('col_date', 'Fecha de modificación')}</span>
             <span>${window.t_cloud('col_size', 'Tamaño del archivo')}</span>
             <span></span>
-        </div>
+        </div>` : `<h3 class="cloud-section-title" style="font-size: 1rem; font-weight: 500; margin-bottom: 15px; opacity: 0.8;">${window.t_cloud('recent_activity', 'Actividad reciente')}</h3>`}
     </div>`;
     }
 
@@ -542,14 +702,15 @@ function renderCloudFiles(files, isRecent = false) {
                 const d = getFileTemplateData(f);
                 return `
                 <div class="cloud-folder-row"
-                     data-name="${f.name}" data-path="${d.fpath}" data-is-dir="true" data-starred="${f.starred}" data-protected="${f.protected === true}"
-                     data-trash-id="${f.id || ''}" data-owner-id="${f.owner_id || ''}" data-view="${f.view || ''}" data-is-mine="${d.isMine}"
-                     onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, true, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+                     data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="true" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
+                     data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-is-mine="${d.isMine}"
+                     onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, true, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)">
                     ${d.checkboxHtml}
                     <span class="cloud-folder-row-icon">${d.icon}</span>
-                    <span class="cloud-folder-row-name">${f.name}</span>
+                    <span class="cloud-folder-row-name">${d.cleanName}</span>
                     ${f.starred ? '<span style="color:#fbbf24;font-size:0.75rem;flex-shrink:0;">★</span>' : ''}
-                    <button class="cloud-folder-row-menu" onclick="handleCloudAction(event, '${f.name}', true, '${d.fpath}')">⋮</button>
+                    ${f.protected ? `<span title="Este elemento está protegido contra eliminación" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
+                    <button class="cloud-folder-row-menu" onclick="handleCloudAction(event, '${d.safeName}', true, '${d.safePath}')">⋮</button>
                 </div>`;
             }).join('');
             gridHtml += `</div>`;
@@ -561,18 +722,20 @@ function renderCloudFiles(files, isRecent = false) {
                 const d = getFileTemplateData(f);
                 return `
                 <div class="cloud-file-card"
-                     data-name="${f.name}" data-path="${d.fpath}" data-is-dir="false" data-starred="${f.starred}" data-protected="${f.protected === true}"
-                     data-trash-id="${f.id || ''}" data-owner-id="${f.owner_id || ''}" data-view="${f.view || ''}" data-is-mine="${d.isMine}"
-                     onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, false, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+                     data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="false" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
+                     data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-is-mine="${d.isMine}"
+                     onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, false, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)">
                     <div class="cloud-file-card-header">
                         ${d.checkboxHtml}
                         <span class="cloud-file-card-icon">${d.icon}</span>
-                        <span class="cloud-file-card-name">${f.name}</span>
+                        <span class="cloud-file-card-name">${d.cleanName}</span>
                         ${f.starred ? '<span style="color:#fbbf24;font-size:0.75rem;flex-shrink:0;">★</span>' : ''}
-                        <button class="cloud-file-card-menu" onclick="handleCloudAction(event, '${f.name}', false, '${d.fpath}')">⋮</button>
+                        ${f.protected ? `<span title="Este elemento está protegido contra eliminación" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
+                        <button class="cloud-file-card-menu" onclick="handleCloudAction(event, '${d.safeName}', false, '${d.safePath}')">⋮</button>
                     </div>
                     <div class="cloud-file-card-preview">
                         ${d.previewContent}
+                        ${d.sharedBadge}
                     </div>
                 </div>`;
             }).join('');
@@ -748,34 +911,34 @@ function renderListRow(f, isRecent, getFileTemplateData) {
     const d = getFileTemplateData(f);
     return `
     <div class="cloud-file-row" 
-         data-name="${f.name}" data-path="${d.fpath}" data-is-dir="${f.is_dir}" data-starred="${f.starred}" data-protected="${f.protected === true}"
-         data-trash-id="${f.id || ''}" data-owner-id="${f.owner_id || ''}" data-view="${f.view || ''}" data-shared-with="${f.shared_with || ''}" data-is-mine="${d.isMine}"
-         onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${f.owner_id || ''}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+         data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="${f.is_dir}" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
+         data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-shared-with="${escAttr(f.shared_with || '')}" data-is-mine="${d.isMine}"
+         onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)">
         <div class="cloud-file-name" style="position: relative; ${currentCloudView === 'home' ? 'padding-left: 0;' : ''}">
             ${d.checkboxHtml}
             <span class="cloud-file-icon" style="font-size: 1.2rem;">${d.icon}</span>
-            <div style="display: flex; flex-direction: column; overflow: hidden;">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${f.name}</span>
-                    ${d.statusBadge}
-                    ${f.starred ? '<span style="color: #fbbf24; font-size: 0.8rem;">★</span>' : ''}
-                    ${f.protected ? `<span title="Este elemento está protegido contra eliminación" style="display: inline-flex; opacity: 0.6; cursor: help;">${protectSvgIcon(true, 13)}</span>` : ''}
-                </div>
-                ${(isRecent || f.path !== undefined) ? `<span style="font-size: 0.65rem; opacity: 0.5;">${window.t_cloud('in_lower', 'en')} ${d.displayPath}</span>` : ''}
+            <div style="display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0;">
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${d.cleanName}</span>
+                ${(!isRecent && f.path !== undefined) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${window.t_cloud('in_lower', 'en')} ${d.cleanDisplayPath}</span>` : ''}
             </div>
         </div>
-        <div class="cloud-file-owner" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim); display: flex; align-items: center; gap: 8px;">
-            ${(currentCloudView === 'shared_by_me' && f.shared_with) ? `<img src="/api/system/user/avatar/${f.shared_with}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;" onerror="this.style.display='none'">` : ((f.owner_id && !d.isMine && currentCloudView !== 'shared_by_me') ? `<img src="/api/system/user/avatar/${f.owner_id}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;" onerror="this.style.display='none'">` : '')}
-            <span>${d.ownerDisplay || window.t_cloud('me', 'Yo')}</span>
+        <div class="cloud-file-owner" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim); display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+            ${(currentCloudView === 'shared_by_me' && f.shared_with) ? `<img src="/api/system/user/avatar/${escAttr(f.shared_with)}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;" onerror="window.cloudAvatarFallback(this, '${jsStr(d.sharedWithName || d.ownerDisplay || '')}')">` : ((f.owner_id && !d.isMine && currentCloudView !== 'shared_by_me') ? `<img src="/api/system/user/avatar/${escAttr(f.owner_id)}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;" onerror="window.cloudAvatarFallback(this, '${jsStr(d.ownerDisplay || '')}')">` : '')}
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">${currentCloudView === 'shared_by_me' ? window.t_cloud('shared_with_label', 'Compartido con') + ' ' + esc(d.sharedWithName || d.ownerDisplay || '') : esc(d.ownerDisplay || window.t_cloud('me', 'Yo'))}</span>
+            <span style="margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 10px; color: var(--text-muted);">
+                ${f.starred ? '<span style="color: #fbbf24; font-size: 0.8rem; display:inline-flex;">★</span>' : ''}
+                ${f.protected ? `<span title="Este elemento está protegido contra eliminación" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
+                ${d.statusBadge}
+            </span>
         </div>
-        <div class="cloud-file-date" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim);">
+        <div class="cloud-file-date" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim); min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
             ${new Date(f.mtime * 1000).toLocaleDateString(window.currentLang, { day: '2-digit', month: 'short', year: 'numeric' })}
         </div>
         <div class="cloud-file-size" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim);">
             ${formatBytes(f.size || 0)}
         </div>
         <div class="cloud-file-actions" style="width: 40px; display: flex; justify-content: flex-end;">
-             <button onclick="handleCloudAction(event, '${f.name}', ${f.is_dir}, '${d.fpath}')" style="background: none; border: none; color: inherit; cursor: pointer; padding: 5px; opacity: 0.5;">⋮</button>
+             <button onclick="handleCloudAction(event, '${d.safeName}', ${f.is_dir}, '${d.safePath}')" style="background: none; border: none; color: inherit; cursor: pointer; padding: 5px; opacity: 0.5;">⋮</button>
         </div>
     </div>`;
 }
@@ -881,7 +1044,7 @@ async function updateCloudQuotaInfo() {
         });
 
         if (!res.ok) throw new Error("Status: " + res.status);
-        const data = await res.json();
+        const data = await _cloudJson(res);
 
         const usedBytes = data.used_bytes || 0;
         const limitGb = data.limit_gb !== undefined ? data.limit_gb : 5;
@@ -931,7 +1094,6 @@ async function updateCloudQuotaInfo() {
         }
     } catch (err) {
         console.error("Error cuota cloud:", err);
-        if (text) text.innerHTML = `<span style="color:#f87171">${window.currentLang === 'en' ? 'Connection error' : 'Error de conexión'}</span>`;
     }
 }
 
@@ -959,7 +1121,7 @@ async function requestMoreCloudQuota() {
             await NV_Alert(window.t_cloud('request_sent'));
             updateCloudQuotaInfo();
         } else {
-            const errData = await res.json();
+            const errData = await _cloudJson(res);
             await NV_Alert(errData.error || 'Error.');
         }
     } catch (err) { }
@@ -969,7 +1131,7 @@ async function fetchAdminQuotaRequests() {
     try {
         const res = await fetch('/api/cloud/admin/quota_requests', { headers: HEADERS });
         if (res.ok) {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             renderAdminQuotaRequests(data.requests || []);
         }
     } catch (err) { console.error(err); }
@@ -1050,7 +1212,7 @@ async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, is
             const rowHtml = `
                     <div id="${rowId}" style="padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border);">
                         <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
-                            <span style="color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">${file.name}</span>
+                            <span style="color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">${esc(file.name)}</span>
                             <span id="${rowId}-pct" style="color: var(--indigo); font-weight: 600;">0%</span>
                         </div>
                         <div style="height: 4px; background: rgba(0,0,0,0.2); border-radius: 2px; overflow: hidden;">
@@ -1226,14 +1388,14 @@ async function deleteCloudItem(name, path, isDir, trashId = null, fileView = nul
 
         let msg = '';
         if (view === 'shared') {
-            msg = window.t_cloud('confirm_unshare', '¿Dejar de compartir') + ` "${name}"?`;
+            msg = window.t_cloud('confirm_unshare', '¿Dejar de compartir') + ` "${esc(name)}"?`;
         } else if (isPermanent) {
             msg = window.t_cloud('confirm_delete_permanent', '¿Eliminar PERMANENTEMENTE') + ` "${name || 'este elemento'}"?`;
         } else if (isComputer) {
-            msg = window.t_cloud('confirm_unlink', '¿Desvincular y eliminar por completo la computadora') + ` "${name}"?`;
+            msg = window.t_cloud('confirm_unlink', '¿Desvincular y eliminar por completo la computadora') + ` "${esc(name)}"?`;
         } else {
             const typeStr = isDir ? window.t_cloud('item_folder', 'la carpeta') : window.t_cloud('item_file', 'el archivo');
-            msg = window.t_cloud('confirm_trash', '¿Mover a la papelera') + ` ${typeStr} "${name}"?`;
+            msg = window.t_cloud('confirm_trash', '¿Mover a la papelera') + ` ${typeStr} "${esc(name)}"?`;
         }
 
         if (!await NV_Confirm(msg, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
@@ -1257,7 +1419,7 @@ async function deleteCloudItem(name, path, isDir, trashId = null, fileView = nul
             fetchCloudFiles(currentCloudPath, currentCloudView);
             closeCloudInfoPanel();
         } else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             await NV_Alert(data.error || window.currentLang === "en" ? "Error processing request." : "Error al procesar la solicitud.");
         }
     } catch (err) {
@@ -1275,7 +1437,7 @@ async function handleUnshareItem(item) {
 
     if (currentCloudView === 'shared') {
         // CASO A: Estás en "Compartidos conmigo". La acción es ocultar/ignorar el archivo que te compartieron.
-        if (!await NV_Confirm(window.t_cloud('confirm_ignore', '¿Seguro que deseas ignorar') + ` "${name}"?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+        if (!await NV_Confirm(window.t_cloud('confirm_ignore', '¿Seguro que deseas ignorar') + ` "${esc(name)}"?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
         try {
             const res = await fetch('/api/cloud/unshare', {
                 method: 'POST',
@@ -1290,7 +1452,7 @@ async function handleUnshareItem(item) {
                 fetchCloudFiles(currentCloudPath, currentCloudView);
                 closeCloudInfoPanel();
             } else {
-                const data = await res.json();
+                const data = await _cloudJson(res);
                 await NV_Alert(data.error || window.currentLang === "en" ? "Error ignoring item." : "Error al ignorar el elemento.");
             }
         } catch (e) {
@@ -1327,7 +1489,7 @@ async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
             </div>
             <div>
                 <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; display: block;">${window.t_cloud('rename_new_name', 'Nuevo nombre')}</label>
-                <input type="text" id="rename-inline-input" value="${oldName.replace(/"/g, '&quot;')}" 
+                <input type="text" id="rename-inline-input" value="${escAttr(oldName)}" 
                     style="width: 100%; box-sizing: border-box; background: var(--surface, #303134); border: 2px solid var(--indigo, #8ab4f8); border-radius: 6px; padding: 10px 12px; color: var(--text-main); font-size: 0.95rem; outline: none; transition: border-color 0.2s;" />
                 <div id="rename-inline-error" style="font-size: 0.8rem; color: #f87171; margin-top: 8px; min-height: 1.2em;"></div>
             </div>
@@ -1355,12 +1517,15 @@ async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
     }, 50);
 
     function validateName(name) {
-        if (name.trim() === '') return window.t_cloud('rename_err_empty', 'El nombre no puede estar vacío.');
+        const cleaned = name.trim();
+        if (cleaned === '') return window.t_cloud('rename_err_empty', 'El nombre no puede estar vacío.');
         const invalidChars = /[<>:"\/\\|?*]/;
-        if (invalidChars.test(name.trim())) return window.t_cloud('rename_err_invalid', 'Contiene caracteres no permitidos (< > : " / \\ | ? *)');
-        if (name.trim().startsWith('.')) return window.t_cloud('rename_err_dot', 'No puede empezar por punto.');
-        const existing = Array.from(document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card')).find(row => row.getAttribute('data-name') === name.trim());
-        if (existing && name.trim() !== oldName) return window.t_cloud('rename_err_exists', 'Ya existe un elemento con ese nombre.');
+        if (invalidChars.test(cleaned)) return window.t_cloud('rename_err_invalid', 'Contiene caracteres no permitidos (< > : " / \\ | ? *)');
+        if (cleaned.startsWith('.')) return window.t_cloud('rename_err_dot', 'No puede empezar por punto.');
+        if (cleaned.length > 150) return window.t_cloud('rename_err_long', window.currentLang === 'en' ? 'The name is too long (max 150 characters).' : 'El nombre es demasiado largo (máximo 150 caracteres).');
+        if (sanitizeName(cleaned, 150) !== cleaned) return window.t_cloud('rename_err_chars', window.currentLang === 'en' ? 'The name contains invalid characters.' : 'El nombre contiene caracteres no válidos.');
+        const existing = Array.from(document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card')).find(row => row.getAttribute('data-name') === cleaned);
+        if (existing && cleaned !== oldName) return window.t_cloud('rename_err_exists', 'Ya existe un elemento con ese nombre.');
         return null;
     }
 
@@ -1383,7 +1548,7 @@ async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
             if (!newName.includes('.')) {
                 if (!await NV_Confirm(window.t_cloud('rename_warn_ext_lost', 'El archivo perderá su extensión. ¿Estás seguro?'), window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
             } else if (oldExt !== newExt) {
-                if (!await NV_Confirm(window.t_cloud('rename_warn_ext_change', 'La extensión cambiará') + ` de .${oldExt} a .${newExt}. ` + window.t_cloud('are_you_sure', '¿Estás seguro?'), window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+                if (!await NV_Confirm(window.t_cloud('rename_warn_ext_change', 'La extensión cambiará') + ` de .${esc(oldExt)} a .${esc(newExt)}. ` + window.t_cloud('are_you_sure', '¿Estás seguro?'), window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
             }
         }
 
@@ -1400,13 +1565,13 @@ async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
                 fetchCloudFiles(currentCloudPath, currentCloudView);
                 closeRenamePanel();
             } else {
-                const data = await res.json();
+                const data = await _cloudJson(res);
                 errorEl.textContent = data.error || 'Error al renombrar.';
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = 'Aceptar';
             }
         } catch (err) {
-            errorEl.textContent = 'Error de conexión.';
+            errorEl.textContent = window.t('conn_error') + '.';
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Aceptar';
         }
@@ -1436,7 +1601,7 @@ async function restoreCloudItem(trashId) {
             fetchCloudFiles('', 'trash');
             closeCloudInfoPanel();
         } else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             await NV_Alert(data.error || window.currentLang === "en" ? "Error restoring." : "Error al restaurar.");
         }
     } catch (err) { }
@@ -1467,7 +1632,11 @@ async function toggleCloudProtect(name, path, fileView = null) {
             fetchCloudFiles(currentCloudPath, currentCloudView);
             closeCloudInfoPanel();
         } else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
+            if (data.error === 'protected_ancestor') {
+                await NV_Alert(window.t_cloud('cloud_protect_ancestor', window.currentLang === 'en' ? 'You cannot unlock this item: it is inside the protected folder "{0}". Unprotect that folder first.' : 'No puedes desbloquear este elemento: está dentro de la carpeta «{0}», que está protegida. Desprotege primero esa carpeta.').replace('{0}', esc(data.ancestor_name || '')));
+                return;
+            }
             await NV_Alert(data.error || (window.currentLang === "en" ? "Cannot change the protection of this item." : "No se puede cambiar el estado de protección de este elemento."));
         }
     } catch (err) {
@@ -1514,6 +1683,14 @@ async function handleCreateFolder() {
         await NV_Alert(window.currentLang === "en" ? "Name cannot start with a dot." : "El nombre no puede empezar por punto.");
         return;
     }
+    if (trimmedName.length > 150) {
+        await NV_Alert(window.currentLang === "en" ? "The name is too long (max 150 characters)." : "El nombre es demasiado largo (máximo 150 caracteres).");
+        return;
+    }
+    if (sanitizeName(trimmedName, 150) !== trimmedName) {
+        await NV_Alert(window.currentLang === "en" ? "The folder name contains invalid characters. Only letters, numbers, spaces and -_().,[]{}@+#%&~!= are allowed." : "El nombre de la carpeta contiene caracteres no válidos. Solo se permiten letras, números, espacios y -_().,[]{}@+#%&~!=");
+        return;
+    }
     const existing = Array.from(document.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card')).find(row => row.getAttribute('data-name') === trimmedName);
     if (existing) {
         await NV_Alert(window.currentLang === "en" ? "A file or folder with that name already exists." : "Ya existe una carpeta o archivo con ese nombre.");
@@ -1531,7 +1708,7 @@ async function handleCreateFolder() {
             headers: HEADERS,
             body: JSON.stringify({ name: trimmedName, path: targetPath, view: targetView })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (data.error) {
             await NV_Alert("Error: " + data.error);
             return;
@@ -1544,16 +1721,35 @@ async function handleCreateFolder() {
     }
 }
 
+async function refreshRecentActivity() {
+    if (currentCloudView !== 'recent') return;
+    const queryVal = document.getElementById('cloud-search')?.value.toLowerCase() || '';
+    if (queryVal || SELECTED_CLOUD_ITEMS.length > 0) return;
+    try {
+        const res = await fetch('/api/cloud/recent', { headers: HEADERS, credentials: 'include' });
+        if (res.ok) {
+            const data = await _cloudJson(res);
+            CLOUD_FILES = data.files || [];
+            renderCloudFiles(CLOUD_FILES, true);
+        }
+    } catch (e) {
+        console.error("[Cloud] Error refrescando actividad reciente:", e);
+    }
+}
+
 async function downloadCloudFile(name, overridePath = null, forceDownload = false, ownerId = null, fileView = null, trashId = null, ownerName = null, isShared = false) {
     try {
         const path = overridePath !== null ? overridePath : currentCloudPath;
         const view = trashId ? 'trash' : (fileView || currentCloudView);
+        const ext = name.split('.').pop().toLowerCase();
+        const previewExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'md', 'json', 'mp4', 'webm', 'mov', 'svg'];
+        const willPreview = !forceDownload && previewExts.includes(ext);
         const res = await fetch('/api/cloud/get_token', {
             method: 'POST',
             headers: HEADERS,
-            body: JSON.stringify({ name, path, view: view, owner_id: ownerId, id: trashId })
+            body: JSON.stringify({ name, path, view: view, owner_id: ownerId, id: trashId, preview: willPreview })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (res.status === 401 || (data.error && String(data.error).toLowerCase().includes('no autorizado'))) {
             await NV_Alert(window.currentLang === 'en' ? 'Session expired. Please log in again.' : 'Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
             window.location.href = '/login';
@@ -1572,10 +1768,8 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
         }
 
         const url = `/api/cloud/download?t=${data.t}`;
-        const ext = name.split('.').pop().toLowerCase();
-        const previewExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'md', 'json', 'mp4', 'webm', 'mov', 'svg'];
 
-        if (!forceDownload && previewExts.includes(ext)) {
+        if (willPreview) {
             openCloudPreview(name, url, path, ownerId, fileView, ownerName, isShared);
         } else {
             const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -1591,6 +1785,7 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
                 document.body.removeChild(link);
             }
         }
+        refreshRecentActivity();
     } catch (err) {
         console.error('[Cloud] Error generando token de acceso:', err);
         await NV_Alert(window.t_cloud('err_token_fetch', 'Error al acceder al archivo. Si el problema persiste, recarga la página.'));
@@ -1691,7 +1886,7 @@ window.openCloudMultiPreview = async function () {
                 headers: HEADERS,
                 body: JSON.stringify({ name: it.name, path, view, owner_id: it.ownerId || null })
             });
-            const data = await res.json();
+            const data = await _cloudJson(res);
             if (!data.t) {
                 if (data.error === 'access_revoked') {
                     await NV_Alert(window.t_cloud('access_revoked', 'Te han quitado el acceso a un archivo.'));
@@ -1983,7 +2178,8 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
         path: overridePath !== null ? overridePath : currentCloudPath,
         view: currentCloudView,
         trashId: trashId,
-        ownerId: ownerId
+        ownerId: ownerId,
+        protected: isProtected === true
     };
 
     if ((currentCloudView === 'home' || currentCloudView === 'recent') && currentCloudContextItem.path.includes('.computers')) {
@@ -2192,7 +2388,7 @@ async function showCloudInfo(name, path, trashId = null, ownerId = null) {
             headers: HEADERS,
             body: JSON.stringify({ name, path, view: currentCloudView, id: trashId, owner_id: ownerId })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (data.error) throw new Error(data.error);
 
         currentCloudInfoItem = { name, path, data, id: trashId, owner_id: ownerId };
@@ -2247,22 +2443,22 @@ function showCloudDetails(name, path, data) {
             <div class="info-section-title">${window.t_cloud('who_has_access', 'Quién tiene acceso').toUpperCase()}</div>
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                 ${data.owner_id ?
-            `<img src="/api/system/user/avatar/${data.owner_id}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" onerror="this.outerHTML='<div style=\\'width: 36px; height: 36px; border-radius: 50%; background: #4285f4; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);\\'>${owner.charAt(0).toUpperCase()}</div>'">`
+            `<img src="/api/system/user/avatar/${escAttr(data.owner_id)}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" onerror="window.cloudAvatarFallback(this, '${jsStr(owner)}')" >`
             :
             `<div style="width: 36px; height: 36px; border-radius: 50%; background: #4285f4; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);">
-                        ${owner.charAt(0).toUpperCase()}
+                        ${esc(owner.charAt(0).toUpperCase())}
                     </div>`
         }
                 <div>
-                    <div style="font-size: 0.9rem; font-weight: 600; color: #ffffff;">${owner}</div>
+                    <div style="font-size: 0.9rem; font-weight: 600; color: #ffffff;">${esc(owner)}</div>
                     <div style="font-size: 0.75rem; color: var(--text-dim); opacity: 0.9;">${window.t_cloud('col_owner', 'Propietario')}</div>
                 </div>
             </div>
             ${(data.shared_users && data.shared_users.length > 0) ? data.shared_users.map(u => `
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                <img src="/api/system/user/avatar/${u.user_id}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;" onerror="this.outerHTML='<div style=\\'width: 30px; height: 30px; border-radius: 50%; background: #6366f1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;\\'>👥</div>'">
+                <img src="/api/system/user/avatar/${escAttr(u.user_id)}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;" onerror="window.cloudAvatarFallback(this, '${jsStr(u.username)}')">
                 <div>
-                    <div style="font-size: 0.85rem; font-weight: 500; color: var(--text-main);">${u.username}</div>
+                    <div style="font-size: 0.85rem; font-weight: 500; color: var(--text-main);">${esc(u.username)}</div>
                     <div style="font-size: 0.7rem; color: var(--text-dim); opacity: 0.9;">${window.t_cloud('guest', 'Invitado')}</div>
                 </div>
             </div>`).join('') : ''}
@@ -2338,7 +2534,7 @@ async function showCloudActivity(name, path, ownerId = null) {
             headers: HEADERS,
             body: JSON.stringify({ name, path, owner_id: ownerId })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
 
         if (!data.activity || data.activity.length === 0) {
             body.innerHTML = `<div style="text-align:center; padding:40px; opacity:0.5;">${window.t_cloud('no_recent_activity', 'No hay actividad reciente')}</div>`;
@@ -2372,8 +2568,8 @@ async function showCloudActivity(name, path, ownerId = null) {
                         <div style="width: 1px; flex: 1; background: var(--border); margin: 4px 0;"></div>
                     </div>
                     <div style="flex: 1;">
-                        <div style="font-size: 0.85rem; font-weight: 600; color: #ffffff;">${translatedAction}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">${act.user} • ${dateStr}, ${timeStr}</div>
+                        <div style="font-size: 0.85rem; font-weight: 600; color: #ffffff;">${esc(translatedAction)}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${esc(act.user)} • ${dateStr}, ${timeStr}</div>
                     </div>
                 </div>
             `;
@@ -2453,7 +2649,7 @@ document.addEventListener('contextmenu', function (e) {
                         restoreBtn.style.display = 'block';
 
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
-                        currentCloudContextItem = { name, path, isDir, trashId, ownerId: row.getAttribute('data-owner-id') };
+                        currentCloudContextItem = { name, path, isDir, trashId, ownerId: row.getAttribute('data-owner-id'), protected: row.getAttribute('data-protected') === 'true' };
                     } else if (currentCloudView === 'computers' && currentCloudPath === '') {
                         ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn', 'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn', 'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn', 'ctx-empty-trash-btn'].forEach(hiddenId => {
                             const hiddenBtn = document.getElementById(hiddenId);
@@ -2476,7 +2672,7 @@ document.addEventListener('contextmenu', function (e) {
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
 
                         const fileView = row.getAttribute('data-view');
-                        currentCloudContextItem = { name, path, isDir, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id') };
+                        currentCloudContextItem = { name, path, isDir, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), protected: row.getAttribute('data-protected') === 'true' };
                         itemActions.style.display = 'block';
                     } else {
                         document.getElementById('ctx-download-btn').style.display = 'block';
@@ -2503,17 +2699,18 @@ document.addEventListener('contextmenu', function (e) {
                         }
 
                         document.getElementById('ctx-organize-btn').style.display = 'block';
-                        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow || itemProtected) ? 'none' : 'block';
+                        const noMoveViews = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred');
+                        document.getElementById('ctx-move-btn').style.display = (noMoveViews || !isMineRow || itemProtected) ? 'none' : 'block';
                         document.getElementById('ctx-copy-btn').style.display = 'block';
 
                         const zipBtn = document.getElementById('ctx-zip-btn');
                         const unzipBtn = document.getElementById('ctx-unzip-btn');
-                        if (zipBtn) zipBtn.style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'flex';
+                        if (zipBtn) zipBtn.style.display = (noMoveViews || !isMineRow) ? 'none' : 'flex';
                         if (unzipBtn) unzipBtn.style.display = (!isMineRow || !name || !name.toLowerCase().endsWith('.zip')) ? 'none' : 'flex';
 
                         document.getElementById('ctx-info-btn').style.display = 'block';
 
-                        setCloudDeleteVisible(!(currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow));
+                        setCloudDeleteVisible(!(noMoveViews || !isMineRow));
                         document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_trash', 'Mover a la papelera');
                         document.getElementById('ctx-restore-btn').style.display = 'none';
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
@@ -2528,7 +2725,7 @@ document.addEventListener('contextmenu', function (e) {
                         starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
                         starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
 
-                        setCloudDeleteVisible(!(currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow || itemProtected));
+                        setCloudDeleteVisible(!(noMoveViews || !isMineRow || itemProtected));
                         const protectText = document.getElementById('ctx-protect-text');
                         const protectIcon = document.getElementById('ctx-protect-icon');
 
@@ -2628,6 +2825,10 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
             showCloudInfo(name, path, trashId, currentCloudContextItem?.ownerId || null);
             break;
         case 'ctx-move-btn':
+            if (currentCloudContextItem.protected === true) {
+                await NV_Alert(window.t_cloud('cloud_move_protected_all', window.currentLang === 'en' ? 'Protected items cannot be moved. Unprotect them first.' : 'No puedes mover los elementos protegidos. Desprotégelos primero para poder moverlos.'), window.t_cloud('confirm_action_title', 'Confirmar acción'));
+                return;
+            }
             setTimeout(() => openCloudMove(name, path, isDir, false), 50);
             break;
         case 'ctx-copy-btn':
@@ -2653,6 +2854,14 @@ async function openCloudMove(name, oldPath, isDir = false, isCopy = false) {
     }
     if (currentCloudView === 'shared' || (currentCloudContextItem && currentCloudContextItem.view === 'shared')) {
         await NV_Alert(window.currentLang === "en" ? "Cannot move or copy shared files." : "No se puede mover ni copiar archivos compartidos.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+    if (!isCopy && (currentCloudView === 'shared_by_me' || (currentCloudContextItem && currentCloudContextItem.view === 'shared_by_me'))) {
+        await NV_Alert(window.currentLang === "en" ? "Cannot move files shared by you." : "No puedes mover archivos que has compartido.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+    if (!isCopy && (currentCloudView === 'recent' || currentCloudView === 'starred' || (currentCloudContextItem && (currentCloudContextItem.view === 'recent' || currentCloudContextItem.view === 'starred')))) {
+        await NV_Alert(window.currentLang === "en" ? "Move is not available in this view." : "Mover no está disponible en esta vista.", window.currentLang === "en" ? "Restriction" : "Restricción");
         return;
     }
     isMultiMove = false;
@@ -2707,7 +2916,7 @@ async function loadCloudFoldersTree() {
             return;
         }
 
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (data.tree) {
             _cloudMoveTree = data.tree;
             _cloudMoveTree._loaded = true;
@@ -2731,7 +2940,7 @@ async function _cloudMoveLoadChildren(node) {
     const res = await fetch(`/api/cloud/folders?view=${_cloudMoveViewQuery}&path=` + encodeURIComponent(node.path || ''),
         { headers: HEADERS });
     if (!res.ok) throw new Error('Error al cargar');
-    const data = await res.json();
+    const data = await _cloudJson(res);
     if (!data.tree) throw new Error('Sin datos');
     node.subdirs = data.tree.subdirs || [];
     node.files = data.tree.files || [];
@@ -2876,6 +3085,7 @@ async function confirmCloudMove() {
         let movedCount = 0;
         for (const item of multiMoveItems) {
             if (moveTargetNewPath === item.path) continue;
+            if (item.row && item.row.getAttribute && item.row.getAttribute('data-protected') === 'true') continue;
             if (item.isDir) {
                 const targetNormalized = moveTargetNewPath ? moveTargetNewPath + '/' : '';
                 const sourceNormalized = item.path ? item.path + '/' : '';
@@ -2935,7 +3145,7 @@ async function moveCloudItem(name, oldPath, newPath) {
             closeCloudInfoPanel();
         }
         else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             await NV_Alert(data.error || window.currentLang === "en" ? "Error moving" : "Error al mover");
         }
     } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error moving" : "Error de red al mover"); }
@@ -2965,7 +3175,7 @@ async function copyCloudItem(name, oldPath, newPath) {
             await NV_Alert(window.currentLang === "en" ? "Copy saved successfully." : "Copia guardada con éxito.");
         }
         else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             await NV_Alert(data.error || window.currentLang === "en" ? "Error saving copy" : "Error al guardar copia");
         }
     } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error saving copy" : "Error de red al guardar copia"); }
@@ -2993,7 +3203,7 @@ async function openCloudShare(name, path) {
             method: 'POST', headers: HEADERS,
             body: JSON.stringify({ name, path })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         _existingShares = data.shares || [];
     } catch (e) { }
 
@@ -3039,12 +3249,12 @@ function renderManageShares() {
 
     container.innerHTML = _existingShares.map(s => `
         <div style="display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 8px; transition: background 0.2s;" class="contact-item-row">
-            <img src="/api/system/user/avatar/${s.user_id}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border);" onerror="this.outerHTML='<div style=\'width: 36px; height: 36px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;\'>${s.username.charAt(0).toUpperCase()}</div>'">
+            <img src="/api/system/user/avatar/${escAttr(s.user_id)}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border);" onerror="window.cloudAvatarFallback(this, '${jsStr(s.username)}')">
             <div style="flex: 1;">
-                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">${s.username}</div>
+                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">${esc(s.username)}</div>
                 <div style="font-size: 0.7rem; color: var(--text-dim); opacity: 0.8;">${window.t_cloud('guest', 'Invitado')}</div>
             </div>
-            <button onclick="revokeCloudShare('${s.user_id}', '${s.username.replace(/'/g, "\\'")}', event)"
+            <button onclick="revokeCloudShare('${jsStr(s.user_id)}', '${jsStr(s.username)}', event)"
                 style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
                 onmouseover="this.style.background='rgba(239,68,68,0.25)';this.style.transform='scale(1.1)'" 
                 onmouseout="this.style.background='rgba(239,68,68,0.1)';this.style.transform='scale(1)'"
@@ -3061,7 +3271,7 @@ async function loadCloudContacts() {
     const list = document.getElementById('share-contacts-list');
     try {
         const res = await fetch('/api/cloud/contacts', { headers: HEADERS });
-        const data = await res.json();
+        const data = await _cloudJson(res);
 
         if (!data.contacts || data.contacts.length === 0) {
             list.innerHTML = `<div style="font-size: 0.85rem; opacity: 0.5; text-align: center; padding: 10px;">${window.t_cloud('share_no_friends', 'No tienes amigos agregados.')}</div>`;
@@ -3071,11 +3281,11 @@ async function loadCloudContacts() {
         list.innerHTML = data.contacts.map(c => {
             const already = _existingShares.some(s => s.user_id === c.user_id);
             return `
-                <div class="contact-item-row" onclick="${already ? '' : "selectUserForSharing('" + c.user_id + "', '" + c.username.replace(/'/g, "\\'") + "')"}" 
+                <div class="contact-item-row" onclick="${already ? '' : "selectUserForSharing('" + jsStr(c.user_id) + "', '" + jsStr(c.username) + "')"}" 
                      style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: ${already ? 'default' : 'pointer'}; transition: background 0.2s; opacity: ${already ? 0.5 : 1};">
-                    <img src="/api/system/user/avatar/${c.user_id}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="this.outerHTML='<div style=\\'width: 32px; height: 32px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;\\'>${c.username.charAt(0).toUpperCase()}</div>'">
+                    <img src="/api/system/user/avatar/${escAttr(c.user_id)}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="window.cloudAvatarFallback(this, '${jsStr(c.username)}')">
                     <div style="flex: 1;">
-                        <div style="font-size: 0.9rem; font-weight: 600;">${c.username}</div>
+                        <div style="font-size: 0.9rem; font-weight: 600;">${esc(c.username)}</div>
                     </div>
                     ${already ? '<button onclick="revokeCloudShare(\'' + c.user_id + '\', \'' + c.username.replace(/'/g, "\\'") + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">' + window.t_cloud('share_revoke', 'REVOCAR') + '</button>' : ''}
                 </div>
@@ -3095,7 +3305,7 @@ async function searchUsersForSharing(query) {
 
     try {
         const res = await fetch(`/api/cloud/users/search?q=${encodeURIComponent(query)}`, { headers: HEADERS });
-        const data = await res.json();
+        const data = await _cloudJson(res);
 
         if (!data.users || data.users.length === 0) {
             results.innerHTML = `<div style="padding: 12px; font-size: 0.85rem; opacity: 0.5;">
@@ -3105,13 +3315,13 @@ async function searchUsersForSharing(query) {
             results.innerHTML = data.users.map(u => {
                 const already = _existingShares.some(s => s.user_id === u.user_id);
                 return `
-                <div onclick="${already ? '' : "selectUserForSharing('" + u.user_id + "', '" + u.username.replace(/'/g, "\\'") + "')"}" 
+                <div onclick="${already ? '' : "selectUserForSharing('" + jsStr(u.user_id) + "', '" + jsStr(u.username) + "')"}" 
                      style="padding: 10px 16px; cursor: ${already ? 'default' : 'pointer'}; border-bottom: 1px solid var(--border); transition: background 0.2s; display: flex; align-items: center; gap: 10px; opacity: ${already ? 0.5 : 1};">
-                    <img src="/api/system/user/avatar/${u.user_id}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="this.outerHTML='<div style=\\'width: 24px; height: 24px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;\\'>${u.username.charAt(0).toUpperCase()}</div>'">
+                    <img src="/api/system/user/avatar/${escAttr(u.user_id)}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="window.cloudAvatarFallback(this, '${jsStr(u.username)}')">
                     <div style="flex: 1;">
-                        <div style="font-size: 0.85rem; font-weight: 600;">${u.username}</div>
+                        <div style="font-size: 0.85rem; font-weight: 600;">${esc(u.username)}</div>
                     </div>
-                    ${already ? '<button onclick="revokeCloudShare(\'' + u.user_id + '\', \'' + u.username.replace(/'/g, "\\'") + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">REVOCAR</button>' : '<div style="font-size:0.7rem;color:#4285f4;font-weight:700;">SELECCIONAR</div>'}
+                    ${already ? '<button onclick="revokeCloudShare(\'' + jsStr(u.user_id) + '\', \'' + jsStr(u.username) + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">REVOCAR</button>' : '<div style="font-size:0.7rem;color:#4285f4;font-weight:700;">SELECCIONAR</div>'}
                 </div>
             `}).join('');
         }
@@ -3140,7 +3350,7 @@ function removeSelectedUser(uid) {
 async function revokeCloudShare(uid, username, event) {
     if (event) event.stopPropagation();
     const itemName = document.getElementById('share-filename').innerText;
-    if (!await NV_Confirm(`${window.t_cloud('confirm_unshare_user', '¿Dejar de compartir con')} ${username}?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
+    if (!await NV_Confirm(`${window.t_cloud('confirm_unshare_user', '¿Dejar de compartir con')} ${esc(username)}?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
 
     try {
         const res = await fetch('/api/cloud/unshare', {
@@ -3152,7 +3362,7 @@ async function revokeCloudShare(uid, username, event) {
                 shared_with: uid
             })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (data.success) {
             _existingShares = _existingShares.filter(s => s.user_id !== uid);
 
@@ -3195,9 +3405,9 @@ function renderSelectedUsers() {
 
     container.innerHTML = selectedUsersToShare.map(u => `
         <div style="display: flex; align-items: center; gap: 6px; background: var(--indigo-dim); color: var(--text-main); padding: 4px 10px; border-radius: 100px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--indigo);">
-            <img src="/api/system/user/avatar/${u.uid}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;" onerror="this.outerHTML='<div style=\\'width: 16px; height: 16px; border-radius: 50%; background: var(--indigo); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 9px;\\'>${u.username.charAt(0).toUpperCase()}</div>'">
-            ${u.username}
-            <span onclick="removeSelectedUser('${u.uid}')" style="cursor: pointer; opacity: 0.6; font-size: 1rem; line-height: 1;">&times;</span>
+            <img src="/api/system/user/avatar/${escAttr(u.uid)}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;" onerror="window.cloudAvatarFallback(this, '${jsStr(u.username)}')">
+            ${esc(u.username)}
+            <span onclick="removeSelectedUser('${jsStr(u.uid)}')" style="cursor: pointer; opacity: 0.6; font-size: 1rem; line-height: 1;">&times;</span>
         </div>
     `).join('');
 }
@@ -3227,7 +3437,7 @@ async function confirmCloudShare() {
             closeCloudShareModal();
             await NV_Alert(window.currentLang === "en" ? `File shared with ${selectedUsersToShare.length} user(s).` : `Archivo compartido con ${selectedUsersToShare.length} usuario(s).`);
         } else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             await NV_Alert("Error: " + (data.error || window.currentLang === "en" ? "Could not share." : "No se pudo compartir."));
         }
     } catch (err) {
@@ -3249,7 +3459,7 @@ async function openLinkDeviceModal() {
         try {
             const devRes = await fetch('/api/cloud/files?view=computers', { headers: HEADERS });
             if (devRes.ok) {
-                const devData = await devRes.json();
+                const devData = await _cloudJson(devRes);
                 (devData.files || []).forEach(f => _existingDevicesAtOpen.add(f.name));
             }
         } catch (e) { }
@@ -3259,7 +3469,7 @@ async function openLinkDeviceModal() {
                 headers: HEADERS
             });
             if (res.ok) {
-                const data = await res.json();
+                const data = await _cloudJson(res);
                 _currentLinkDeviceToken = data.temp_token;
             }
         } catch (e) { console.error("Error al generar token del agente", e); }
@@ -3273,13 +3483,12 @@ async function openLinkDeviceModal() {
         }
 
         setLinkDeviceOS(_currentLinkDeviceOS);
-        setLinkDeviceOS(_currentLinkDeviceOS);
         if (linkDevicePollInterval) clearInterval(linkDevicePollInterval);
         linkDevicePollInterval = setInterval(async () => {
             try {
                 const res = await fetch('/api/cloud/files?view=computers', { headers: HEADERS });
                 if (res.ok) {
-                    const data = await res.json();
+                    const data = await _cloudJson(res);
                     const files = data.files || [];
                     const newDevice = files.find(f => f.active && !_existingDevicesAtOpen.has(f.name));
                     if (newDevice) {
@@ -3287,7 +3496,7 @@ async function openLinkDeviceModal() {
                         linkDevicePollInterval = null;
                         closeLinkDeviceModal();
                         await fetchCloudFiles(newDevice.name, 'computers');
-                        await NV_Alert(window.currentLang === "en" ? `Computer "${newDevice.name.replace('', '')}" linked successfully.` : `Computadora "${newDevice.name.replace('', '')}" vinculada con éxito.`);
+                        await NV_Alert(window.currentLang === "en" ? `Computer "${esc(newDevice.name)}" linked successfully.` : `Computadora "${esc(newDevice.name)}" vinculada con éxito.`);
                     }
                 }
             } catch (err) { }
@@ -3340,124 +3549,6 @@ function copySyncCommand() {
     }).catch(err => {
         console.error("Error al copiar:", err);
     });
-}
-
-function setLinkDeviceTab(tab) {
-    const btnTerminal = document.getElementById('tab-btn-terminal');
-    const btnBrowser = document.getElementById('tab-btn-browser');
-    const contentTerminal = document.getElementById('link-device-terminal-content');
-    const contentBrowser = document.getElementById('link-device-browser-content');
-
-    if (!btnTerminal || !btnBrowser || !contentTerminal || !contentBrowser) return;
-
-    if (tab === 'terminal') {
-        btnTerminal.style.background = 'var(--indigo)';
-        btnTerminal.style.color = '#fff';
-        btnBrowser.style.background = 'transparent';
-        btnBrowser.style.color = 'var(--text-muted)';
-        contentTerminal.style.display = 'block';
-        contentBrowser.style.display = 'none';
-    } else {
-        btnBrowser.style.background = 'var(--indigo)';
-        btnBrowser.style.color = '#fff';
-        btnTerminal.style.background = 'transparent';
-        btnTerminal.style.color = 'var(--text-muted)';
-        contentTerminal.style.display = 'none';
-        contentBrowser.style.display = 'block';
-    }
-}
-
-async function handleLinkDeviceFolderSelect(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const deviceName = 'Navegador Web';
-
-    const progressContainer = document.getElementById('link-device-upload-progress');
-    const progressBar = document.getElementById('upload-progress-bar');
-    const progressPercent = document.getElementById('upload-progress-percent');
-    const progressStatus = document.getElementById('upload-progress-status');
-    const progressCount = document.getElementById('upload-progress-count');
-    const dropzone = document.getElementById('link-device-dropzone');
-
-    if (progressContainer) progressContainer.style.display = 'block';
-    if (dropzone) dropzone.style.pointerEvents = 'none';
-
-    const totalFiles = files.length;
-    let uploadedCount = 0;
-
-    try {
-        if (progressStatus) progressStatus.innerText = window.t_cloud('link_modal_registering', "Registrando dispositivo...");
-        const pingRes = await fetch('/api/cloud/sync-agent/ping', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({
-                device: deviceName,
-                os: 'Web-Browser'
-            })
-        });
-
-        if (!pingRes.ok) {
-            throw new Error(window.t_cloud('link_modal_err_register', "No se pudo registrar el dispositivo."));
-        }
-
-        for (let i = 0; i < totalFiles; i++) {
-            const file = files[i];
-            const relPath = file.webkitRelativePath;
-            const parts = relPath.split('/');
-            parts.shift();
-            const filename = parts.pop();
-            const subDir = parts.join('/');
-
-            let uploadSubpath = `${deviceName}`;
-            if (subDir) {
-                uploadSubpath += `/${subDir}`;
-            }
-
-            if (progressStatus) progressStatus.innerText = `${window.t_cloud('link_modal_uploading', 'Subiendo: ')}${filename}`;
-            if (progressCount) progressCount.innerText = `${window.t_cloud('link_modal_processing_file', 'Procesando archivo')} ${i + 1} ${window.t_cloud('of', 'de')} ${totalFiles}`;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const uploadUrl = `/api/cloud/upload?path=${encodeURIComponent(uploadSubpath)}&view=computers`;
-            const uploadRes = await fetch(uploadUrl, {
-                method: 'POST',
-                headers: {
-                    'X-Token': TOKEN
-                },
-                body: formData
-            });
-
-            if (uploadRes.ok) {
-                uploadedCount++;
-                const percent = Math.round((uploadedCount / totalFiles) * 100);
-                if (progressBar) progressBar.style.width = `${percent}%`;
-                if (progressPercent) progressPercent.innerText = `${percent}%`;
-            }
-        }
-
-        if (progressStatus) progressStatus.innerText = window.t_cloud('link_modal_sync_complete', "¡Sincronización completada!");
-        if (progressPercent) progressPercent.innerText = "100%";
-        if (progressBar) progressBar.style.width = "100%";
-
-        setTimeout(async () => {
-            closeLinkDeviceModal();
-            if (progressContainer) progressContainer.style.display = 'none';
-            if (dropzone) dropzone.style.pointerEvents = 'auto';
-            if (progressBar) progressBar.style.width = '0%';
-            if (progressPercent) progressPercent.innerText = '0%';
-
-            await fetchCloudFiles(deviceName + "", 'computers');
-            await NV_Alert(window.currentLang === "en" ? `Web Sync complete! Successfully uploaded ${uploadedCount} of ${totalFiles} files.` : `¡Sincronización Web completada! Se han subido ${uploadedCount} de ${totalFiles} archivos correctamente.`);
-        }, 1500);
-
-    } catch (err) {
-        console.error("Error en sincronización web:", err);
-        if (progressStatus) progressStatus.innerText = "Error al sincronizar.";
-        if (dropzone) dropzone.style.pointerEvents = 'auto';
-        await NV_Alert(window.currentLang === "en" ? "An error occurred syncing folder via browser." : "Ocurrió un error al sincronizar la carpeta mediante el navegador.");
-    }
 }
 
 function getUploadTarget() {
@@ -3622,6 +3713,22 @@ function updateCloudMultiSelectBar() {
                 btnDelete.style.background = 'rgba(248,113,113,0.1)';
                 btnDelete.style.borderColor = 'rgba(248,113,113,0.3)';
                 btnDelete.style.color = '#f87171';
+            }
+        } else if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred') {
+            if (btnDownload) btnDownload.style.display = 'block';
+            if (btnZip) btnZip.style.display = 'block';
+            if (btnMove) btnMove.style.display = 'none';
+            if (btnRestore) btnRestore.style.display = 'none';
+            if (btnDeleteText) btnDeleteText.innerText = currentCloudView === 'shared_by_me' ? window.t_cloud('ctx_unshare', 'Dejar de compartir') : window.t_cloud('btn_delete', 'Eliminar');
+            if (btnDelete) {
+                if (currentCloudView === 'shared' || currentCloudView === 'starred') {
+                    btnDelete.style.display = 'none';
+                } else {
+                    btnDelete.style.display = 'block';
+                    btnDelete.style.background = 'rgba(248,113,113,0.1)';
+                    btnDelete.style.borderColor = 'rgba(248,113,113,0.3)';
+                    btnDelete.style.color = '#f87171';
+                }
             }
         } else {
             if (btnDownload) btnDownload.style.display = 'block';
@@ -3798,7 +3905,7 @@ async function downloadSelectedAsZip() {
         });
 
         if (res.ok) {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             const token = data.t;
 
             showCloudProgressToast("Iniciando descarga...");
@@ -3814,7 +3921,7 @@ async function downloadSelectedAsZip() {
                 clearCloudSelection();
             }, 1500);
         } else {
-            const data = await res.json();
+            const data = await _cloudJson(res);
             hideCloudProgressToast();
             await NV_Alert(data.error || window.currentLang === "en" ? "Error preparing download." : "Error al preparar la descarga.");
         }
@@ -3827,8 +3934,26 @@ async function downloadSelectedAsZip() {
 async function moveSelectedItems() {
     if (SELECTED_CLOUD_ITEMS.length === 0) return;
 
+    if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred') {
+        await NV_Alert(window.currentLang === "en" ? "Move is not available in this view." : "Mover no está disponible en esta vista.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+
+    const isItemProtected = (it) => !!(it.row && it.row.getAttribute && it.row.getAttribute('data-protected') === 'true');
+    const protectedCount = SELECTED_CLOUD_ITEMS.filter(isItemProtected).length;
+
+    if (protectedCount === SELECTED_CLOUD_ITEMS.length) {
+        await NV_Alert(window.t_cloud('cloud_move_protected_all', window.currentLang === 'en' ? 'Protected items cannot be moved. Unprotect them first.' : 'No puedes mover los elementos protegidos. Desprotégelos primero para poder moverlos.'), window.t_cloud('confirm_action_title', 'Confirmar acción'));
+        return;
+    }
+
+    if (protectedCount > 0) {
+        const skippedMsg = window.t_cloud('cloud_move_protected_skip', window.currentLang === 'en' ? '{0} protected item(s) will not be moved' : '{0} elemento(s) protegido(s) no se moverá(n)').replace('{0}', protectedCount);
+        await NV_Alert(skippedMsg, window.t_cloud('confirm_action_title', 'Confirmar acción'));
+    }
+
     isMultiMove = true;
-    multiMoveItems = [...SELECTED_CLOUD_ITEMS];
+    multiMoveItems = SELECTED_CLOUD_ITEMS.filter(it => !isItemProtected(it));
     moveTargetNewPath = '';
 
     const modal = document.getElementById('cloud-move-modal');
@@ -3845,7 +3970,7 @@ async function moveSelectedItems() {
 
     const nameEl = document.getElementById('move-filename');
     if (nameEl) {
-        const count = SELECTED_CLOUD_ITEMS.length;
+        const count = multiMoveItems.length;
         const itemsStr = count === 1 ? window.t_cloud('selected_single', 'seleccionado') : window.t_cloud('selected_plural', 'seleccionados');
         const elementStr = count === 1 ? window.t_cloud('item_single', 'elemento') : window.t_cloud('item_plural', 'elementos');
         nameEl.innerText = `${count} ${elementStr} ${itemsStr}`;
@@ -3864,9 +3989,22 @@ async function deleteSelectedItems() {
     const isPermanent = currentCloudView === 'trash';
     const isComputer = currentCloudView === 'computers' && currentCloudPath === '';
     const isShared = currentCloudView === 'shared';
-    let msg = window.t_cloud('confirm_trash_multi', '¿Mover los') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected_to_trash', 'elementos seleccionados a la papelera?');
+    const isSharedByMe = currentCloudView === 'shared_by_me';
+    const isStarred = currentCloudView === 'starred';
+
     if (isShared) {
-        msg = window.t_cloud('confirm_unshare_multi', '¿Dejar de compartir los') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected', 'elementos seleccionados') + '?';
+        await NV_Alert(window.currentLang === "en" ? "You cannot delete or remove items shared with you." : "No puedes eliminar ni quitar elementos compartidos contigo.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+
+    if (isStarred) {
+        await NV_Alert(window.t_cloud('cloud_delete_starred', window.currentLang === "en" ? "You cannot delete items from the Starred view. Go to the item's folder to delete it." : "No puedes eliminar elementos desde la vista de Destacados. Ve a la carpeta del elemento para eliminarlo."), window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+
+    let msg = window.t_cloud('confirm_trash_multi', '¿Mover los') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected_to_trash', 'elementos seleccionados a la papelera?');
+    if (isSharedByMe) {
+        msg = window.t_cloud('confirm_unshare_by_me_multi', window.currentLang === 'en' ? 'The selected {0} item(s) will no longer be shared. Continue?' : 'Se dejará de compartir {0} elemento(s) seleccionado(s). ¿Continuar?').replace('{0}', SELECTED_CLOUD_ITEMS.length);
     } else if (isPermanent) {
         msg = window.t_cloud('confirm_delete_permanent', '¿Eliminar PERMANENTEMENTE') + ' ' + SELECTED_CLOUD_ITEMS.length + ' ' + window.t_cloud('items_selected', 'elementos seleccionados') + '?';
     } else if (isComputer) {
@@ -3882,7 +4020,7 @@ async function deleteSelectedItems() {
         try {
             const itemView = item.row.getAttribute('data-view') || currentCloudView;
             let res;
-            if (isShared || itemView === 'shared') {
+            if (isShared || isSharedByMe || itemView === 'shared') {
                 res = await fetch('/api/cloud/unshare', {
                     method: 'POST',
                     headers: HEADERS,
@@ -3907,6 +4045,9 @@ async function deleteSelectedItems() {
         fetchCloudFiles(currentCloudPath, currentCloudView);
         clearCloudSelection();
         closeCloudInfoPanel();
+        if (isSharedByMe) {
+            await NV_Alert(window.t_cloud('unshared_success', window.currentLang === 'en' ? 'Stopped sharing.' : 'Se dejó de compartir.'), window.t_cloud('confirm_action_title', 'Confirmar acción'));
+        }
     }
 }
 
@@ -4317,7 +4458,7 @@ async function handleZipItem() {
             }),
             credentials: 'include'
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (data.ok) {
             fetchCloudFiles(currentCloudPath, currentCloudView);
         } else {
@@ -4349,7 +4490,7 @@ async function handleUnzipItem() {
             }),
             credentials: 'include'
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (data.ok) {
             fetchCloudFiles(currentCloudPath, currentCloudView);
         } else {
@@ -4369,20 +4510,20 @@ function _renderVideoQualityMenu(token) {
     const menu = document.getElementById('video-quality-menu');
     if (!menu || !token) return;
 
-    const itemReady = (quality, label) => `
-        <div onclick="window.changeVideoQuality('${quality}', '${label}', '${token}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between;"><span>${label}</span><span class="v-qual-check" style="display:none;">✓</span></div>`;
+const itemReady = (quality, label) => `
+        <div onclick="window.changeVideoQuality('${jsStr(quality)}', '${jsStr(label)}', '${jsStr(token)}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between;"><span>${esc(label)}</span><span class="v-qual-check" style="display:none;">✓</span></div>`;
     const itemProcessing = (quality) => `
-        <div style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-muted); border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; opacity: 0.7; cursor: default;"><span>${(window.t_cloud('video_preparing', 'Preparando') || 'Preparando')} ${quality}…</span></div>`;
+        <div style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-muted); border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; opacity: 0.7; cursor: default;"><span>${(window.t_cloud('video_preparing', 'Preparando') || 'Preparando')} ${esc(quality)}…</span></div>`;
 
     fetch(`/api/cloud/stream_video?t=${token}&available=1`, { cache: 'no-store' })
-        .then(r => r.json())
+        .then(r => _cloudJson(r))
         .then(data => {
             const ready = data.available || [];
             const processing = data.processing || [];
             const skipped = data.skipped || [];
             const qLabel = (q) => q === '2160p' ? '2160p (4K)' : q;
 
-            let html = `<div onclick="window.changeVideoQuality('original', 'Original', '${token}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;"><span>Original</span><span class="v-qual-check">✓</span></div>`;
+            let html = `<div onclick="window.changeVideoQuality('original', 'Original', '${jsStr(token)}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;"><span>Original</span><span class="v-qual-check">✓</span></div>`;
             ready.forEach(q => { html += itemReady(q, qLabel(q)); });
             processing.forEach(q => { html += itemProcessing(q); });
 
@@ -4393,7 +4534,7 @@ function _renderVideoQualityMenu(token) {
             const missing = VIDEO_QUALITY_ORDER.filter(q =>
                 !ready.includes(q) && !processing.includes(q) && !skipped.includes(q));
             if (missing.length) {
-                html += `<div onclick="window.generateVideoQualities('${token}')" style="padding: 8px 12px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${window.t_cloud('video_generate_all', 'Generar todas las calidades…')}</div>`;
+                html += `<div style="padding: 8px 12px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${window.t_cloud('video_generate_all', 'Generar todas las calidades…')}</div>`;
             }
             menu.innerHTML = html;
 
@@ -4410,7 +4551,7 @@ function _renderVideoQualityMenu(token) {
             }
         })
         .catch(() => {
-            menu.innerHTML = `<div onclick="window.changeVideoQuality('original', 'Original', '${token}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;"><span>Original</span><span class="v-qual-check">✓</span></div>`;
+            menu.innerHTML = `<div onclick="window.changeVideoQuality('original', 'Original', '${jsStr(token)}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;"><span>Original</span><span class="v-qual-check">✓</span></div>`;
         });
 }
 
@@ -4469,10 +4610,10 @@ function initCloud() {
         loadCloudFoldersTree, openCloudMove,
         openCloudPreview, openCloudShare, executeNewItemAction,
         renderListRow, renderFolderNode,
-        closeLinkDeviceModal, setLinkDeviceTab, setLinkDeviceOS,
+        closeLinkDeviceModal, setLinkDeviceOS,
         copySyncCommand, toggleCloudInfoPanel, switchCloudInfoTab,
         confirmCloudShare, closeCloudShareModal, handleCreateFolder,
-        generateSyncCommand, searchUsersForSharing, handleLinkDeviceFolderSelect,
+        generateSyncCommand, searchUsersForSharing,
         selectUserForSharing, refreshCloudInfoPanel, showCloudInfo,
         handleUnshareItem, revokeCloudShare,
         toggleCloudFileSelection,
@@ -4636,7 +4777,7 @@ async function handleGenerateLinkToken() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target_device: pcName })
         });
-        const data = await res.json();
+        const data = await _cloudJson(res);
         if (res.ok && data.temp_token) {
             const introText = window.currentLang === 'en'
                 ? `Enter this token in the desktop app to connect <b style="color: #e8edf8;">${pcName || 'your device'}</b>:`
@@ -4655,8 +4796,8 @@ async function handleGenerateLinkToken() {
                     <div id="nv-token-box" style="font-family: monospace; font-size: 1.05rem; font-weight: 700; color: #a5b4fc; background: rgba(99, 102, 241, 0.12); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 10px; padding: 12px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: all; cursor: pointer; transition: all 0.3s ease;"
                          onmouseover="if(!this.dataset.expired){ this.style.background='rgba(99, 102, 241, 0.25)'; this.style.borderColor='#818cf8'; }"
                          onmouseout="if(!this.dataset.expired){ this.style.background='rgba(99, 102, 241, 0.12)'; this.style.borderColor='rgba(99, 102, 241, 0.4)'; }"
-                         onclick="if(!this.dataset.expired){ navigator.clipboard.writeText('${data.temp_token}'); const alertToast = document.getElementById('nv-copy-toast'); if(alertToast){ alertToast.style.opacity='1'; setTimeout(()=>alertToast.style.opacity='0', 2000); } }">
-                        <span id="nv-token-text">${data.temp_token}</span>
+                         onclick="if(!this.dataset.expired){ navigator.clipboard.writeText('${jsStr(data.temp_token)}'); const alertToast = document.getElementById('nv-copy-toast'); if(alertToast){ alertToast.style.opacity='1'; setTimeout(()=>alertToast.style.opacity='0', 2000); } }">
+                        <span id="nv-token-text">${esc(data.temp_token)}</span>
                     </div>
                     <div id="nv-copy-toast" style="opacity: 0; transition: opacity 0.3s; font-size: 0.78rem; color: #34d399; font-weight: 600; margin-top: 6px; height: 18px;">
                         ${copyToast}
@@ -4694,7 +4835,7 @@ async function handleGenerateLinkToken() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ temp_token: data.temp_token, target_device: pcName })
                         });
-                        const checkData = await checkRes.json();
+                        const checkData = await _cloudJson(checkRes);
                         if (checkData.used) {
                             if (_tokenTimerInterval) {
                                 clearInterval(_tokenTimerInterval);

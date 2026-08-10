@@ -337,6 +337,9 @@ class SystemNotifier:
 
     def send_telegram_message(self, message):
         """Envía un mensaje a través del bot de Telegram si está configurado."""
+        if os.environ.get('TELEGRAM_ENABLED', 'true').lower() == 'false':
+            print("[Notifier] Telegram deshabilitado temporalmente (TELEGRAM_ENABLED=false)")
+            return False
         bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
         chat_id = os.environ.get('TELEGRAM_CHAT_ID')
         

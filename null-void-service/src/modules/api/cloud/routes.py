@@ -289,6 +289,8 @@ def toggle_protect():
     
     ok, is_prot = services.toggle_protect(name, subpath, view, request.user_token)
     if not ok:
+        if isinstance(is_prot, tuple) and len(is_prot) == 2 and is_prot[0] == 'protected_ancestor':
+            return jsonify(error='protected_ancestor', ancestor_name=is_prot[1]), 400
         return jsonify(error=is_prot if isinstance(is_prot, str) else "Error al cambiar el estado de protección"), 400
     return jsonify(ok=True, is_protected=is_prot)
 
@@ -432,7 +434,7 @@ def get_download_token():
     trash_id = data.get('id')
     owner_id = data.get('owner_id')
     
-    dl_token, err = services.get_download_token(view, name, subpath, owner_id, trash_id, request.user_token)
+    dl_token, err = services.get_download_token(view, name, subpath, owner_id, trash_id, request.user_token, bool(data.get('preview')))
     if not dl_token:
         return jsonify(error=err or "Archivo no encontrado"), 404
     return jsonify(t=dl_token)

@@ -17,6 +17,20 @@ def parse_pdf(file_path: str) -> dict:
     return parse_text(text)
 
 
+def parse_pdf_date(file_path: str) -> str | None:
+    """Devuelve la fecha (YYYY-MM-DD) extraída del PDF, o None si no aparece."""
+    try:
+        result = subprocess.run(
+            ['pdftotext', '-layout', file_path, '-'],
+            capture_output=True, text=True, check=True
+        )
+        text = result.stdout
+    except Exception as e:
+        print(f"Error procesando PDF con pdftotext: {e}")
+        text = ""
+    return _find_date_text(text)
+
+
 def parse_text(text: str) -> dict:
     return {
         "raw_text": text,
@@ -45,6 +59,11 @@ def _extract_invoice_number(text: str) -> str:
 
 
 def _extract_date(text: str) -> str:
+    return _find_date_text(text) or datetime.now().strftime("%Y-%m-%d")
+
+
+def _find_date_text(text: str) -> str | None:
+    """Busca una fecha de factura en el texto. Devuelve 'YYYY-MM-DD' o None."""
     m = re.search(r'Nº\s*Factura.*?\n\s*[A-Za-z0-9/.-]+\s+([0-9]{2}/[0-9]{2}/[0-9]{4})', text)
     if not m:
         m = re.search(r'Fecha\s+Valor.*?\n\s*[A-Za-z0-9/.-]+\s+([0-9]{2}/[0-9]{2}/[0-9]{4})', text)
@@ -62,7 +81,7 @@ def _extract_date(text: str) -> str:
             parts = m.groups()
         if len(parts) == 3:
             return f"{parts[2]}-{parts[1]}-{parts[0]}"
-    return datetime.now().strftime("%Y-%m-%d")
+    return None
 
 
 def _extract_total(text: str) -> float:

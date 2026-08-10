@@ -36,7 +36,7 @@ def get_requests():
 
 @friends_bp.route('/send', methods=['POST'])
 def send_request():
-    _, uid = _get_user()
+    user, uid = _get_user()
     if not uid:
         return jsonify(error="No autorizado"), 401
     data = request.get_json(silent=True) or {}
@@ -47,12 +47,16 @@ def send_request():
     if error:
         return jsonify(error=error), 400
     socketio.emit('friends_updated', {}, room=f"user_{addressee}")
+    if result and result.get('auto_accepted'):
+        services.notify_friend_event(addressee, uid, user, 'auto_accepted')
+    elif result:
+        services.notify_friend_event(addressee, uid, user, 'sent')
     return jsonify(ok=True)
 
 
 @friends_bp.route('/accept', methods=['POST'])
 def accept_request():
-    _, uid = _get_user()
+    user, uid = _get_user()
     if not uid:
         return jsonify(error="No autorizado"), 401
     data = request.get_json(silent=True) or {}
@@ -63,12 +67,13 @@ def accept_request():
     ok, msg = services.accept_request(rid, uid)
     if ok and ru:
         socketio.emit('friends_updated', {}, room=f"user_{ru['requester']}")
+        services.notify_friend_event(ru['requester'], uid, user, 'accepted')
     return jsonify(ok=ok, msg=msg)
 
 
 @friends_bp.route('/reject', methods=['POST'])
 def reject_request():
-    _, uid = _get_user()
+    user, uid = _get_user()
     if not uid:
         return jsonify(error="No autorizado"), 401
     data = request.get_json(silent=True) or {}
@@ -79,6 +84,7 @@ def reject_request():
     ok, msg = services.reject_request(rid, uid)
     if ok and ru:
         socketio.emit('friends_updated', {}, room=f"user_{ru['requester']}")
+        services.notify_friend_event(ru['requester'], uid, user, 'rejected')
     return jsonify(ok=ok, msg=msg)
 
 

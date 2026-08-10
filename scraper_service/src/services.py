@@ -29,6 +29,10 @@ def _log_print(*args, **kwargs):
         pass
 print = _log_print
 
+def _telegram_enabled():
+    return os.environ.get("TELEGRAM_ENABLED", "true").lower() != "false"
+
+
 def get_scraped_data(user_id=None, scraper_type=None):
     return get_all_products(user_id=user_id, scraper_type=scraper_type)
 
@@ -671,7 +675,7 @@ def _process_detail_background(link, rule, price, surface, city, dist, sku, rule
         tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
 
-        if tg_token and tg_chat:
+        if tg_token and tg_chat and _telegram_enabled():
             kws_found = ", ".join(matched_kws) if matched_kws else "N/A"
             city_clean = city.replace("-", " ").title() if city else "Luxembourg"
             dist_str = f"{dist:.1f} km" if dist is not None else "Not specified"
@@ -873,7 +877,7 @@ def _scrape_athome_task(location="Howald", min_surface=45, user_id=None):
 
                                     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
                                     tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
-                                    if tg_token and tg_chat:
+                                    if tg_token and tg_chat and _telegram_enabled():
                                         city_clean = location.replace("-", " ").title() if location else "Luxembourg"
                                         msg = (
                                             f"🔥 *Great Deal Alert!*\n\n"
@@ -1156,7 +1160,7 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
                                     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
                                     tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
                                     
-                                    if tg_token and tg_chat:
+                                    if tg_token and tg_chat and _telegram_enabled():
                                         city_clean = city.replace("-", " ").title() if city else "Luxembourg"
                                         dist_str = f"{dist:.1f} km" if dist is not None else "Not specified"
                                         

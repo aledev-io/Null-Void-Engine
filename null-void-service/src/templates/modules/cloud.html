@@ -107,13 +107,13 @@
                     style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem;">✕</button>
             </div>
 
-            <p data-i18n="move_select_dest" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+            <p data-i18n="move_select_dest" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
                 Selecciona la carpeta de
                 destino para este elemento:</p>
 
             <!-- Contenedor del Árbol de Directorios -->
             <div id="cloud-move-tree-container"
-                style="max-height: 300px; overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem;">
+                style="max-height: 300px; overflow-y: auto; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem;">
                 <!-- El árbol se cargará dinámicamente aquí -->
             </div>
 
@@ -147,17 +147,17 @@
                 <button onclick="closeBkpSourceModal()"
                     style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem; padding: 4px;">✕</button>
             </div>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;" data-i18n="bkp_src_modal_multi_desc">
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;" data-i18n="bkp_src_modal_multi_desc">
                 Marca los archivos y carpetas que deseas respaldar. Puedes combinar elementos de diferentes rutas.</p>
             <div id="bkp-source-tree-container"
-                style="max-height: 40vh; overflow-y: auto; padding: 16px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                style="max-height: 40vh; overflow-y: auto; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
             </div>
             <div style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
                 <span data-i18n="bkp_src_modal_include_title">Lista de elementos a respaldar</span>
                 <span style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: var(--indigo); color: #fff;" id="bkp-source-selected-count">0</span>
             </div>
             <div id="bkp-source-inclusion-list"
-                style="max-height: 132px; overflow-y: auto; padding: 10px 12px; background: rgba(0,0,0,0.18); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                style="max-height: 132px; overflow-y: auto; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
             </div>
             <div id="bkp-source-excluded-block" style="display: none; margin-bottom: 16px;">
                 <div style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #f87171; display: flex; align-items: center; gap: 8px;">
@@ -165,7 +165,7 @@
                     <span style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: rgba(248,113,113,0.15); color: #f87171;" id="bkp-source-excluded-count">0</span>
                 </div>
                 <div id="bkp-source-excluded-list"
-                    style="max-height: 110px; overflow-y: auto; padding: 10px 12px; background: rgba(0,0,0,0.18); border: 1px solid rgba(248,113,113,0.25); border-radius: 10px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                    style="max-height: 110px; overflow-y: auto; padding: 10px 12px; background: var(--surface); border: 1px solid rgba(248,113,113,0.3); border-radius: 10px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
                 </div>
             </div>
             <div id="bkp-source-selected-hint"
@@ -201,25 +201,7 @@
                     style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.4rem;">✕</button>
             </div>
 
-            <p data-i18n="link_modal_desc"
-                style="font-size: 0.88rem; color: var(--text-main); opacity: 0.85; margin-bottom: 20px; line-height: 1.5; text-align: left;">
-                Elige cómo quieres conectar tu dispositivo actual con la nube de Null-Void:
-            </p>
-
-            <!-- Selector de Pestañas Premium -->
-            <div class="link-device-tabs-bg">
-                <button onclick="setLinkDeviceTab('terminal')" id="tab-btn-terminal"
-                    style="flex: 1; padding: 10px 12px; border: none; border-radius: 8px; background: var(--indigo); color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-                    <span data-i18n="link_modal_app">Aplicación (Recomendado)</span>
-                </button>
-                <button onclick="setLinkDeviceTab('browser')" id="tab-btn-browser"
-                    style="flex: 1; padding: 10px 12px; border: none; border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                    <span data-i18n="link_modal_browser">Navegador (Fácil)</span>
-                </button>
-            </div>
-
+            <!-- Selector de Sistema Operativo -->
             <div style="margin-bottom: 18px; text-align: left;">
                 <label class="link-device-label" data-i18n="link_modal_os">SISTEMA OPERATIVO</label>
                 <div style="display: flex; gap: 8px;">
@@ -244,8 +226,8 @@
 
 
 
-            <!-- CONTENIDO DE LA PESTAÑA APLICACION -->
-            <div id="link-device-terminal-content" style="text-align: left;">
+            <!-- CONTENIDO DE LA VINCULACIÓN -->
+            <div id="link-device-app-content" style="text-align: left;">
                 <div style="margin-bottom: 24px; text-align: left;">
                     <label class="link-device-label" data-i18n="link_modal_token_title">COPIA ESTE TOKEN DE
                         VINCULACIÓN</label>
@@ -286,49 +268,6 @@
                             <span data-i18n="link_modal_download">Descargar Agente Base</span>
                         </a>
                     </div>
-                </div>
-            </div>
-
-            <!-- CONTENIDO DE LA PESTAÑA NAVEGADOR -->
-            <div id="link-device-browser-content" style="display: none; text-align: left;">
-                <p data-i18n="link_modal_browser_desc"
-                    style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
-                    Selecciona una carpeta completa de tu ordenador. El navegador la sincronizará de forma segura en la
-                    nube como un dispositivo virtual vinculado. ¡Sin comandos ni instalación!
-                </p>
-
-                <input type="file" id="link-device-folder-input" webkitdirectory directory multiple
-                    style="display: none;" onchange="handleLinkDeviceFolderSelect(event)">
-
-                <div id="link-device-dropzone" onclick="document.getElementById('link-device-folder-input').click()"
-                    style="border: 2px dashed var(--border); border-radius: 12px; padding: 35px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.15); margin-bottom: 24px;"
-                    onmouseover="this.style.borderColor='var(--indigo)'"
-                    onmouseout="this.style.borderColor='var(--border)'">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto 12px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                    <span id="dropzone-text"
-                        style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); display: block; margin-bottom: 4px;"
-                        data-i18n="link_modal_select_folder">Seleccionar
-                        Carpeta Local</span>
-                    <span id="dropzone-subtext" style="font-size: 0.76rem; color: var(--text-muted);"
-                        data-i18n="link_modal_select_folder_desc">Haz clic para
-                        elegir un directorio completo de tu equipo</span>
-                </div>
-
-                <div id="link-device-upload-progress" style="display: none; margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 8px;">
-                        <span id="upload-progress-status" style="color: var(--text-main); font-weight: 700;"
-                            data-i18n="link_modal_syncing">Sincronizando archivos...</span>
-                        <span id="upload-progress-percent" style="color: var(--indigo); font-weight: 800;">0%</span>
-                    </div>
-                    <div
-                        style="width: 100%; height: 10px; background: rgba(0,0,0,0.25); border-radius: 6px; overflow: hidden; border: 1px solid var(--border);">
-                        <div id="upload-progress-bar"
-                            style="width: 0%; height: 100%; background: var(--indigo); transition: width 0.1s;"></div>
-                    </div>
-                    <span id="upload-progress-count"
-                        style="display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;"
-                        data-i18n="link_modal_processing">Procesando
-                        archivo 0 de 0</span>
                 </div>
             </div>
 
@@ -1922,7 +1861,7 @@
                     </div>
                 </div>
                 <div class="cloud-table-header"
-                    style="display: none; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none;">
+                    style="display: none; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; column-gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none;">
                     <span data-i18n="col_name">Nombre</span>
                     <span data-i18n="col_owner">Propietario</span>
                     <span data-i18n="col_date">Fecha de modificación</span>
@@ -2092,7 +2031,7 @@
                                 la carpeta de destino para el backup:</p>
 
                             <div id="bkp-folder-tree-container"
-                                style="max-height: 300px; overflow-y: auto; padding: 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                                style="max-height: 300px; overflow-y: auto; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
                             </div>
 
                             <div style="margin-bottom: 16px;">
@@ -2158,8 +2097,44 @@
                         </div>
 
                         <div id="bkp-auto-panel" class="bkp-panel" style="display: none;">
-                            <div class="bkp-section-label" data-i18n="bkp_auto_title">
-                                Automatización de Respaldos</div>
+                            <div id="bkp-auto-list-view">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;">
+                                <div class="bkp-section-label" style="margin: 0;" data-i18n="bkp_auto_title">
+                                    Automatización de Respaldos</div>
+                                <button type="button" onclick="newBkpAuto()"
+                                    style="padding: 8px 14px; border-radius: 8px; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35); color: var(--indigo); cursor: pointer; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    <span data-i18n="bkp_new_auto">Nueva automatización</span>
+                                </button>
+                            </div>
+
+                            <div id="bkp-task-list"
+                                style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
+                            </div>
+
+                            <div
+                                style="display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; padding: 0 4px;">
+                                <span id="bkp-meta-full-line"><span data-i18n="bkp_last_full">Último respaldo <b>Completo</b>:</span>
+                                    <span id="bkp-last-full" style="color: var(--text-secondary); font-weight: 600;">—</span></span>
+                                <span id="bkp-meta-snap-line"><span data-i18n="bkp_last_snapshot">Último respaldo:</span> <span
+                                        id="bkp-last-snapshot"
+                                        style="color: var(--text-secondary); font-weight: 600;">—</span></span>
+                                <span id="bkp-meta-single-line" style="display: none;"><span data-i18n="bkp_last_single">Último respaldo (Completo):</span>
+                                    <span id="bkp-last-single"
+                                        style="color: var(--text-secondary); font-weight: 600;">—</span></span>
+                            </div>
+                            </div>
+
+                            <div id="bkp-auto-form-view" style="display: none;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                                <div class="bkp-section-label" style="margin: 0;" id="bkp-auto-form-title"
+                                    data-i18n="bkp_new_auto">Nueva automatización</div>
+                                <button type="button" onclick="cancelBkpAutoEdit()"
+                                    style="padding: 8px 14px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                    <span data-i18n="bkp_btn_back">Volver</span>
+                                </button>
+                            </div>
                             <div
                                 style="background: var(--surface-hi); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-sizing: border-box; width: 100%;">
                                 <div
@@ -2177,7 +2152,20 @@
                                     </label>
                                 </div>
 
-                                <div class="bkp-dest-grid">
+                                <div style="margin-bottom: 16px;">
+                                    <label
+                                        style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
+                                        data-i18n="bkp_auto_name">Nombre</label>
+                                    <input type="text" id="bkp-auto-name" maxlength="60" autocomplete="off" spellcheck="false"
+                                        placeholder="Ej: Respaldo semanal de documentos"
+                                        data-i18n-placeholder="bkp_auto_name_ph"
+                                        style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
+                                    <div id="bkp-auto-name-error"
+                                        style="display: none; font-size: 0.75rem; color: #f87171; font-weight: 600; margin-top: 6px;">
+                                    </div>
+                                </div>
+
+                                <div class="bkp-dest-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                                     <div>
                                         <label
                                             style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
@@ -2196,6 +2184,18 @@
                                             del respaldo</label>
                                         <input type="time" id="bkp-auto-time" value="02:00"
                                             style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box; color-scheme: dark;">
+                                    </div>
+                                    <div>
+                                        <label
+                                            style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
+                                            data-i18n="bkp_copies_limit">Límite
+                                            de copias</label>
+                                        <input type="number" id="bkp-auto-limit" value="5" min="1" max="50"
+                                            style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
+                                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 6px;"
+                                            data-i18n="bkp_copies_limit_desc">Las copias más antiguas se eliminan
+                                            automáticamente al superar este límite.
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2277,6 +2277,9 @@
                                     </div>
                                     <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px;"
                                         data-i18n="bkp_source_auto_note">La tarea automática respaldará únicamente los elementos seleccionados.</div>
+                                    <div id="bkp-auto-source-error"
+                                        style="display: none; font-size: 0.75rem; color: #f87171; font-weight: 600; margin-top: 6px;">
+                                    </div>
                                 </div>
 
                                 <div id="bkp-auto-days" style="display: none; margin-top: 16px; flex-wrap: wrap; gap: 8px; align-items: center;">
@@ -2299,53 +2302,37 @@
                                         data-i18n="bkp_day_0">D</button>
                                 </div>
 
-                                <div style="margin-top: 16px; max-width: 220px;">
-                                    <label
-                                        style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
-                                        data-i18n="bkp_copies_limit">Límite
-                                        de copias</label>
-                                    <input type="number" id="bkp-auto-limit" value="5" min="1" max="50"
-                                        style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
-                                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 6px;"
-                                        data-i18n="bkp_copies_limit_desc">Las copias más antiguas se eliminan
-                                        automáticamente al superar este límite.
-                                    </div>
-                                </div>
-
                                 <div
                                     style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
-                                    <button type="button" onclick="saveBkpAutomation()"
-                                        style="padding: 10px 18px; border-radius: 8px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none; color: #fff; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3); transition: all 0.2s;">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z">
-                                            </path>
-                                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                                            <polyline points="7 3 7 8 15 8"></polyline>
-                                        </svg>
-                                        <span data-i18n="bkp_save_config">Guardar configuración</span>
-                                    </button>
+                                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                        <button type="button" id="bkp-auto-delete-btn" onclick="deleteBkpAutoById()"
+                                            style="display: none; padding: 10px 18px; border-radius: 8px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.35); color: #f87171; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path
+                                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                </path>
+                                            </svg>
+                                            <span data-i18n="bkp_btn_delete">Eliminar</span>
+                                        </button>
+                                        <button type="button" onclick="saveBkpAutomation()"
+                                            style="padding: 10px 18px; border-radius: 8px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none; color: #fff; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3); transition: all 0.2s;">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z">
+                                                </path>
+                                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                                <polyline points="7 3 7 8 15 8"></polyline>
+                                            </svg>
+                                            <span data-i18n="bkp_save_config">Guardar configuración</span>
+                                        </button>
+                                    </div>
                                     <div id="bkp-automation-status" style="font-size: 0.78rem;"></div>
                                 </div>
                             </div>
-
-                            <div
-                                style="display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); margin-top: 14px; padding: 0 4px;">
-                                <span><span data-i18n="bkp_last_full">Último respaldo <b>Completo</b>:</span>
-                                    <span id="bkp-last-full" style="color: var(--text-secondary); font-weight: 600;">—</span></span>
-                                <span><span data-i18n="bkp_last_snapshot">Último respaldo:</span> <span
-                                        id="bkp-last-snapshot"
-                                        style="color: var(--text-secondary); font-weight: 600;">—</span></span>
-                            </div>
-
-                            <!-- Tareas programadas -->
-                            <div style="margin-top: 24px;">
-                                <div class="bkp-section-label" data-i18n="bkp_tasks_title">
-                                    Tareas Programadas</div>
-                                <div id="bkp-task-list"
-                                    style="display: flex; flex-direction: column; gap: 10px;">
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -2408,7 +2395,7 @@
                 </div>
                 <div class="context-item" id="ctx-unshare-btn" style="display: none; color: #f87171;"
                     onclick="handleUnshareItem()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg> <span id="ctx-unshare-text" data-i18n="ctx_unshare">Dejar
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.84 12.25 1.72-1.71a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"></path><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"></path><line x1="8" x2="8" y1="2" y2="5"></line><line x1="2" x2="5" y1="8" y2="8"></line><line x1="16" x2="16" y1="19" y2="22"></line><line x1="19" x2="22" y1="16" y2="16"></line></svg> <span id="ctx-unshare-text" data-i18n="ctx_unshare">Dejar
                         de compartir</span>
                 </div>
                 <div class="context-item has-submenu" id="ctx-organize-btn">

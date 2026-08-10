@@ -685,6 +685,9 @@ def telegram_send_selected():
     import os
     import requests
     
+    if os.environ.get('TELEGRAM_ENABLED', 'true').lower() == 'false':
+        return jsonify(error="Telegram deshabilitado temporalmente (TELEGRAM_ENABLED=false en .env)"), 400
+    
     tg_token = os.environ.get('TELEGRAM_BOT_TOKEN')
     tg_chat = os.environ.get('TELEGRAM_CHAT_ID')
     

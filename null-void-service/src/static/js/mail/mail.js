@@ -219,7 +219,7 @@ export async function removeGoogleAccount(email) {
             showToast('Error: ' + data.error, 'error');
         }
     } catch (e) {
-        showToast('Error de conexión', 'error');
+        showToast(window.t('conn_error'), 'error');
     }
 }
 
@@ -255,7 +255,7 @@ export async function saveGoogleConfig() {
             showToast('Error: ' + data.error, 'error');
         }
     } catch {
-        showToast('Error de conexión.', 'error');
+        showToast(window.t('conn_error') + '.', 'error');
     } finally {
         btn.innerHTML = orig;
         btn.disabled = false;
@@ -433,7 +433,7 @@ export async function loadCurrentFolder(silent = false, forceRefresh = false, lo
         renderEmailList(folderCache[currentFolder]);
     } catch {
         if (fetchId === currentFolderFetchId && !folderCache[currentFolder] && !silent) {
-            list.innerHTML = `<div style="padding:20px;color:#f87171;text-align:center;">Error de conexión.</div>`;
+            list.innerHTML = `<div style="padding:20px;color:#f87171;text-align:center;">${window.t('conn_error')}.</div>`;
         }
     } finally {
         if (!silent && loadingId === activeLoadingId) {
@@ -677,7 +677,7 @@ export async function toggleStar(folder, id, element) {
             body: JSON.stringify(body)
         });
         const data = await res.json();
-        if (!data.ok) throw new Error(data.error || 'Error de conexión');
+        if (!data.ok) throw new Error(data.error || window.t('conn_error'));
     } catch (err) {
         showToast('Error: ' + err.message, true);
         element.classList.toggle('starred', !newStarred);
@@ -1065,7 +1065,7 @@ export async function sendEmail(isScheduled = false, scheduledAt = null) {
             showToast('Error: ' + data.error, 'error');
         }
     } catch {
-        showToast('Error de conexión.', 'error');
+        showToast(window.t('conn_error') + '.', 'error');
     } finally {
         btn.innerHTML = orig;
         document.querySelectorAll('.compose-footer .btn-send').forEach(b => b.disabled = false);

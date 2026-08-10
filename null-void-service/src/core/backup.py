@@ -739,21 +739,52 @@ def _automation_file(user_id):
     return os.path.join(CONFIG.DATA_DIR, "Cloud", user_id, ".backups", "automation.json")
 
 
-def load_automation_config(user_id):
-    """Carga la configuración de respaldos automáticos del usuario."""
+def load_automations_config(user_id):
+    """Carga la lista de automatizaciones de respaldo del usuario.
+    Soporta el formato antiguo (un único objeto) migrándolo a lista y
+    garantiza que cada entrada tenga id y name."""
     try:
         with open(_automation_file(user_id), encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
     except Exception:
-        return {}
+        return []
+
+    if isinstance(data, list):
+        automations = data
+    elif isinstance(data, dict) and isinstance(data.get("automations"), list):
+        automations = data["automations"]
+    elif isinstance(data, dict) and data:
+        automations = [data]
+    else:
+        return []
+
+    for i, cfg in enumerate(automations):
+        if not isinstance(cfg, dict):
+            continue
+        if not cfg.get("id"):
+            cfg["id"] = f"auto_{i+1}"
+        if not cfg.get("name"):
+            cfg["name"] = f"Respaldo {i+1}"
+    return automations
 
 
-def save_automation_config(user_id, cfg):
-    """Persiste la configuración de respaldos automáticos del usuario."""
+def save_automations_config(user_id, automations):
+    """Persiste la lista de automatizaciones de respaldo del usuario."""
     path = _automation_file(user_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
+        json.dump({"automations": automations}, f, ensure_ascii=False, indent=2)
+
+
+def load_automation_config(user_id):
+    """Compatibilidad: devuelve la primera automatización (o {} si no hay)."""
+    automations = load_automations_config(user_id)
+    return automations[0] if automations else {}
+
+
+def save_automation_config(user_id, cfg):
+    """Compatibilidad: guarda una única configuración como lista."""
+    save_automations_config(user_id, [cfg] if isinstance(cfg, dict) else cfg)
 
 
 def get_zip_path(filename):

@@ -20,50 +20,195 @@ export async function loadBackupConfig() {
     try {
         const res = await fetch('/api/backup/automation?token=' + TOKEN);
         const data = await res.json();
-        if (!data.ok || !data.automation) return;
-        const a = data.automation;
-        _bkpAutoConfig = a;
-        const enabled = document.getElementById('bkp-auto-enabled');
-        const freq = document.getElementById('bkp-auto-frequency');
-        const time = document.getElementById('bkp-auto-time');
-        const limit = document.getElementById('bkp-auto-limit');
-        if (enabled) enabled.checked = !!a.enabled;
-        if (freq) freq.value = a.frequency || 'daily';
-        if (time) time.value = a.time || '02:00';
-        if (limit) limit.value = a.copies_limit || 5;
-        const manualType = document.querySelector('input[name="bkp_type"][value="' + (a.backup_type || 'full') + '"]');
-        if (manualType) manualType.checked = true;
-        toggleBkpType();
-        if (Array.isArray(a.days)) {
-            a.days.forEach(d => {
-                const btn = document.querySelector('#bkp-auto-days [data-day="' + d + '"]');
-                if (btn) btn.classList.add('active');
-            });
+        if (!data.ok) return;
+        _bkpAutoAutomations = Array.isArray(data.automations)
+            ? data.automations
+            : (data.automation ? [data.automation] : []);
+        if (_bkpAutoAutomations.length) {
+            await _applyAutoToForm(_bkpAutoAutomations[_bkpAutoAutomations.length - 1]);
+            _bkpAutoConfig = null;
+            _updateBkpDeleteBtn();
+        } else {
+            _bkpAutoConfig = null;
         }
-        if (a.dest_mode === 'cloud') {
-            const cloudRadio = document.querySelector('input[name="bkp_dest_mode"][value="cloud"]');
-            if (cloudRadio) {
-                cloudRadio.checked = true;
-                await toggleBkpDestMode();
-            }
-        }
-        if (Array.isArray(a.source_paths)) {
-            _bkpAutoSourcePaths = a.source_paths.filter(p => typeof p === 'string');
-            _renderBkpSourceList('auto');
-        }
-        if (Array.isArray(a.exclude_exts)) {
-            _bkpAutoExcludeExts = a.exclude_exts.filter(x => typeof x === 'string');
-        }
-        if (Array.isArray(a.exclude_paths)) {
-            _bkpAutoExcludePaths = a.exclude_paths.filter(p => typeof p === 'string');
-        }
-        bkpFrequencyChanged();
-        _updateBkpButtonLabel();
+        _showBkpListView();
     } catch (e) {
         console.error("Error loading backup automation:", e);
     }
-    _loadBkpMetaInfo();
     _renderBkpTaskList();
+    _loadBkpMetaInfo();
+}
+
+// Vuelca una automatización guardada en el formulario (estado de edición).
+export async function _applyAutoToForm(a) {
+    if (!a) return;
+    _bkpAutoConfig = a;
+    const enabled = document.getElementById('bkp-auto-enabled');
+    const freq = document.getElementById('bkp-auto-frequency');
+    const time = document.getElementById('bkp-auto-time');
+    const limit = document.getElementById('bkp-auto-limit');
+    const name = document.getElementById('bkp-auto-name');
+    if (enabled) enabled.checked = !!a.enabled;
+    if (freq) freq.value = a.frequency || 'daily';
+    if (time) time.value = a.time || '02:00';
+    if (limit) limit.value = a.copies_limit || 5;
+    if (name) name.value = a.name || '';
+    const manualType = document.querySelector('input[name="bkp_type"][value="' + (a.backup_type || 'full') + '"]');
+    if (manualType) manualType.checked = true;
+    toggleBkpType();
+    document.querySelectorAll('#bkp-auto-days .bkp-day-btn').forEach(b => b.classList.remove('active'));
+    if (Array.isArray(a.days)) {
+        a.days.forEach(d => {
+            const btn = document.querySelector('#bkp-auto-days [data-day="' + d + '"]');
+            if (btn) btn.classList.add('active');
+        });
+    }
+    const cloudRadio = document.querySelector('input[name="bkp_dest_mode"][value="cloud"]');
+    const downloadRadio = document.querySelector('input[name="bkp_dest_mode"][value="download"]');
+    if (a.dest_mode === 'cloud') {
+        if (cloudRadio) {
+            cloudRadio.checked = true;
+            await toggleBkpDestMode();
+        }
+    } else if (downloadRadio) {
+        downloadRadio.checked = true;
+        await toggleBkpDestMode();
+    }
+    _bkpAutoSourcePaths = Array.isArray(a.source_paths) ? a.source_paths.filter(p => typeof p === 'string') : [];
+    _bkpAutoExcludeExts = Array.isArray(a.exclude_exts) ? a.exclude_exts.filter(x => typeof x === 'string') : [];
+    _bkpAutoExcludePaths = Array.isArray(a.exclude_paths) ? a.exclude_paths.filter(p => typeof p === 'string') : [];
+    _renderBkpSourceList('auto');
+    bkpFrequencyChanged();
+    _updateBkpButtonLabel();
+    _updateBkpDeleteBtn();
+}
+
+// Formulario en blanco para crear una automatización nueva.
+// Cambia entre la vista de lista (por defecto) y el formulario de edición.
+function _showBkpListView() {
+    const lv = document.getElementById('bkp-auto-list-view');
+    const fv = document.getElementById('bkp-auto-form-view');
+    if (lv) lv.style.display = '';
+    if (fv) fv.style.display = 'none';
+    _renderBkpTaskList();
+}
+
+function _setBkpFormTitle(mode, name) {
+    const title = document.getElementById('bkp-auto-form-title');
+    if (!title) return;
+    if (mode === 'edit') {
+        title.innerText = _t('bkp_edit_auto_title') + (name ? ': ' + name : '');
+    } else {
+        title.innerText = _t('bkp_new_auto');
+    }
+}
+
+function _showBkpFormView(mode, name) {
+    const lv = document.getElementById('bkp-auto-list-view');
+    const fv = document.getElementById('bkp-auto-form-view');
+    if (lv) lv.style.display = 'none';
+    if (fv) {
+        fv.style.display = 'block';
+        fv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    _setBkpFormTitle(mode, name);
+}
+
+export function cancelBkpAutoEdit() {
+    _bkpAutoConfig = {};
+    _updateBkpDeleteBtn();
+    _showBkpListView();
+}
+
+export function newBkpAuto() {
+    _bkpAutoConfig = {};
+    const enabled = document.getElementById('bkp-auto-enabled');
+    const freq = document.getElementById('bkp-auto-frequency');
+    const time = document.getElementById('bkp-auto-time');
+    const limit = document.getElementById('bkp-auto-limit');
+    const name = document.getElementById('bkp-auto-name');
+    if (enabled) enabled.checked = false;
+    if (freq) freq.value = 'daily';
+    if (time) time.value = '02:00';
+    if (limit) limit.value = '5';
+    if (name) name.value = '';
+    const manualType = document.querySelector('input[name="bkp_type"][value="full"]');
+    if (manualType) manualType.checked = true;
+    toggleBkpType();
+    document.querySelectorAll('#bkp-auto-days .bkp-day-btn').forEach(b => b.classList.remove('active'));
+    const downloadRadio = document.querySelector('input[name="bkp_dest_mode"][value="download"]');
+    if (downloadRadio) {
+        downloadRadio.checked = true;
+        toggleBkpDestMode();
+    }
+    _bkpAutoSourcePaths = [];
+    _bkpAutoExcludeExts = [];
+    _bkpAutoExcludePaths = [];
+    _renderBkpSourceList('auto');
+    bkpFrequencyChanged();
+    _updateBkpButtonLabel();
+    _updateBkpDeleteBtn();
+    const status = document.getElementById('bkp-automation-status');
+    if (status) status.innerHTML = '';
+    _showBkpFormView('new');
+}
+
+export function _updateBkpDeleteBtn() {
+    const delBtn = document.getElementById('bkp-auto-delete-btn');
+    if (delBtn) delBtn.style.display = (_bkpAutoConfig && _bkpAutoConfig.id) ? 'inline-flex' : 'none';
+}
+
+export function editBkpAuto(id) {
+    const entry = _bkpAutoAutomations.find(x => x.id === id);
+    if (!entry) return;
+    _applyAutoToForm(entry);
+    _showBkpFormView('edit', entry.name);
+}
+
+export async function toggleBkpAuto(id) {
+    const entry = _bkpAutoAutomations.find(x => x.id === id);
+    if (!entry) return;
+    try {
+        const res = await fetch('/api/backup/automation?token=' + TOKEN, {
+            method: 'POST',
+            headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify(Object.assign({}, entry, { enabled: !entry.enabled }))
+        });
+        const data = await res.json();
+        if (data.ok) {
+            _bkpAutoAutomations = Array.isArray(data.automations) ? data.automations : [];
+            _renderBkpTaskList();
+        }
+    } catch (e) {
+        console.error("Error toggling automation:", e);
+    }
+}
+
+export async function deleteBkpAuto(id) {
+    const entry = _bkpAutoAutomations.find(x => x.id === id);
+    if (!entry) return;
+    if (!await NV_Confirm(_t('bkp_delete_confirm').replace('{0}', entry.name || '?'))) return;
+    try {
+        const res = await fetch('/api/backup/automation/' + encodeURIComponent(id) + '?token=' + TOKEN, {
+            method: 'DELETE',
+            headers: HEADERS
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            await NV_Alert(data.error || _t('bkp_delete_error'));
+            return;
+        }
+        _bkpAutoAutomations = Array.isArray(data.automations) ? data.automations : [];
+        if (_bkpAutoConfig && _bkpAutoConfig.id === id) newBkpAuto();
+        _renderBkpTaskList();
+    } catch (e) {
+        console.error("Error deleting automation:", e);
+        await NV_Alert(_t('bkp_conn_error'));
+    }
+}
+
+export function deleteBkpAutoById() {
+    if (_bkpAutoConfig && _bkpAutoConfig.id) deleteBkpAuto(_bkpAutoConfig.id);
 }
 
 export function switchBkpMode(mode) {
@@ -93,46 +238,63 @@ export function switchBkpMode(mode) {
     } catch (e) { }
 }
 
-export function toggleBkpTaskActive() {
-    if (!_bkpAutoConfig) return;
-    _bkpAutoConfig.enabled = !_bkpAutoConfig.enabled;
-    const enabled = document.getElementById('bkp-auto-enabled');
-    if (enabled) enabled.checked = _bkpAutoConfig.enabled;
-    saveBkpAutomation();
-}
-
 export function _renderBkpTaskList() {
     const list = document.getElementById('bkp-task-list');
     if (!list) return;
-    const cfg = _bkpAutoConfig;
-    if (!cfg) {
+    if (!_bkpAutoAutomations || !_bkpAutoAutomations.length) {
         list.innerHTML = `
-            <div style="padding: 18px 16px; border: 1px dashed var(--border); border-radius: 12px; text-align: center; color: var(--text-secondary); font-size: 0.8rem; box-sizing: border-box; width: 100%;">
-                ${_t('bkp_no_tasks')}
+            <div style="padding: 40px 20px; border: 1px dashed var(--border); border-radius: 14px; text-align: center; box-sizing: border-box; width: 100%;">
+                <div style="width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 14px; background: rgba(99,102,241,0.1); display: flex; align-items: center; justify-content: center; color: var(--indigo);">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+                <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">${_t('bkp_no_tasks_title')}</div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary); max-width: 340px; margin: 0 auto;">${_t('bkp_no_tasks')}</div>
+                <button type="button" onclick="newBkpAuto()"
+                    style="margin-top: 18px; padding: 11px 22px; border-radius: 10px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none; color: #fff; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3); transition: all 0.2s;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>${_t('bkp_new_auto')}</span>
+                </button>
             </div>`;
         return;
     }
-    const typeLabel = { full: _t('bkp_type_full'), differential: _t('bkp_type_diff'), incremental: _t('bkp_type_incr') }[cfg.backup_type] || _t('bkp_type_full');
-    const freqLabel = { daily: _t('bkp_freq_daily'), weekly: _t('bkp_freq_weekly'), monthly: _t('bkp_freq_monthly') }[cfg.frequency] || _t('bkp_freq_daily');
     const dayNames = [_t('bkp_day_0'), _t('bkp_day_1'), _t('bkp_day_2'), _t('bkp_day_3'), _t('bkp_day_4'), _t('bkp_day_5'), _t('bkp_day_6')];
-    const daysLabel = Array.isArray(cfg.days) && cfg.days.length
-        ? cfg.days.map(d => dayNames[d] || '?').join(' · ')
-        : (cfg.frequency === 'weekly' ? _t('bkp_no_days') : _t('bkp_all_days'));
-    const destLabel = cfg.dest_mode === 'cloud' ? _t('bkp_dest_cloud_label') : _t('bkp_dest_device_label');
-    const enabled = !!cfg.enabled;
-    list.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid ${enabled ? 'rgba(99,102,241,0.35)' : 'var(--border)'}; border-radius: 12px; background: var(--surface-hi); box-sizing: border-box; width: 100%;">
-            <div style="width: 10px; height: 10px; border-radius: 50%; background: ${enabled ? '#10b981' : 'var(--border-hi)'}; flex-shrink: 0; ${enabled ? 'box-shadow: 0 0 8px rgba(16,185,129,0.5);' : ''}"></div>
+    list.innerHTML = _bkpAutoAutomations.map(cfg => {
+        const typeLabel = { full: _t('bkp_type_full'), differential: _t('bkp_type_diff'), incremental: _t('bkp_type_incr') }[cfg.backup_type] || _t('bkp_type_full');
+        const freqLabel = { daily: _t('bkp_freq_daily'), weekly: _t('bkp_freq_weekly'), monthly: _t('bkp_freq_monthly') }[cfg.frequency] || _t('bkp_freq_daily');
+        const daysLabel = Array.isArray(cfg.days) && cfg.days.length
+            ? cfg.days.map(d => dayNames[d] || '?').join(' · ')
+            : (cfg.frequency === 'weekly' ? _t('bkp_no_days') : _t('bkp_all_days'));
+        const destLabel = cfg.dest_mode === 'cloud' ? _t('bkp_dest_cloud_label') : _t('bkp_dest_device_label');
+        const enabled = !!cfg.enabled;
+        const rid = String(cfg.id || '').replace(/"/g, '&quot;');
+        const name = cfg.name || _t('bkp_task_summary').replace('{0}', typeLabel).replace('{1}', freqLabel).replace('{2}', cfg.time || '02:00');
+        return `
+        <div style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid ${enabled ? 'rgba(99,102,241,0.35)' : 'var(--border)'}; border-radius: 12px; background: var(--surface-hi); box-sizing: border-box; width: 100%; flex-wrap: wrap;">
+            <div style="width: 10px; height: 10px; border-radius: 50%; background: ${enabled ? '#10b981' : 'var(--border-hi)'}; margin-top: 5px; flex-shrink: 0; ${enabled ? 'box-shadow: 0 0 8px rgba(16,185,129,0.5);' : ''}"></div>
             <div style="flex: 1; min-width: 0;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">${_t('bkp_task_summary').replace('{0}', typeLabel).replace('{1}', freqLabel).replace('{2}', cfg.time || '02:00')}</span>
-                    <span style="font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px; ${enabled ? 'background: rgba(16,185,129,0.12); color: #10b981;' : 'background: rgba(148,163,184,0.12); color: var(--text-muted);'}">${enabled ? _t('bkp_task_active') : _t('bkp_task_inactive')}</span>
+                    <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${name}</span>
+                    <span style="font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px; flex-shrink: 0; ${enabled ? 'background: rgba(16,185,129,0.12); color: #10b981;' : 'background: rgba(148,163,184,0.12); color: var(--text-muted);'}">${enabled ? _t('bkp_task_active') : _t('bkp_task_inactive')}</span>
+                    <span style="font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px; background: rgba(99,102,241,0.12); color: var(--indigo); flex-shrink: 0;">${typeLabel} · ${freqLabel} · ${cfg.time || '02:00'}</span>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 3px;">${_t('bkp_task_details').replace('{0}', daysLabel).replace('{1}', destLabel).replace('{2}', cfg.copies_limit || 5)}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 7px; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.5;">
+                    <span>${_t('bkp_task_days').replace('{0}', daysLabel)}</span>
+                    <span>${_t('bkp_task_dest').replace('{0}', destLabel)}</span>
+                    <span>${_t('bkp_task_retention').replace('{0}', cfg.copies_limit || 5)}</span>
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📄 ${Array.isArray(cfg.source_paths) && cfg.source_paths.length ? cfg.source_paths.join(' · ') : _t('bkp_source_none')}</span>
+                </div>
             </div>
-            <button onclick="toggleBkpTaskActive()"
-                style="flex-shrink: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; transition: all 0.2s; ${enabled ? 'background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #f87171;' : 'background: var(--surface-hi); border: 1px solid var(--indigo); color: var(--indigo);'}">${enabled ? _t('bkp_btn_disable') : _t('bkp_btn_enable')}</button>
+            <div style="display: flex; align-items: center; gap: 7px; flex-shrink: 0; flex-wrap: wrap;">
+                <button onclick="toggleBkpAuto('${rid}')"
+                    style="padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; transition: all 0.2s; ${enabled ? 'background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #f87171;' : 'background: var(--surface-hi); border: 1px solid var(--indigo); color: var(--indigo);'}">${enabled ? _t('bkp_btn_disable') : _t('bkp_btn_enable')}</button>
+                <button onclick="editBkpAuto('${rid}')"
+                    style="padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); transition: all 0.2s;">${_t('bkp_btn_edit')}</button>
+                <button onclick="deleteBkpAuto('${rid}')"
+                    style="padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 700; background: transparent; border: 1px solid rgba(248,113,113,0.3); color: #f87171; transition: all 0.2s;"
+                    title="${_t('bkp_btn_delete')}">🗑</button>
+            </div>
         </div>`;
+    }).join('');
 }
 
 export function toggleBkpType() {
@@ -156,8 +318,23 @@ export async function _loadBkpMetaInfo() {
         const fmt = ts => ts ? new Date(ts).toLocaleString() : '—';
         const lf = document.getElementById('bkp-last-full');
         const ls = document.getElementById('bkp-last-snapshot');
+        const lint = document.getElementById('bkp-last-single');
         if (lf) lf.innerText = fmt(data.meta.last_full);
         if (ls) ls.innerText = fmt(data.meta.last_snapshot);
+        if (lint) lint.innerText = fmt(data.meta.last_full);
+        const singleLine = document.getElementById('bkp-meta-single-line');
+        const fullLine = document.getElementById('bkp-meta-full-line');
+        const snapLine = document.getElementById('bkp-meta-snap-line');
+        const same = data.meta.last_full && data.meta.last_full === data.meta.last_snapshot;
+        if (same && singleLine && fullLine && snapLine) {
+            fullLine.style.display = 'none';
+            snapLine.style.display = 'none';
+            singleLine.style.display = '';
+        } else if (singleLine && fullLine && snapLine) {
+            singleLine.style.display = 'none';
+            fullLine.style.display = '';
+            snapLine.style.display = '';
+        }
     } catch (e) {
         console.error("Error loading backup meta:", e);
     }
@@ -166,6 +343,7 @@ export async function _loadBkpMetaInfo() {
 let _bkpFolderTree = null;
 let _currentBkpPath = '';
 let _bkpAutoConfig = null;
+let _bkpAutoAutomations = [];
 let _bkpAutoSourcePaths = [];
 let _bkpManualSourcePaths = [];
 let _bkpAutoExcludeExts = [];
@@ -894,6 +1072,7 @@ export async function confirmBkpSource() {
         if (!paths.includes(p)) paths.push(p);
     });
     closeBkpSourceModal();
+    if (ref === 'auto') _setBkpFieldError('bkp-auto-source-error', '');
     _renderBkpSourceList(ref);
 }
 
@@ -901,6 +1080,7 @@ export function removeBkpSourcePath(ref, path) {
     const paths = _getBkpSourcePaths(ref);
     const idx = paths.indexOf(path);
     if (idx !== -1) paths.splice(idx, 1);
+    if (ref === 'auto') _setBkpFieldError('bkp-auto-source-error', '');
     _renderBkpSourceList(ref);
 }
 
@@ -1380,9 +1560,44 @@ export function toggleBkpDay(el) {
     if (el) el.classList.toggle('active');
 }
 
+function _sanitizeBkpName(v) {
+    return String(v || '')
+        .replace(/[^\p{L}\p{N}\s\-_().']/gu, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .slice(0, 60);
+}
+
+export function _setBkpFieldError(id, message) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.textContent = message || '';
+        el.style.display = message ? 'block' : 'none';
+    }
+}
+
 export async function saveBkpAutomation() {
     const status = document.getElementById('bkp-automation-status');
     if (status) status.innerHTML = `<span style="color: var(--text-muted);">${_t('bkp_saving')}</span>`;
+    _setBkpFieldError('bkp-auto-name-error', '');
+    _setBkpFieldError('bkp-auto-source-error', '');
+    const nameInput = document.getElementById('bkp-auto-name');
+    const name = _sanitizeBkpName((nameInput || {}).value || '');
+    if (name && nameInput && nameInput.value !== name) nameInput.value = name;
+    const hasSource = Array.isArray(_bkpAutoSourcePaths) && _bkpAutoSourcePaths.length > 0;
+    if (!String(name).trim()) {
+        _setBkpFieldError('bkp-auto-name-error', '❌ ' + _t('bkp_name_required'));
+        if (nameInput) {
+            nameInput.style.borderColor = '#f87171';
+            nameInput.style.boxShadow = '0 0 0 2px rgba(248,113,113,0.25)';
+            nameInput.focus();
+        }
+        return;
+    }
+    if (!hasSource) {
+        _setBkpFieldError('bkp-auto-source-error', '❌ ' + _t('bkp_select_files_first'));
+        return;
+    }
     try {
         const enabled = !!(document.getElementById('bkp-auto-enabled') || {}).checked;
         const frequency = (document.getElementById('bkp-auto-frequency') || {}).value || 'daily';
@@ -1394,16 +1609,23 @@ export async function saveBkpAutomation() {
         const destMode = destModeInput ? destModeInput.value : 'download';
         const cloudPath = (document.getElementById('bkp-cloud-path') || {}).value || '';
         const backupType = _getSelectedBackupType();
+        const id = (_bkpAutoConfig && _bkpAutoConfig.id) ? String(_bkpAutoConfig.id) : '';
         const res = await fetch('/api/backup/automation?token=' + TOKEN, {
             method: 'POST',
             headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ enabled, frequency, days, time, copies_limit: copiesLimit, backup_type: backupType, dest_mode: destMode, cloud_path: cloudPath, source_paths: _bkpAutoSourcePaths, exclude_exts: _bkpAutoExcludeExts, exclude_paths: _bkpAutoExcludePaths })
+            body: JSON.stringify({ id, name: String(name).trim(), enabled, frequency, days, time, copies_limit: copiesLimit, backup_type: backupType, dest_mode: destMode, cloud_path: cloudPath, source_paths: _bkpAutoSourcePaths, exclude_exts: _bkpAutoExcludeExts, exclude_paths: _bkpAutoExcludePaths })
         });
         const data = await res.json();
         if (data.ok) {
-            _bkpAutoConfig = data.automation;
-            _renderBkpTaskList();
-            if (status) status.innerHTML = `<span style="color: #10b981; font-weight: 600;">${_t('bkp_saved')}</span>`;
+            _bkpAutoAutomations = Array.isArray(data.automations) ? data.automations : [];
+            if (data.automation && data.automation.id) {
+                const saved = _bkpAutoAutomations.find(x => x.id === data.automation.id);
+                await _applyAutoToForm(saved || data.automation);
+            }
+            _bkpAutoConfig = {};
+            _showBkpListView();
+            const status2 = document.getElementById('bkp-automation-status');
+            if (status2) status2.innerHTML = '';
         } else {
             if (status) status.innerHTML = `<span style="color: #f87171; font-weight: 600;">❌ ${data.error || _t('bkp_save_error')}</span>`;
         }
@@ -1417,7 +1639,12 @@ export function initBackups() {
     window.toggleBkpSourceMode = toggleBkpSourceMode;
     window.toggleBkpType = toggleBkpType;
     window.switchBkpMode = switchBkpMode;
-    window.toggleBkpTaskActive = toggleBkpTaskActive;
+    window.newBkpAuto = newBkpAuto;
+    window.editBkpAuto = editBkpAuto;
+    window.cancelBkpAutoEdit = cancelBkpAutoEdit;
+    window.deleteBkpAuto = deleteBkpAuto;
+    window.deleteBkpAutoById = deleteBkpAutoById;
+    window.toggleBkpAuto = toggleBkpAuto;
     window.bkpCreateFolder = bkpCreateFolder;
     window.doBackup = doBackup;
     window.bkpFrequencyChanged = bkpFrequencyChanged;
@@ -1439,6 +1666,29 @@ export function initBackups() {
     _renderBkpTaskList();
     _renderBkpSourceList('manual');
     _selectBkpPath('');
+    const nameInput = document.getElementById('bkp-auto-name');
+    if (nameInput) {
+        nameInput.addEventListener('input', function () {
+            this.style.borderColor = '';
+            this.style.boxShadow = '';
+            _setBkpFieldError('bkp-auto-name-error', '');
+            // Restricciones: solo letras (con acentos), números, espacios y
+            // puntuación básica; sin espacios dobles y con límite de longitud.
+            let v = this.value.replace(/[^\p{L}\p{N}\s\-_().']/gu, '');
+            v = v.replace(/\s{2,}/g, ' ').slice(0, 60);
+            if (v !== this.value) this.value = v;
+        });
+        // Bloquea pegar texto con caracteres no permitidos antes de que llegue al input
+        nameInput.addEventListener('paste', function (e) {
+            e.preventDefault();
+            const txt = (e.clipboardData || window.clipboardData).getData('text') || '';
+            const cleaned = txt.replace(/[^\p{L}\p{N}\s\-_().']/gu, '').replace(/\s{2,}/g, ' ').slice(0, 60);
+            const start = this.selectionStart || this.value.length;
+            const end = this.selectionEnd || this.value.length;
+            this.value = (this.value.slice(0, start) + cleaned + this.value.slice(end)).slice(0, 60);
+            this.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
     let savedMode = 'manual';
     try {
         savedMode = localStorage.getItem('nullvoid_backups_mode') || 'manual';
@@ -1454,4 +1704,9 @@ window.addEventListener('languageChanged', () => {
     _renderBkpSourceList('manual');
     _renderBkpModalInclusionList();
     _renderBkpModalExclusionList();
+    const fv = document.getElementById('bkp-auto-form-view');
+    if (fv && fv.style.display !== 'none') {
+        _setBkpFormTitle(_bkpAutoConfig && _bkpAutoConfig.id ? 'edit' : 'new',
+            _bkpAutoConfig && _bkpAutoConfig.name || '');
+    }
 });

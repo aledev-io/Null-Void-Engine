@@ -1,5 +1,26 @@
 from . import repository
 from modules.session import session as sess
+from core.notifications import notifier
+from datetime import datetime
+
+
+def notify_friend_event(user_id, sender_id, sender_name, action):
+    """Envía una notificación (historial + push/web/FCM) a user_id por una acción de sender_name."""
+    if not sender_name:
+        return
+    if action == 'sent':
+        title, body = "Nueva solicitud de amistad", f"{sender_name} te ha enviado una solicitud de amistad"
+    elif action == 'accepted':
+        title, body = "Solicitud de amistad aceptada", f"{sender_name} ha aceptado tu solicitud de amistad"
+    elif action == 'rejected':
+        title, body = "Solicitud de amistad rechazada", f"{sender_name} ha rechazado tu solicitud de amistad"
+    elif action == 'auto_accepted':
+        title, body = "Nueva amistad", f"{sender_name} y tú ya sois amigos"
+    else:
+        return
+    now = datetime.now()
+    notifier._add_to_history(title, now.strftime("%Y-%m-%d"), now.strftime("%H:%M"), body, "friends", user_id, sender_id=sender_id)
+    notifier._send_system_notification(title, now.strftime("%H:%M"), 0, body, "friends", user_id=user_id, sender_id=sender_id)
 
 
 def get_friends_list(user_id):

@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from flask import Blueprint, jsonify, request, send_file, Response
 from modules.session import session as sess
 from core import backup as backup_service
@@ -211,21 +212,12 @@ def api_backup_automation_get():
     if not user_id:
         return jsonify({"ok": False, "error": "No autorizado"}), 401
 
-    cfg = backup_service.load_automation_config(user_id)
-    source_paths = cfg.get("source_paths", [])
-    return jsonify({"ok": True, "automation": {
-        "enabled": bool(cfg.get("enabled", False)),
-        "frequency": cfg.get("frequency", "daily"),
-        "days": cfg.get("days", []),
-        "time": cfg.get("time", "02:00"),
-        "copies_limit": int(cfg.get("copies_limit", 5)),
-        "backup_type": cfg.get("backup_type", "full"),
-        "dest_mode": cfg.get("dest_mode", "download"),
-        "cloud_path": cfg.get("cloud_path", ""),
-        "source_paths": source_paths,
-        "exclude_exts": cfg.get("exclude_exts", []),
-        "exclude_paths": cfg.get("exclude_paths", []),
-    }})
+    automations = backup_service.load_automations_config(user_id)
+    return jsonify({
+        "ok": True,
+        "automations": automations,
+        "automation": automations[0] if automations else None,
+    })
 
 
 @backup_bp.route("/api/backup/automation", methods=["POST"])
@@ -236,6 +228,15 @@ def api_backup_automation_post():
         return jsonify({"ok": False, "error": "No autorizado"}), 401
 
     data = request.get_json(silent=True) or {}
+
+    name = str(data.get("name", "")).strip()[:60]
+    if not name:
+        return jsonify({"ok": False, "error_code": "err_name_required", "error": "El nombre de la automatización es obligatorio."}), 400
+
+    source_paths = _sanitize_source_paths(data)
+    if not source_paths:
+        return jsonify({"ok": False, "error_code": "err_no_sources", "error": "Selecciona al menos un elemento a respaldar."}), 400
+
     frequency = data.get("frequency", "daily")
     if frequency not in ALLOWED_FREQUENCIES:
         return jsonify({"ok": False, "error": "Frecuencia inválida."}), 400
@@ -264,6 +265,8 @@ def api_backup_automation_post():
     exclude_paths = _sanitize_exclude_paths(data)
 
     cfg = {
+        "id": str(data.get("id", "")).strip(),
+        "name": str(data.get("name", "")).strip(),
         "enabled": bool(data.get("enabled", False)),
         "frequency": frequency,
         "days": days,
@@ -276,8 +279,39 @@ def api_backup_automation_post():
         "exclude_exts": exclude_exts,
         "exclude_paths": exclude_paths,
     }
-    backup_service.save_automation_config(user_id, cfg)
-    return jsonify({"ok": True, "automation": cfg})
+
+    automations = backup_service.load_automations_config(user_id)
+    rid = cfg["id"]
+    if rid:
+        for entry in automations:
+            if entry.get("id") == rid:
+                cfg["id"] = rid
+                entry.update({k: v for k, v in cfg.items() if v is not None})
+                break
+        else:
+            automations.append(cfg)
+    else:
+        cfg["id"] = "auto_" + str(int(time.time() * 1000))
+        automations.append(cfg)
+
+    backup_service.save_automations_config(user_id, automations)
+    return jsonify({"ok": True, "automations": automations, "automation": cfg})
+
+
+@backup_bp.route("/api/backup/automation/<automation_id>", methods=["DELETE"])
+def api_backup_automation_delete(automation_id):
+    token = _extract_token()
+    user_id = sess.get_user_id(token) if token else None
+    if not user_id:
+        return jsonify({"ok": False, "error": "No autorizado"}), 401
+
+    automations = backup_service.load_automations_config(user_id)
+    remaining = [a for a in automations if a.get("id") != automation_id]
+    if len(remaining) == len(automations):
+        return jsonify({"ok": False, "error": "Automatización no encontrada"}), 404
+
+    backup_service.save_automations_config(user_id, remaining)
+    return jsonify({"ok": True, "automations": remaining})
 
 
 @backup_bp.route("/api/backup/download/<string:filename>", methods=["GET"])

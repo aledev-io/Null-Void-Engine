@@ -19,15 +19,15 @@ export function timeAgo(timestamp) {
     const seconds = Math.floor((new Date() - new Date(timestamp * 1000)) / 1000);
     if (isNaN(seconds)) return isEn ? "a while ago" : "hace tiempo";
     let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + (isEn ? " yrs" : " años");
+    if (interval >= 1) return Math.floor(interval) + (Math.floor(interval) === 1 ? (isEn ? " yr" : " año") : (isEn ? " yrs" : " años"));
     interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + (isEn ? " mos" : " meses");
+    if (interval >= 1) return Math.floor(interval) + (Math.floor(interval) === 1 ? (isEn ? " mo" : " mes") : (isEn ? " mos" : " meses"));
     interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + (isEn ? " days" : " días");
+    if (interval >= 1) return Math.floor(interval) + (Math.floor(interval) === 1 ? (isEn ? " day" : " día") : (isEn ? " days" : " días"));
     interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + (isEn ? " hrs" : " h");
+    if (interval >= 1) return Math.floor(interval) + (isEn ? " hrs" : " h");
     interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + (isEn ? " mins" : " min");
+    if (interval >= 1) return Math.floor(interval) + (isEn ? " mins" : " min");
     return isEn ? "just now" : "ahora";
 }
 

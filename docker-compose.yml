@@ -4,7 +4,8 @@ services:
     container_name: nullvoid-engine
     network_mode: "host"
     volumes:
-      - ./data:/app/data
+      - ${DATA_HOST_DIR:-./data}:/app/data
+      - ${SCRAPER_HOST_DIR:-./data}:/app/data/scraper
       - ./null-void-service/src:/app/src
       - ./client_agent:/app/client_agent
       - ./.secrets:/app/src/.secrets:ro
@@ -54,7 +55,8 @@ services:
     network_mode: "host"
     container_name: nullvoid-scraper
     volumes:
-      - ./data:/app/data
+      - ${DATA_HOST_DIR:-./data}:/app/data
+      - ${SCRAPER_HOST_DIR:-./data}:/app/data/scraper
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:

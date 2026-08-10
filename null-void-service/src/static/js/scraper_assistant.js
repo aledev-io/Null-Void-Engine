@@ -120,12 +120,12 @@
         try {
             const res = await fetch(url, { ...options, headers });
             if (res.status === 401 || res.status === 403) {
-                addBotMessage("Your session has expired. Please reload the page.");
+                addBotMessage(window.t ? window.t('sess_expired_reload') : "Your session has expired. Please reload the page.");
                 return null;
             }
             return await res.json();
         } catch (e) {
-            addBotMessage("Connection error: " + e.message);
+            addBotMessage((window.t ? window.t('conn_error') : "Connection error") + ": " + e.message);
             return null;
         }
     }
