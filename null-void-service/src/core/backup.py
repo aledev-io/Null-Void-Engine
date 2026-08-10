@@ -439,6 +439,7 @@ def _consume_job(q, future, cancel_event, zip_path):
         # Desconexión del cliente o fin: cancelar worker y limpiar parciales.
         cancel_event.set()
         _safe_remove(zip_path + ".tmp")
+        _safe_remove(zip_path + ".tmp_enc")
         if error_emitted:
             _safe_remove(zip_path)
 
@@ -453,6 +454,8 @@ def _stream_worker(zip_path, entries, manifest_json, user_id, dest_mode, cloud_p
         _zip_entries(zip_path, entries, manifest_json, q, cancel_event, total)
         _update_backup_meta(user_id, backup_type)
         if dest_mode == "cloud":
+            from core.crypto_utils import encrypt_file
+            encrypt_file(zip_path, zip_path)
             _enforce_copies_limit(user_id, cloud_path, 5)
             _qput(q, {"type": "done", "cloud": True, "zip_name": zip_name,
                       "backup_type": backup_type, "since": since_ms, "count": total}, cancel_event)
@@ -511,15 +514,14 @@ def _normalize_exclude_exts(value):
 
 
 def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_type,
-                         zip_name, q, cancel_event, exclude_exts=None, exclude_paths=None):
+                         since_ms, zip_name, zip_path, q, cancel_event,
+                         exclude_exts=None, exclude_paths=None):
     exclude_exts = _normalize_exclude_exts(exclude_exts)
     exclude_paths = _normalize_exclude_paths(exclude_paths)
     try:
         resolved = resolve_cloud_sources(user_id, source_paths)
         if not resolved:
             raise _BackupError("No se encontraron las carpetas seleccionadas.")
-        meta = load_backup_meta(user_id)
-        since_ms = _since_for_type(meta, backup_type)
 
         # Poda de solapamientos: si ya se incluye una carpeta, sus rutas
         # internas son redundantes (evita entradas duplicadas en el ZIP).
@@ -579,10 +581,6 @@ def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_ty
         total = len(all_files)
         if total == 0:
             raise _BackupError("Las carpetas seleccionadas no contienen archivos.")
-
-        dest = backup_vault(user_id) if dest_mode == "cloud" else TEMP_BACKUP_DIR
-        os.makedirs(dest, exist_ok=True)
-        zip_path = os.path.join(dest, zip_name)
 
         _qput(q, {"type": "progress", "phase": "scan", "current": total, "total": total,
                   "file": f"Empaquetando {total} archivos…"}, cancel_event)
@@ -645,7 +643,7 @@ def create_backup(files, dest_mode, cloud_path, token, backup_type="full"):
             return None, "No se han seleccionado archivos."
 
         entries = [(n, os.path.join(tmp_dir, n)) for n in saved]
-        dest = backup_vault(user_id) if dest_mode == "cloud" else TEMP_BACKUP_DIR
+        dest = backup_vault(user_id) if dest_mode == "cloud" else os.path.join(TEMP_BACKUP_DIR, str(user_id))
         os.makedirs(dest, exist_ok=True)
         zip_path = os.path.join(dest, zip_name)
 
@@ -672,6 +670,13 @@ def create_backup(files, dest_mode, cloud_path, token, backup_type="full"):
 
         _update_backup_meta(user_id, backup_type)
         if dest_mode == "cloud":
+            from core.crypto_utils import encrypt_file
+            try:
+                encrypt_file(zip_path, zip_path)
+            except Exception:
+                _safe_remove(zip_path)
+                _safe_remove(zip_path + ".tmp_enc")
+                return None, "Error al cifrar el respaldo."
             _enforce_copies_limit(user_id, cloud_path, 5)
             return {
                 "cloud": True,
@@ -715,7 +720,7 @@ def create_backup_stream(file_names, upload_dir, dest_mode, cloud_path, token, b
 
     yield {"type": "progress", "phase": "upload", "current": total, "total": total, "file": ""}
 
-    dest = backup_vault(user_id) if dest_mode == "cloud" else TEMP_BACKUP_DIR
+    dest = backup_vault(user_id) if dest_mode == "cloud" else os.path.join(TEMP_BACKUP_DIR, str(user_id))
     zip_path = os.path.join(dest, zip_name)
     entries = [(n, os.path.join(upload_dir, n)) for n in file_names]
     manifest_json = None
@@ -779,29 +784,52 @@ def save_automations_config(user_id, automations):
 def load_automation_config(user_id):
     """Compatibilidad: devuelve la primera automatización (o {} si no hay)."""
     automations = load_automations_config(user_id)
-    return automations[0] if automations else {}
-
-
 def save_automation_config(user_id, cfg):
     """Compatibilidad: guarda una única configuración como lista."""
     save_automations_config(user_id, [cfg] if isinstance(cfg, dict) else cfg)
 
 
-def get_zip_path(filename):
-    path = os.path.join(TEMP_BACKUP_DIR, filename)
-    if os.path.exists(path):
-        return path
+def get_user_backup_path(user_id, filename):
+    """Obtiene la ruta de un archivo de respaldo garantizando pertenencia a user_id (Anti-IDOR)."""
+    if not user_id or not filename:
+        return None
+    safe_filename = os.path.basename(filename)
+
+    # 1. Buscar en el vault de la nube del usuario
+    vault_dir = backup_vault(user_id)
+    candidate_vault = os.path.join(vault_dir, safe_filename)
+    if os.path.exists(candidate_vault):
+        return candidate_vault
+
+    # 2. Buscar en la carpeta temporal aislada del usuario
+    user_temp_dir = os.path.join(TEMP_BACKUP_DIR, str(user_id))
+    candidate_temp = os.path.join(user_temp_dir, safe_filename)
+    if os.path.exists(candidate_temp):
+        return candidate_temp
+
     return None
+
+
+def get_zip_path(filename, user_id=None):
+    if user_id:
+        return get_user_backup_path(user_id, filename)
+    safe_name = os.path.basename(filename)
+    path = os.path.join(TEMP_BACKUP_DIR, safe_name)
+    return path if os.path.exists(path) else None
 
 
 def cleanup_old_temp():
     """Limpia ZIPs y .tmp huérfanos de más de 1 hora en el directorio temporal."""
     try:
-        for f in os.listdir(TEMP_BACKUP_DIR):
-            path = os.path.join(TEMP_BACKUP_DIR, f)
-            if os.path.isfile(path) and (time.time() - os.path.getmtime(path) > 3600):
-                if f.endswith(".zip") or f.endswith(".tmp") or f.startswith("backup_"):
-                    os.remove(path)
+        for root, dirs, files in os.walk(TEMP_BACKUP_DIR):
+            for f in files:
+                path = os.path.join(root, f)
+                if os.path.isfile(path) and (time.time() - os.path.getmtime(path) > 3600):
+                    if f.endswith(".zip") or f.endswith(".tmp") or f.startswith("backup_"):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
     except Exception:
         pass
 
@@ -814,45 +842,50 @@ def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path,
     exclude_exts: lista de extensiones (".tmp", "log", "*.zip", ...) que se
     omitirán del contenido de las carpetas marcadas.
 
-    exclude_paths: lista de rutas relativas al Cloud ('Asignaturas/1') cuyos
-    archivos y subárboles se omiten del respaldo (ganan sobre la inclusión).
-
-    Todo el trabajo pesado (recorrido + compresión) ocurre en un hilo
-    secundario; este generador solo drena eventos y emite heartbeats, por lo
-    que el event loop de gevent/eventlet sigue atendiendo pings y peticiones.
+    exclude_paths: lista de subrutas relativas que se ignorarán.
     """
-    backup_type = normalize_backup_type(backup_type)
-    exclude_set = _normalize_exclude_exts(exclude_exts)
-    exclude_paths_set = _normalize_exclude_paths(exclude_paths)
+    user_id = str(user_id)
+    dest = backup_vault(user_id) if dest_mode == "cloud" else os.path.join(TEMP_BACKUP_DIR, user_id)
+    os.makedirs(dest, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_name = f"backup_{backup_type}_{timestamp}.zip"
-    dest = backup_vault(user_id) if dest_mode == "cloud" else TEMP_BACKUP_DIR
     zip_path = os.path.join(dest, zip_name)
 
+    meta = load_backup_meta(user_id)
+    since_ms = _since_for_type(meta, backup_type)
+
+    q = queue.Queue()
     cancel_event = threading.Event()
-    q = queue.Queue(maxsize=256)
+
     future = _BACKUP_EXECUTOR.submit(
-        _cloud_stream_worker, user_id, source_paths, dest_mode, cloud_path,
-        backup_type, zip_name, q, cancel_event, exclude_set, exclude_paths_set,
+        _cloud_stream_worker,
+        user_id,
+        source_paths,
+        dest_mode,
+        cloud_path,
+        backup_type,
+        since_ms,
+        zip_name,
+        zip_path,
+        q,
+        cancel_event,
+        exclude_exts,
+        exclude_paths,
     )
-    try:
-        yield from _consume_job(q, future, cancel_event, zip_path)
-    except GeneratorExit:
-        cancel_event.set()
-        raise
+
+    return _consume_job(q, future, cancel_event, zip_path)
 
 
 def _enforce_copies_limit(user_id, cloud_path, limit):
-    if not limit or limit <= 0:
-        return
+    """Conserva únicamente las `limit` copias más recientes por usuario."""
     try:
         dest = backup_vault(user_id)
         if not os.path.isdir(dest):
             return
         bkp_files = []
         for f in os.listdir(dest):
-            if f.startswith("backup_") and f.endswith(".zip"):
+            if f.startswith("backup_") and (f.endswith(".zip") or f.endswith(".nvbak")):
                 fp = os.path.join(dest, f)
                 bkp_files.append((os.path.getmtime(fp), fp))
         bkp_files.sort(key=lambda x: x[0], reverse=True)
@@ -882,3 +915,66 @@ def run_automated_backup(user_id, cfg):
     if last.get("type") == "done" and dest_mode == "cloud":
         _enforce_copies_limit(user_id, cloud_path, limit)
     return last
+
+
+def restore_backup(user_id, filename, target_rel_path=""):
+    """Descifra y restaura un archivo de copia de seguridad (ZIP/NVBAK) en la unidad Cloud del usuario."""
+    from core.crypto_utils import decrypt_file
+    from modules.api.cloud.services import BASE_CLOUD_ROOT
+    from werkzeug.security import safe_join
+
+    target_rel_path = (target_rel_path or "").strip("/")
+    rel_segments = [seg for seg in target_rel_path.split("/") if seg]
+    if any(seg == ".." or seg.startswith(".") or "\\" in seg or "\x00" in seg
+           for seg in rel_segments):
+        return False, "Ruta de destino inválida."
+
+    zip_path = get_user_backup_path(user_id, filename)
+    if not zip_path or not os.path.exists(zip_path):
+        return False, "Archivo de respaldo no encontrado o no pertenece a este usuario."
+
+    user_cloud_root = safe_join(BASE_CLOUD_ROOT, str(user_id))
+    if not user_cloud_root:
+        return False, "Ruta de usuario inválida."
+
+    try:
+        target_dir = safe_join(user_cloud_root, target_rel_path) if target_rel_path else user_cloud_root
+    except ValueError:
+        return False, "Ruta de destino inválida."
+    if not target_dir:
+        return False, "Ruta de destino inválida."
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_zip = os.path.join(tmp_dir, "decrypted.zip")
+        try:
+            decrypt_file(zip_path, tmp_zip)
+        except Exception as e:
+            return False, f"Error al descifrar el respaldo: {str(e)}"
+
+        restored_count = 0
+        total_bytes = 0
+        try:
+            with zipfile.ZipFile(tmp_zip, "r") as zf:
+                infolist = zf.infolist()
+                if len(infolist) > MAX_FILES:
+                    return False, f"El respaldo excede el límite máximo de {MAX_FILES} archivos."
+
+                for member in infolist:
+                    if member.is_dir() or member.filename in ("manifest.json",):
+                        continue
+                    total_bytes += member.file_size
+                    if total_bytes > MAX_TOTAL_BYTES:
+                        return False, "La copia de seguridad excede el tamaño máximo total permitido."
+
+                    # Prevenir Zip Slip
+                    dest_file = safe_join(target_dir, member.filename)
+                    if not dest_file or not os.path.realpath(dest_file).startswith(os.path.realpath(user_cloud_root)):
+                        continue
+                    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                    with zf.open(member) as src, open(dest_file, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    restored_count += 1
+        except Exception as e:
+            return False, f"Error al extraer el archivo de respaldo: {str(e)}"
+
+    return True, {"restored_count": restored_count, "target_dir": target_rel_path or "/"}

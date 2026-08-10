@@ -53,3 +53,4 @@ null-void-app/android/app/google-services.json
 .opencode
 
 client_agent/.build.lock
+tests/

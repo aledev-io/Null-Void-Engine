@@ -11,6 +11,29 @@ app = Flask(__name__)
 import queue
 import threading
 
+INTERNAL_TOKEN_HEADER = "X-Internal-Token"
+
+
+def _internal_headers():
+    """Cabeceras de autenticación interna (misma clave que el servicio principal)."""
+    key = os.environ.get("SCRAPER_API_KEY", "").strip()
+    return {INTERNAL_TOKEN_HEADER: key} if key else {}
+
+
+@app.before_request
+def require_internal_token():
+    """Exige la clave compartida entre servicios en todas las rutas.
+
+    El microservicio escucha en 0.0.0.0:5001 (red host); sin esta comprobación
+    cualquier cliente de la red podría lanzar scrapings o leer reglas.
+    """
+    key = os.environ.get("SCRAPER_API_KEY", "").strip()
+    if not key:
+        return jsonify({"status": "error", "message": "SCRAPER_API_KEY no está configurada en el servidor"}), 503
+    if request.headers.get(INTERNAL_TOKEN_HEADER, "") != key:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+
+
 task_queue = queue.Queue()
 
 def scraper_worker():
@@ -23,7 +46,7 @@ def scraper_worker():
         # Notify start
         try:
             import requests
-            requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={"is_scraping": True}, timeout=3, verify=False)
+            requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={"is_scraping": True}, headers=_internal_headers(), timeout=3, verify=False)
         except:
             pass
             
@@ -36,7 +59,7 @@ def scraper_worker():
         if task_queue.empty():
             try:
                 import requests
-                requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={"is_scraping": False}, timeout=3, verify=False)
+                requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={"is_scraping": False}, headers=_internal_headers(), timeout=3, verify=False)
             except:
                 pass
                 
@@ -180,6 +203,13 @@ def scrape_detail_route():
     sku = data.get('sku', '').strip()
     if not url:
         return jsonify({"status": "error", "message": "URL vacía"}), 400
+
+    # Anti-SSRF: solo URLs http/https públicas (bloquea file:// y redes internas)
+    from url_guard import validate_public_url
+    try:
+        url = validate_public_url(url)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
         
     from services import _scrape_detail
     from concurrent.futures import ThreadPoolExecutor

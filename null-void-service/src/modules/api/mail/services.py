@@ -556,13 +556,15 @@ def verify_credentials(email_addr, app_password):
 
 
 def save_credentials(user_id, email_addr, app_password):
+    from core.crypto_utils import encrypt_field
+    encrypted = encrypt_field(app_password)
     with get_db() as db:
         # Check if exists
         row = db.execute("SELECT id FROM user_google_accounts WHERE user_id = ? AND email = ?", (user_id, email_addr)).fetchone()
         if row:
-            db.execute("UPDATE user_google_accounts SET app_password = ? WHERE id = ?", (app_password, row['id']))
+            db.execute("UPDATE user_google_accounts SET app_password = ? WHERE id = ?", (encrypted, row['id']))
         else:
-            db.execute("INSERT INTO user_google_accounts (user_id, email, app_password) VALUES (?, ?, ?)", (user_id, email_addr, app_password))
+            db.execute("INSERT INTO user_google_accounts (user_id, email, app_password) VALUES (?, ?, ?)", (user_id, email_addr, encrypted))
         db.commit()
 
 def remove_credentials(user_id, email_addr):

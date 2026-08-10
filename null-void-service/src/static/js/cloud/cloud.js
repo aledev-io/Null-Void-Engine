@@ -4086,10 +4086,21 @@ function initMarqueeSelection() {
     if (!list) return;
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            const viewCloud = document.getElementById('view-cloud');
-            if (viewCloud && viewCloud.classList.contains('active')) {
-                clearCloudSelection();
+        const viewCloud = document.getElementById('view-cloud');
+        const cloudActive = viewCloud && viewCloud.classList.contains('active');
+
+        if (e.key === 'Escape' && cloudActive) {
+            clearCloudSelection();
+        }
+
+        // Tecla Supr: con elementos seleccionados actúa como el botón
+        // "Eliminar" (misma confirmación, misma lógica).
+        if ((e.key === 'Delete' || e.key === 'Supr') && cloudActive) {
+            if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            if (e.target.closest('.cloud-modal, #nv-dialog-overlay')) return;
+            if (SELECTED_CLOUD_ITEMS.length > 0) {
+                e.preventDefault();
+                deleteSelectedItems();
             }
         }
     });

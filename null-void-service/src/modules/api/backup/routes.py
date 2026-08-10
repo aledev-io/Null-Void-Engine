@@ -317,27 +317,80 @@ def api_backup_automation_delete(automation_id):
 @backup_bp.route("/api/backup/download/<string:filename>", methods=["GET"])
 def api_backup_download(filename):
     token = _extract_token()
-    if not token or not sess.get_user_id(token):
+    user_id = sess.get_user_id(token) if token else None
+    if not user_id:
         return jsonify({"ok": False, "error": "No autorizado"}), 401
 
     safe_filename = os.path.basename(filename)
     if not safe_filename.endswith(".zip") or safe_filename != filename:
         return jsonify({"ok": False, "error": "Solicitud inválida"}), 400
 
-    zip_path = backup_service.get_zip_path(safe_filename)
-    if not zip_path:
-        return jsonify({"ok": False, "error": "Archivo no encontrado"}), 404
+    # Garantizar pertenencia al usuario (Anti-IDOR)
+    zip_path = backup_service.get_user_backup_path(user_id, safe_filename)
+    if not zip_path or not os.path.exists(zip_path):
+        return jsonify({"ok": False, "error": "Archivo no encontrado o no autorizado"}), 404
 
     clean_name = safe_filename.split("_", 1)[1] if "_" in safe_filename else safe_filename
-
     backup_service.cleanup_old_temp()
 
-    return send_file(
-        zip_path,
-        as_attachment=True,
-        download_name=clean_name,
-        mimetype="application/zip",
-    )
+    from core.crypto_utils import decrypt_file, is_encrypted_file
+    if not is_encrypted_file(zip_path):
+        return send_file(
+            zip_path,
+            as_attachment=True,
+            download_name=clean_name,
+            mimetype="application/zip",
+        )
+
+    # Si está cifrado, descifrarlo en directorio temp y limpiar al cerrar la conexión (Anti-DoS)
+    tmp_dir = tempfile.mkdtemp()
+    decrypted_tmp = os.path.join(tmp_dir, clean_name)
+    try:
+        decrypt_file(zip_path, decrypted_tmp)
+        resp = send_file(
+            decrypted_tmp,
+            as_attachment=True,
+            download_name=clean_name,
+            mimetype="application/zip",
+        )
+
+        @resp.call_on_close
+        def _clean():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        return resp
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return jsonify({"ok": False, "error": f"Error al preparar la descarga: {e}"}), 500
+
+
+
+@backup_bp.route("/api/backup/restore", methods=["POST"])
+def api_backup_restore():
+    token = _extract_token()
+    user_id = sess.get_user_id(token) if token else None
+    if not user_id:
+        return jsonify({"ok": False, "error": "No autorizado"}), 401
+
+    data = request.get_json(silent=True) or {}
+    filename = str(data.get("filename", "")).strip()
+    target_path = str(data.get("target_path", "")).strip("/")
+
+    if not filename:
+        return jsonify({"ok": False, "error": "Nombre de archivo de respaldo requerido"}), 400
+
+    target_segments = [seg for seg in target_path.split("/") if seg]
+    if target_segments and any(
+            seg == ".." or seg.startswith(".") or "\\" in seg or "\x00" in seg
+            for seg in target_segments):
+        return jsonify({"ok": False, "error": "Ruta de destino inválida."}), 400
+
+    ok, result = backup_service.restore_backup(user_id, filename, target_path)
+    if not ok:
+        return jsonify({"ok": False, "error": result}), 400
+
+    return jsonify({"ok": True, "details": result})
+
 
 
 @backup_bp.route("/api/backup/cloud", methods=["POST"])

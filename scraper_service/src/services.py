@@ -1225,9 +1225,12 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
         print(f"[Scraper Diario] Finalizado. Total apartamentos extraídos: {total_apartments}.")
 
 def _scrape_detail(url, sku):
+    from url_guard import validate_public_url
     from playwright.sync_api import sync_playwright
     import os
     import requests
+    
+    validate_public_url(url)
     
     desc_text = "No se pudo extraer la descripción."
     contact_text = "Contacto no disponible."

@@ -22,6 +22,7 @@ def scraper_view():
     return render_template('modules/scraper.html', token=token, user=user, user_avatar_url=user_avatar_url)
 
 import requests
+from core.scraper_client import scraper_request
 
 @scraper_bp.route('/api/scraper/pccomponentes/search', methods=['POST'])
 def pccomponentes_search():
@@ -36,7 +37,7 @@ def pccomponentes_search():
         return jsonify(error="La búsqueda no puede estar vacía"), 400
     
     try:
-        resp = requests.post("http://127.0.0.1:5001/search", json={"query": query, "user_id": user_id}, timeout=5)
+        resp = scraper_request("POST", "/search", json={"query": query, "user_id": user_id}, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio del scraper: " + str(e)), 500
@@ -55,7 +56,7 @@ def athome_search():
         
     # We will assume the query is the location. 
     try:
-        resp = requests.post("http://127.0.0.1:5001/search_athome", json={"location": query, "min_surface": 45, "user_id": user_id}, timeout=5)
+        resp = scraper_request("POST", "/search_athome", json={"location": query, "min_surface": 45, "user_id": user_id}, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio del scraper: " + str(e)), 500
@@ -67,7 +68,7 @@ def athome_routine():
         return jsonify(error="No autorizado"), 401
         
     try:
-        resp = requests.post("http://127.0.0.1:5001/scrape_athome_routine", timeout=5)
+        resp = scraper_request("POST", "/scrape_athome_routine", timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio del scraper: " + str(e)), 500
@@ -84,7 +85,7 @@ def pccomponentes_routine():
     terms = data.get('terms', [])
     
     try:
-        resp = requests.post("http://127.0.0.1:5001/scrape_routine", json={"terms": terms}, timeout=5)
+        resp = scraper_request("POST", "/scrape_routine", json={"terms": terms}, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio del scraper: " + str(e)), 500
@@ -96,7 +97,7 @@ def cancel_routine():
         return jsonify(error="No autorizado"), 401
         
     try:
-        resp = requests.post("http://127.0.0.1:5001/cancel_routine", timeout=5)
+        resp = scraper_request("POST", "/cancel_routine", timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio del scraper: " + str(e)), 500
@@ -117,6 +118,11 @@ _geocode_cache = {}
 def webhook_scraper_state():
     # Only allow localhost
     if request.remote_addr != '127.0.0.1':
+        return jsonify(error="Forbidden"), 403
+    # Autenticación interna: misma clave compartida con el microservicio scraper
+    import os
+    key = os.environ.get("SCRAPER_API_KEY", "").strip()
+    if key and request.headers.get('X-Internal-Token', '') != key:
         return jsonify(error="Forbidden"), 403
     data = request.get_json(silent=True) or {}
     
@@ -340,11 +346,11 @@ def bot_rules_proxy():
         return jsonify(error="No autorizado"), 401
     try:
         if request.method == 'GET':
-            resp = requests.get(f"http://127.0.0.1:5001/bot_rules?user_id={user_id}", timeout=5)
+            resp = scraper_request("GET", f"/bot_rules?user_id={user_id}", timeout=5)
             return jsonify(resp.json())
         data = request.get_json(silent=True) or {}
         data['user_id'] = user_id
-        resp = requests.post("http://127.0.0.1:5001/bot_rules", json=data, timeout=5)
+        resp = scraper_request("POST", "/bot_rules", json=data, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio: " + str(e)), 500
@@ -355,7 +361,7 @@ def delete_bot_rule_proxy(rule_id):
     if not user_id:
         return jsonify(error="No autorizado"), 401
     try:
-        resp = requests.delete(f"http://127.0.0.1:5001/bot_rules/{rule_id}", json={"user_id": user_id}, timeout=5)
+        resp = scraper_request("DELETE", f"/bot_rules/{rule_id}", json={"user_id": user_id}, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio: " + str(e)), 500
@@ -368,7 +374,7 @@ def toggle_bot_rule_proxy(rule_id):
     try:
         data = request.get_json(silent=True) or {}
         data['user_id'] = user_id
-        resp = requests.post(f"http://127.0.0.1:5001/bot_rules/{rule_id}/toggle", json=data, timeout=5)
+        resp = scraper_request("POST", f"/bot_rules/{rule_id}/toggle", json=data, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio: " + str(e)), 500
@@ -580,7 +586,7 @@ def get_product_description(sku):
         # Llama al scraper_service que tiene Playwright para obtener la galería y descripción real
         payload = {"url": url, "sku": sku}
         # nullvoid-scraper es el nombre del contenedor en la red Docker, puerto 5001
-        scrape_res = requests.post("http://127.0.0.1:5001/detail", json=payload, timeout=180)
+        scrape_res = scraper_request("POST", "/detail", json=payload, timeout=180)
         
         if scrape_res.status_code != 200:
             return jsonify(error="Error en el servicio de scraping interno"), 500

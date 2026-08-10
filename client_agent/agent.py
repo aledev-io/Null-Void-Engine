@@ -9,6 +9,7 @@ import threading
 import json
 import signal
 import webbrowser
+import hashlib
 from queue import Queue
 
 try:
@@ -22,11 +23,22 @@ except ImportError:
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def load_bootstrap_servers():
-    servers = []
+
+class CloudCertMismatchError(Exception):
+    """El certificado TLS del servidor no coincide con AGENT_CERT_HASH."""
+
+
+def load_agent_env():
+    """Lee el .env del agente: AGENT_BOOTSTRAP_SERVERS y AGENT_CERT_HASH.
+
+    AGENT_CERT_HASH es la huella SHA-256 del certificado TLS del servidor
+    (la imprime el servidor al arrancar). Con ella, el agente rechaza
+    cualquier servidor cuyo certificado no coincida (anti-MITM).
+    """
+    data = {}
     env_paths = [
-        '.env', 
-        '../.env', 
+        '.env',
+        '../.env',
         '../../.env',
         os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), '.env')
     ]
@@ -38,13 +50,18 @@ def load_bootstrap_servers():
                         line = line.strip()
                         if line.startswith('AGENT_BOOTSTRAP_SERVERS='):
                             val = line.split('=', 1)[1].strip().strip('"').strip("'")
-                            servers = [s.strip() for s in val.split(',') if s.strip()]
-                            return servers
+                            data.setdefault('servers', [s.strip() for s in val.split(',') if s.strip()])
+                        elif line.startswith('AGENT_CERT_HASH='):
+                            val = line.split('=', 1)[1].strip().strip('"').strip("'")
+                            if val:
+                                data.setdefault('cert_hash', val.lower())
             except Exception:
                 pass
-    return servers
+    return data
 
-BOOTSTRAP_SERVERS = load_bootstrap_servers()
+
+_AGENT_ENV = load_agent_env()
+BOOTSTRAP_SERVERS = _AGENT_ENV.get('servers', [])
 
 CONFIG_DIR = os.path.expanduser("~/.nullvoid")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "sync_config.json")
@@ -80,6 +97,35 @@ def get_device_name():
     return platform.node()
 
 
+def peer_cert_fingerprint(res):
+    """SHA-256 (hex, minúsculas) del certificado TLS presentado por el servidor."""
+    try:
+        conn = getattr(res.raw, "_connection", None)
+        sock = getattr(conn, "sock", None) if conn else None
+        der = sock.getpeercert(binary_form=True) if sock else None
+        if not der:
+            return None
+        return hashlib.sha256(der).hexdigest()
+    except Exception:
+        return None
+
+
+def _pinned_request(method, url, cert_hash, verify, **kw):
+    """Realiza la petición y comprueba el certificado TLS contra el hash esperado.
+
+    Si `cert_hash` está configurado y el certificado del servidor no coincide,
+    lanza CloudCertMismatchError antes de devolver la respuesta.
+    """
+    res = requests.request(method, url, verify=verify, **kw)
+    if cert_hash:
+        fingerprint = peer_cert_fingerprint(res)
+        if not fingerprint or fingerprint != cert_hash.lower():
+            raise CloudCertMismatchError(
+                "El certificado SSL del servidor no coincide con la huella "
+                "AGENT_CERT_HASH configurada. Posible suplantación (MITM).")
+    return res
+
+
 def perform_registration(test_urls, token_or_user, device_name=None, local_dir=None, password=None):
     """Realiza la solicitud HTTP de registro al servidor Nube y guarda el config.json."""
     if not device_name:
@@ -97,13 +143,15 @@ def perform_registration(test_urls, token_or_user, device_name=None, local_dir=N
         payload["temp_token"] = token_or_user
     
     last_err = "No se pudo conectar con los servidores."
+    expected_cert_hash = _AGENT_ENV.get('cert_hash')
     for url in test_urls:
         reg_url = f"{url}/api/cloud/sync-agent/register"
         log(f"Probando conexión de registro con: {url}...")
         
         for verify_ssl in (True, False):
             try:
-                res = requests.post(reg_url, json=payload, verify=verify_ssl, timeout=5)
+                res = _pinned_request("POST", reg_url, expected_cert_hash, verify_ssl,
+                                      json=payload, timeout=5)
                 if res.status_code == 200:
                     res_data = res.json()
                     fingerprint = res_data.get("server_fingerprint")
@@ -118,6 +166,13 @@ def perform_registration(test_urls, token_or_user, device_name=None, local_dir=N
                         "server_fingerprint": fingerprint,
                         "verify_ssl": verify_ssl
                     }
+                    # Fija la huella TLS observada solo si la cadena SSL se
+                    # validó correctamente (verify_ssl) o si venía en el .env.
+                    observed_cert_hash = peer_cert_fingerprint(res)
+                    if expected_cert_hash:
+                        config["cert_hash"] = expected_cert_hash
+                    elif observed_cert_hash and verify_ssl:
+                        config["cert_hash"] = observed_cert_hash
                     if local_dir:
                         config["local_dir"] = local_dir
                     save_config(config)
@@ -130,6 +185,9 @@ def perform_registration(test_urls, token_or_user, device_name=None, local_dir=N
                         err_msg = res.text
                     last_err = f"Servidor {url}: {err_msg}"
                     break
+            except CloudCertMismatchError as e:
+                last_err = f"Servidor {url}: {e}"
+                break
             except requests.exceptions.SSLError:
                 if verify_ssl:
                     continue
@@ -225,6 +283,7 @@ class SyncClient:
         self.local_dir = config.get("local_dir", LOCAL_DIR)
         self.server_fingerprint = config.get("server_fingerprint")
         self.verify_ssl = config.get("verify_ssl", False)
+        self.cert_hash = (config.get("cert_hash") or _AGENT_ENV.get('cert_hash') or "").lower() or None
         
         if not self.server_fingerprint:
             print("[Null-Void Sync] Error Crítico: No hay huella criptográfica del servidor en la configuración.")
@@ -254,6 +313,10 @@ class SyncClient:
         state_str = "Pausada" if self.paused else "Reanudada"
         log(f"Sincronización {state_str}.")
         return self.paused
+
+    def _request(self, method, url, **kw):
+        """Petición HTTP con verificación de la huella TLS del servidor (si está fijada)."""
+        return _pinned_request(method, url, self.cert_hash, self.verify_ssl, **kw)
 
     def _bump_stat(self, key):
         with self.stats_lock:
@@ -316,9 +379,9 @@ class SyncClient:
     def send_ping(self):
         for url in self.server_urls:
             try:
-                res = requests.post(f"{url}/api/cloud/sync-agent/ping",
+                res = self._request("POST", f"{url}/api/cloud/sync-agent/ping",
                     headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
-                    json={"device": self.device_name, "os": platform.system(), "version": "1.0.0"}, timeout=5, verify=self.verify_ssl)
+                    json={"device": self.device_name, "os": platform.system(), "version": "1.0.0"}, timeout=5)
                 if res.status_code == 401:
                     print(f"[Null-Void Sync] Token revocado en {url}. Por favor, vuelve a vincular el dispositivo.")
                     log("El dispositivo fue desvinculado de la cuenta (token revocado por el servidor).")
@@ -360,8 +423,8 @@ class SyncClient:
             log(f"Detectado nuevo/modificado: {rel_path}. Subiendo...")
             url = f"{self.active_url}/api/cloud/upload?path={requests.utils.quote(server_subpath)}&view=computers&overwrite=true"
             with open(local_path, "rb") as f:
-                res = requests.post(url, headers={"Authorization": f"Bearer {self.token}"},
-                    files={"file": (filename, f)}, verify=self.verify_ssl)
+                res = self._request("POST", url, headers={"Authorization": f"Bearer {self.token}"},
+                    files={"file": (filename, f)})
             
             success = res.status_code in (200, 201)
             if success:
@@ -385,9 +448,9 @@ class SyncClient:
         try:
             print(f"[Null-Void Sync] Deleting on server: {rel_path}")
             log(f"Detectado borrado: {rel_path}. Eliminando en el servidor...")
-            res = requests.post(f"{self.active_url}/api/cloud/delete",
+            res = self._request("POST", f"{self.active_url}/api/cloud/delete",
                 headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
-                json={"path": server_subpath, "name": filename, "view": "computers"}, verify=self.verify_ssl)
+                json={"path": server_subpath, "name": filename, "view": "computers"})
             success = res.status_code in (200, 204)
             if success:
                 print(f"[Null-Void Sync] Deleted on server: {rel_path}")
@@ -410,9 +473,9 @@ class SyncClient:
         try:
             print(f"[Null-Void Sync] Creating directory on server: {rel_path}")
             log(f"Detectada nueva carpeta: {rel_path}. Creando en el servidor...")
-            res = requests.post(f"{self.active_url}/api/cloud/mkdir",
+            res = self._request("POST", f"{self.active_url}/api/cloud/mkdir",
                 headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
-                json={"path": server_subpath, "name": name, "view": "computers"}, verify=self.verify_ssl)
+                json={"path": server_subpath, "name": name, "view": "computers"})
             success = res.status_code in (200, 201)
             if success:
                 print(f"[Null-Void Sync] Directory created on server: {rel_path}")
@@ -429,9 +492,9 @@ class SyncClient:
 
     def get_server_state(self):
         try:
-            res = requests.post(f"{self.active_url}/api/cloud/sync-agent/changes",
+            res = self._request("POST", f"{self.active_url}/api/cloud/sync-agent/changes",
                 headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
-                json={"device": self.device_name, "os": platform.system()}, timeout=10, verify=self.verify_ssl)
+                json={"device": self.device_name, "os": platform.system()}, timeout=10)
             if res.status_code == 200:
                 data = res.json()
                 self.verify_server_identity(data)
@@ -443,7 +506,7 @@ class SyncClient:
         try:
             url = f"{self.active_url}/api/cloud/sync-agent/download"
             params = {"device": self.device_name, "path": rel_path, "token": self.token}
-            res = requests.get(url, headers={"Authorization": f"Bearer {self.token}"}, params=params, timeout=30, verify=self.verify_ssl)
+            res = self._request("GET", url, headers={"Authorization": f"Bearer {self.token}"}, params=params, timeout=30)
             if res.status_code == 200:
                 local_path = os.path.join(self.local_dir, rel_path.replace("/", os.sep))
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -565,7 +628,7 @@ class SyncClient:
             self.stop_event.set()
         
         self.connected = False
-        try: requests.post(f"{self.active_url}/api/cloud/sync-agent/disconnect", headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}, json={"device": self.device_name}, timeout=5, verify=self.verify_ssl)
+        try: self._request("POST", f"{self.active_url}/api/cloud/sync-agent/disconnect", headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}, json={"device": self.device_name}, timeout=5)
         except: pass
         
         if self.observer: self.observer.stop()

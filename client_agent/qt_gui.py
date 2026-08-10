@@ -17,6 +17,18 @@ import threading
 
 from cloud_api import CloudAgentAPI, clean_error_msg
 
+
+def _agent_api():
+    """CloudAgentAPI con la huella TLS fijada en el .env (AGENT_CERT_HASH),
+    de modo que la GUI también rechace servidores suplantados."""
+    cert_hash = None
+    try:
+        from agent import _AGENT_ENV
+        cert_hash = (_AGENT_ENV or {}).get("cert_hash")
+    except Exception:
+        pass
+    return CloudAgentAPI(cert_hash=cert_hash)
+
 # ────────── Design Tokens (identicos a la web Cloud) ──────────
 P = {
     "bg":             "#111827",
@@ -308,7 +320,7 @@ def _remaining_devices(client):
 
     token = getattr(client, 'token', '') or ''
     try:
-        data = CloudAgentAPI().list_devices(
+        data = _agent_api().list_devices(
             server_url,
             token or "session_active",
             bearer_token=token or None,
@@ -767,7 +779,7 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
             btn_next.setEnabled(False)
 
             def _ping():
-                return CloudAgentAPI().test_connection(url)
+                return _agent_api().test_connection(url)
 
             def _on_conn_done(result):
                 ok, err_msg = result
@@ -802,7 +814,7 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
             btn_next.setEnabled(False)
 
             def _verify():
-                return CloudAgentAPI().verify_token(url, token_val)
+                return _agent_api().verify_token(url, token_val)
 
             def _on_tok_done(result):
                 ok, target_dev, err_msg = result
@@ -1182,9 +1194,9 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
         def _load_devs():
             try:
                 if use_my_devices:
-                    data = CloudAgentAPI().my_devices(server_url, getattr(client, 'token', '') or '')
+                    data = _agent_api().my_devices(server_url, getattr(client, 'token', '') or '')
                 else:
-                    data = CloudAgentAPI().list_devices(
+                    data = _agent_api().list_devices(
                         server_url, tok,
                         bearer_token=getattr(client, 'token', None),
                     )
@@ -1276,9 +1288,11 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
 
         def _register():
             try:
-                return CloudAgentAPI().register_device(server_url, token, device_name, platform.system())
+                api = _agent_api()
+                res = api.register_device(server_url, token, device_name, platform.system())
+                return res, getattr(api, 'last_cert_fingerprint', None)
             except Exception as e:
-                return e
+                return e, None
 
         def _on_reg_done(result):
             btn_connect.setEnabled(True)
@@ -1286,9 +1300,43 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
                 err2_lbl.setStyleSheet("color: #f87171; font-size: 12px; font-weight: 600;")
                 err2_lbl.setText(clean_error_msg(f"Error: {result}"))
                 return
+            res_data, cert_fp = result
+            if not isinstance(res_data, dict):
+                err2_lbl.setStyleSheet("color: #f87171; font-size: 12px; font-weight: 600;")
+                err2_lbl.setText(clean_error_msg(f"Error: {res_data}"))
+                return
+            if cert_fp and not getattr(client, 'cert_hash', None):
+                try:
+                    from agent import save_config
+                    cfg = getattr(client, 'config', None)
+                    if isinstance(cfg, dict) and not cfg.get('cert_hash'):
+                        mb = QtWidgets.QMessageBox(dlg)
+                        mb.setWindowTitle("Confianza del certificado SSL")
+                        mb.setIcon(QtWidgets.QMessageBox.Icon.Question)
+                        mb.setText(
+                            "El servidor usa un certificado SSL autofirmado.\n\n"
+                            f"Huella SHA-256:\n{cert_fp}\n\n"
+                            "¿Confiar en este servidor y guardar su huella para "
+                            "detectar posibles suplantaciones en futuras conexiones?"
+                        )
+                        trust_btn = mb.addButton("Confiar y guardar", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+                        no_btn = mb.addButton("No confiar", QtWidgets.QMessageBox.ButtonRole.RejectRole)
+                        mb.exec()
+                        if mb.clickedButton() is trust_btn:
+                            cfg["cert_hash"] = cert_fp
+                            save_config(cfg)
+                            try:
+                                client.cert_hash = cert_fp
+                            except Exception:
+                                pass
+                        elif mb.clickedButton() is no_btn:
+                            dlg.accept()
+                            return
+                except Exception:
+                    pass
             dlg.accept()
             if on_success:
-                on_success(result.get("device_name", ""))
+                on_success(res_data.get("device_name", ""))
 
         state["workers"].append(run_async(_register, _on_reg_done, parent=dlg))
 

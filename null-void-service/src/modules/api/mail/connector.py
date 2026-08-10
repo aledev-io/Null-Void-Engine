@@ -68,6 +68,7 @@ def decode_mime_words(s):
 
 
 def get_google_credentials(user_id, email=None):
+    from core.crypto_utils import decrypt_field
     with get_db() as db:
         if email:
             row = db.execute(
@@ -81,7 +82,7 @@ def get_google_credentials(user_id, email=None):
             ).fetchone()
             
         if row and row['email'] and row['app_password']:
-            return row['email'], row['app_password']
+            return row['email'], decrypt_field(row['app_password'])
             
         # Fallback to users table just in case migration hasn't run
         row = db.execute(
@@ -90,7 +91,7 @@ def get_google_credentials(user_id, email=None):
         ).fetchone()
         if row and row['gmail_address'] and row['gmail_app_password']:
             if not email or row['gmail_address'] == email:
-                return row['gmail_address'], row['gmail_app_password']
+                return row['gmail_address'], decrypt_field(row['gmail_app_password'])
                 
     return None, None
 

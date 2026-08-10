@@ -16,10 +16,9 @@ if service_dir not in sys.path:
 
 import sync_agent
 
-from core.limiter import limiter
+from core.limiter import limiter, get_limiter_key
 
 cloud_bp = Blueprint('cloud', __name__, url_prefix='/api/cloud')
-limiter.exempt(cloud_bp)
 
 
 def get_user_from_token(token):
@@ -59,6 +58,7 @@ def list_recent():
 
 
 @cloud_bp.route('/files', methods=['GET'])
+@limiter.limit("600 per hour", key_func=get_limiter_key)
 @login_required
 def list_files():
     view = request.args.get('view', 'drive')
@@ -82,6 +82,7 @@ def list_files():
 
 
 @cloud_bp.route('/upload', methods=['POST'])
+@limiter.limit("1000 per hour", key_func=get_limiter_key)
 @login_required
 def upload_file():
     view = request.form.get('view') or request.args.get('view') or 'drive'
@@ -454,6 +455,7 @@ def get_multi_download_token():
 
 
 @cloud_bp.route('/download', methods=['GET'])
+@limiter.limit("600 per hour", key_func=get_limiter_key)
 def download_file():
     dl_token = request.args.get('t')
     resp, err = services.download_file(dl_token)
@@ -463,6 +465,9 @@ def download_file():
 
 
 @cloud_bp.route('/stream_video', methods=['GET'])
+# El navegador hace peticiones Range continuas al reproducir: una película
+# HD/4K puede generar 800-1500 peticiones por hora sin ser abuso.
+@limiter.limit("3000 per hour", key_func=get_limiter_key)
 def stream_video():
     dl_token = request.args.get('t')
     quality = request.args.get('quality', 'original').lower()
@@ -579,6 +584,7 @@ def list_shared_by_me():
 
 
 @cloud_bp.route('/sync-agent/ping', methods=['POST'])
+@limiter.limit("5000 per hour", key_func=get_limiter_key)
 def sync_agent_ping():
     token = sync_agent.get_agent_token()
     uid, username = get_user_from_token(token)
@@ -588,6 +594,7 @@ def sync_agent_ping():
 
 
 @cloud_bp.route('/sync-agent/disconnect', methods=['POST'])
+@limiter.limit("120 per hour", key_func=get_limiter_key)
 def sync_agent_disconnect():
     token = sync_agent.get_agent_token()
     uid, username = get_user_from_token(token)
@@ -597,6 +604,7 @@ def sync_agent_disconnect():
 
 
 @cloud_bp.route('/sync-agent/changes', methods=['POST'])
+@limiter.limit("5000 per hour", key_func=get_limiter_key)
 def sync_agent_changes():
     token = sync_agent.get_agent_token()
     uid, username = get_user_from_token(token)
@@ -606,6 +614,7 @@ def sync_agent_changes():
 
 
 @cloud_bp.route('/sync-agent/download', methods=['GET'])
+@limiter.limit("2000 per hour", key_func=get_limiter_key)
 def sync_agent_download():
     token = sync_agent.get_agent_token()
     uid, username = get_user_from_token(token)
@@ -666,6 +675,7 @@ def download_client_agent():
 
 
 @cloud_bp.route('/sync-agent/generate-token', methods=['POST'])
+@limiter.limit("60 per minute", key_func=get_limiter_key)
 def sync_agent_generate_token():
     token = sync_agent.get_agent_token()
     uid, username = get_user_from_token(token)
@@ -677,6 +687,7 @@ def sync_agent_generate_token():
 
 
 @cloud_bp.route('/sync-agent/check-token-status', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
 def sync_agent_check_token_status():
     try:
         data = request.get_json(silent=True) or {}
@@ -688,6 +699,7 @@ def sync_agent_check_token_status():
 
 
 @cloud_bp.route('/sync-agent/list-devices', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
 def sync_agent_list_devices():
     try:
         data = request.get_json(silent=True) or {}
@@ -699,6 +711,7 @@ def sync_agent_list_devices():
 
 
 @cloud_bp.route('/sync-agent/my-devices', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
 def sync_agent_my_devices():
     """Lista los PCs del usuario autenticado por el token de dispositivo (Bearer)."""
     try:
@@ -710,6 +723,7 @@ def sync_agent_my_devices():
 
 
 @cloud_bp.route('/sync-agent/register', methods=['POST'])
+@limiter.limit("30 per minute", key_func=get_limiter_key)
 def sync_agent_register():
     data = request.get_json(silent=True) or {}
     return sync_agent.handle_register(data)

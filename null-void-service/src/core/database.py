@@ -268,14 +268,22 @@ def init_db() -> None:
         if 'target_device' not in alt_cols:
             conn.execute("ALTER TABLE agent_link_tokens ADD COLUMN target_device TEXT DEFAULT ''")
 
-        # Migrar credenciales legacy de Gmail a la nueva tabla
-        conn.execute("""
-            INSERT OR IGNORE INTO user_google_accounts (user_id, email, app_password)
+        # Migrar credenciales legacy de Gmail a la nueva tabla (cifradas)
+        from core.crypto_utils import encrypt_field
+        legacy_rows = conn.execute("""
             SELECT user_id, gmail_address, gmail_app_password
             FROM users
             WHERE gmail_address IS NOT NULL AND gmail_address != '' 
               AND gmail_app_password IS NOT NULL AND gmail_app_password != ''
-        """)
+        """).fetchall()
+        for row in legacy_rows:
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_google_accounts (user_id, email, app_password) VALUES (?, ?, ?)",
+                    (row['user_id'], row['gmail_address'], encrypt_field(row['gmail_app_password']))
+                )
+            except Exception:
+                pass
         conn.commit()
 
         # Migrar columna 'user' a 'user_id' en tablas legacy

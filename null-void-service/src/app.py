@@ -23,6 +23,7 @@ import json
 import socket
 import platform
 import subprocess
+import hashlib
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, send_from_directory, make_response, g, Response
 from flask_limiter import Limiter
@@ -58,6 +59,27 @@ def check_single_instance():
         print(f"\n[!] ERROR: El servidor ya se encuentra en ejecución.")
         os._exit(1)
 
+def _print_tls_cert_fingerprint():
+    """Imprime la huella SHA-256 del certificado TLS del servidor.
+
+    Esa huella es la que el agente de escritorio debe fijar en su .env como
+    AGENT_CERT_HASH=<hash> para detectar suplantaciones (MITM).
+    """
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+        if not os.path.exists(CONFIG.CERT_FILE):
+            print(f"[NullVoid] AVISO: No se encontró {CONFIG.CERT_FILE}; no se pudo calcular la huella TLS.")
+            return
+        with open(CONFIG.CERT_FILE, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        fingerprint = hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
+        print(f"[NullVoid] Huella TLS SHA-256 de tu servidor: {fingerprint}")
+        print("[NullVoid] Para fijar la confianza en el agente: AGENT_CERT_HASH=" + fingerprint)
+    except Exception as e:
+        print(f"[NullVoid] No se pudo calcular la huella del certificado TLS: {e}")
+
+
 def create_app():
     if not os.environ.get('GUNICORN_VERSION') and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         check_single_instance()
@@ -69,6 +91,9 @@ def create_app():
 
     socketio.init_app(app)
     limiter.init_app(app)
+
+    if CONFIG.USE_HTTPS:
+        _print_tls_cert_fingerprint()
 
     from modules.api.auth.routes import auth_bp
     from modules.api.events import events_bp
@@ -339,8 +364,8 @@ def create_app():
         token = request.cookies.get('token')
         if not token or not sess.get_user(token):
             return jsonify(error="No autorizado"), 401
-        import requests as req
-        r = req.post('http://127.0.0.1:5001/export_list_pdf',
+        from core.scraper_client import scraper_request
+        r = scraper_request('POST', '/export_list_pdf',
                     json=request.get_json(),
                     stream=True)
         return Response(r.content,

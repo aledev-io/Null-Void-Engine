@@ -7,6 +7,22 @@ limpieza de mensajes de error para que la UI no repita esa lógica.
 import requests
 
 
+def peer_cert_fingerprint(res):
+    """SHA-256 (hex, minúsculas) del certificado TLS presentado por el servidor
+    con el que se completó la petición `res`. Devuelve None si no se pudo
+    obtener (por ejemplo si la conexión ya se liberó)."""
+    try:
+        conn = getattr(res.raw, "_connection", None)
+        sock = getattr(conn, "sock", None) if conn else None
+        der = sock.getpeercert(binary_form=True) if sock else None
+        if not der:
+            return None
+        import hashlib
+        return hashlib.sha256(der).hexdigest()
+    except Exception:
+        return None
+
+
 def clean_error_msg(err_raw):
     """Limpia y personaliza cualquier mensaje de error de red para ser claro con el usuario."""
     if not err_raw:
@@ -36,24 +52,43 @@ class CloudAPICertificateError(CloudAPIError):
 class CloudAgentAPI:
     """Cliente HTTP de los endpoints de sync-agent del servidor Null-Void.
 
-    Nota de producto: el servidor usa un certificado SSL autofirmado, por lo
-    que la verificación TLS permanece desactivada de momento (verify=False)
-    hasta que se implemente el diálogo de confianza explícita de certificados.
+    Verificación TLS: el servidor usa un certificado autofirmado, así que la
+    validación de cadena suele estar desactivada (verify=False). Para evitar
+    ataques MITM se puede fijar la confianza con `cert_hash`: la huella
+    SHA-256 del certificado del servidor (la imprime el servidor al arrancar
+    y se pone en el .env del agente como AGENT_CERT_HASH). Si el certificado
+    no coincide, todas las peticiones fallan con CloudAPICertificateError.
     """
 
-    def __init__(self, timeout=6, verify=False):
+    def __init__(self, timeout=6, verify=False, cert_hash=None):
         self.timeout = timeout
         self.verify = verify
+        self.cert_hash = (cert_hash or "").strip().lower() or None
+        self.last_cert_fingerprint = None
+
+    def _check_cert_pin(self, res):
+        """Compara la huella del certificado real con el hash esperado."""
+        fingerprint = peer_cert_fingerprint(res)
+        self.last_cert_fingerprint = fingerprint or self.last_cert_fingerprint
+        if self.cert_hash:
+            if not fingerprint or fingerprint != self.cert_hash:
+                raise CloudAPICertificateError(
+                    "El certificado SSL del servidor no coincide con la huella "
+                    "esperada (AGENT_CERT_HASH). Posible suplantación (MITM).")
 
     def _post(self, url, path, body=None, headers=None, timeout=None):
         try:
-            return requests.post(
+            res = requests.post(
                 f"{url.rstrip('/')}{path}",
                 json=body,
                 headers=headers or {},
                 timeout=timeout or self.timeout,
                 verify=self.verify,
             )
+            self._check_cert_pin(res)
+            return res
+        except CloudAPICertificateError:
+            raise
         except requests.exceptions.SSLError:
             raise CloudAPICertificateError("El servidor usa un certificado SSL no verificado.")
         except requests.exceptions.ConnectionError:
@@ -81,7 +116,11 @@ class CloudAgentAPI:
             if res.status_code == 404:
                 return False, "La dirección especificada no es un servidor Null-Void Cloud. Recuerda incluir el puerto (ejemplo: https://mi-servidor:5000)."
             return False, f"El servidor respondió con código HTTP {res.status_code}. Verifica que el servicio Null-Void esté activo."
-        except CloudAPICertificateError:
+        except CloudAPICertificateError as e:
+            if self.cert_hash:
+                return False, str(e)
+            # Sin hash configurado, un certificado sin verificar solo indica
+            # que el servidor existe (el usuario podrá fijar la huella después).
             return True, None
         except CloudAPIError as e:
             return False, str(e)

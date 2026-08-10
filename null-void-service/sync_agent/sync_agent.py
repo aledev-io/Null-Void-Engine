@@ -85,7 +85,9 @@ def _sanitize_device_name(device):
 def get_server_fingerprint(username="", os_name=""):
     import hashlib
     from flask import current_app
-    secret = current_app.config.get('SECRET_KEY', 'null-void-default-secret-key')
+    secret = current_app.config.get('SECRET_KEY')
+    if not secret:
+        raise RuntimeError("SECRET_KEY no está definida; no se puede firmar el fingerprint del servidor.")
     payload = f"{secret}:{username}:{os_name}"
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
@@ -428,6 +430,24 @@ def handle_register(data):
     return jsonify(device_token=device_token, device_name=safe_device, username=user_name, server_fingerprint=get_server_fingerprint(user_name, os_name))
 
 
+def _server_tls_fingerprint():
+    """Huella SHA-256 (DER) del certificado TLS del servidor, o '' si no hay
+    certificado configurado. Se incrusta en el script del agente para fijar
+    la confianza (pinning) y detectar suplantaciones (MITM)."""
+    try:
+        import hashlib
+        from src.config.config import CONFIG
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+        if not os.path.exists(CONFIG.CERT_FILE):
+            return ""
+        with open(CONFIG.CERT_FILE, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
+    except Exception:
+        return ""
+
+
 def _build_agent_script(server_url, token, device_name):
     script_template = """# -*- coding: utf-8 -*-
 import os, sys, time, platform, urllib3, subprocess, threading
@@ -450,6 +470,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 SERVER_URL = "__SERVER_URL__"
 TOKEN = "__TOKEN__"
 DEVICE_NAME = "__DEVICE_NAME__"
+EXPECTED_FINGERPRINT = "__SERVER_FINGERPRINT__"
+VERIFY_TLS = bool(EXPECTED_FINGERPRINT and SERVER_URL.startswith("https://"))
 _desktop = os.path.expanduser("~/Desktop")
 if not os.path.exists(_desktop): _desktop = os.path.expanduser("~/Escritorio")
 if not os.path.exists(_desktop): _desktop = os.path.expanduser("~")
@@ -464,6 +486,36 @@ def log(msg):
     print(f"[Null-Void Sync] {full}")
     try: ui_log_queue.put(full)
     except Exception: pass
+
+def _peer_cert_fingerprint(res):
+    # SHA-256 (hex) del certificado TLS del servidor con el que se completó `res`
+    try:
+        conn = getattr(res.raw, "_connection", None)
+        sock = getattr(conn, "sock", None) if conn else None
+        der = sock.getpeercert(binary_form=True) if sock else None
+        if not der:
+            return None
+        import hashlib
+        return hashlib.sha256(der).hexdigest()
+    except Exception:
+        return None
+
+def _check_server_pin(res):
+    # Fija la confianza en el certificado del servidor (pinning, anti-MITM)
+    if not EXPECTED_FINGERPRINT:
+        return
+    fp = _peer_cert_fingerprint(res)
+    if not fp or fp.lower() != EXPECTED_FINGERPRINT.lower():
+        log("[SEGURIDAD] La huella SSL del servidor no coincide con la esperada. "
+            "Posible suplantacion (MITM). Peticion cancelada.")
+        raise RuntimeError("CERT_MISMATCH")
+
+def _req(method, url, **kw):
+    # Peticion HTTP con verificacion de huella TLS (pinning)
+    kw.setdefault("timeout", 30)
+    res = requests.request(method, url, verify=VERIFY_TLS, **kw)
+    _check_server_pin(res)
+    return res
 
 log(f"Iniciando Agente de Sincronización para: {DEVICE_NAME}")
 os.makedirs(LOCAL_DIR, exist_ok=True)
@@ -483,9 +535,9 @@ def self_destruct():
 
 def send_ping():
     try:
-        res = requests.post(SERVER_URL + "/api/cloud/sync-agent/ping",
+        res = _req("POST", SERVER_URL + "/api/cloud/sync-agent/ping",
             headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"},
-            json={"device": DEVICE_NAME, "os": platform.system()}, timeout=5, verify=False)
+            json={"device": DEVICE_NAME, "os": platform.system()}, timeout=5)
         if res.status_code == 401:
             log("Error 401: Dispositivo o token desvinculado. Autodestruyendo agente...")
             self_destruct(); sys.exit(1)
@@ -502,8 +554,8 @@ def upload_file(local_path):
         log(f"[SUBIENDO] {rel_path}")
         url = SERVER_URL + "/api/cloud/upload?path=" + requests.utils.quote(server_subpath) + "&view=computers"
         with open(local_path, "rb") as f:
-            res = requests.post(url, headers={"Authorization": "Bearer " + TOKEN},
-                files={"file": (filename, f)}, verify=False)
+            res = _req("POST", url, headers={"Authorization": "Bearer " + TOKEN},
+                files={"file": (filename, f)}, timeout=60)
         if res.status_code in (200, 201):
             log(f"[OK] Subido: {rel_path}")
             return True
@@ -519,9 +571,9 @@ def delete_file(rel_path):
     filename = os.path.basename(rel_path)
     try:
         log(f"[ELIMINANDO] {rel_path}")
-        res = requests.post(SERVER_URL + "/api/cloud/delete",
+        res = _req("POST", SERVER_URL + "/api/cloud/delete",
             headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"},
-            json={"path": server_subpath, "name": filename, "view": "computers"}, verify=False)
+            json={"path": server_subpath, "name": filename, "view": "computers"}, timeout=10)
         return res.status_code in (200, 204)
     except Exception as e:
         log(f"[ERROR] Eliminar {rel_path}: {e}")
@@ -534,18 +586,18 @@ def create_dir(rel_path):
     name = os.path.basename(rel_path)
     try:
         log(f"[CREAR DIR] {rel_path}")
-        res = requests.post(SERVER_URL + "/api/cloud/mkdir",
+        res = _req("POST", SERVER_URL + "/api/cloud/mkdir",
             headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"},
-            json={"path": server_subpath, "name": name, "view": "computers"}, verify=False)
+            json={"path": server_subpath, "name": name, "view": "computers"}, timeout=10)
         return res.status_code in (200, 201)
     except Exception as e:
         return False
 
 def get_server_state():
     try:
-        res = requests.post(SERVER_URL + "/api/cloud/sync-agent/changes",
+        res = _req("POST", SERVER_URL + "/api/cloud/sync-agent/changes",
             headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"},
-            json={"device": DEVICE_NAME}, timeout=10, verify=False)
+            json={"device": DEVICE_NAME}, timeout=10)
         if res.status_code == 200:
             data = res.json()
             return data.get("files", {}), set(data.get("dirs", []))
@@ -559,7 +611,7 @@ def download_file_from_server(rel_path):
         log(f"[DESCARGANDO] {rel_path}")
         url = SERVER_URL + "/api/cloud/sync-agent/download"
         params = {"device": DEVICE_NAME, "path": rel_path, "token": TOKEN}
-        res = requests.get(url, headers={"Authorization": "Bearer " + TOKEN}, params=params, timeout=30, verify=False)
+        res = _req("GET", url, headers={"Authorization": "Bearer " + TOKEN}, params=params, timeout=120)
         if res.status_code == 200:
             local_path = os.path.join(LOCAL_DIR, rel_path.replace("/", os.sep))
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -678,14 +730,18 @@ def sync_loop():
                 if rel_path not in srv_files:
                     local_path = os.path.join(LOCAL_DIR, rel_path.replace("/", os.sep))
                     if os.path.exists(local_path):
-                        ignore_paths.add(rel_path); try: os.remove(local_path); except: pass
+                        ignore_paths.add(rel_path)
+                        try: os.remove(local_path)
+                        except: pass
                         threading.Timer(2.0, lambda r=rel_path: ignore_paths.discard(r)).start()
             
             for d in list(server_known_dirs):
                 if d not in srv_dirs:
                     local_d = os.path.join(LOCAL_DIR, d.replace("/", os.sep))
                     if os.path.isdir(local_d):
-                        ignore_paths.add(d); try: _shutil.rmtree(local_d); except: pass
+                        ignore_paths.add(d)
+                        try: _shutil.rmtree(local_d)
+                        except: pass
                         threading.Timer(2.0, lambda r=d: ignore_paths.discard(r)).start()
             
             server_known_dirs = srv_dirs; server_known_files = srv_files
@@ -861,4 +917,8 @@ def launch_gui():
 
 launch_gui()
 """
-    return script_template.replace("__SERVER_URL__", server_url).replace("__TOKEN__", token).replace("__DEVICE_NAME__", device_name)
+    return (script_template
+            .replace("__SERVER_URL__", server_url)
+            .replace("__TOKEN__", token)
+            .replace("__DEVICE_NAME__", device_name)
+            .replace("__SERVER_FINGERPRINT__", _server_tls_fingerprint()))

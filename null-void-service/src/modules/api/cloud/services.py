@@ -686,13 +686,9 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
     except ValueError:
         return None, None
 
-    # Si overwrite_existing es True (subida por Agente) o si el archivo ya existe y se permite sobrescribir:
-    if overwrite_existing and os.path.exists(final_file_path):
-        try: os.unlink(final_file_path)
-        except Exception: pass
-
-    # Si ya existe y no se especifica sobrescribir, añadir sufijo numérico estilo SO: 'Archivo(1).txt'
-    if os.path.exists(final_file_path):
+    # Si overwrite_existing es True (subida por Agente), no renombrar:
+    # el destino se reemplaza in-place, pero solo tras pasar el chequeo de cuota.
+    if not overwrite_existing and os.path.exists(final_file_path):
         final_file_path = _unique_path(final_file_path)
     final_filename = os.path.basename(final_file_path)
 
@@ -720,6 +716,13 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
         os.unlink(temp_path)
     else:
         os.rename(temp_path, pool_file_path)
+
+    # overwrite: reemplazar in-place solo ahora que la cuota ya está validada
+    if overwrite_existing:
+        try:
+            os.unlink(final_file_path)
+        except OSError:
+            pass
 
     os.link(pool_file_path, final_file_path)
 
@@ -1003,11 +1006,7 @@ def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=No
 
     try:
         if owner_id and str(owner_id) != str(current_uid):
-            require_access(current_uid, owner_id, name)
-            owner_root = os.path.join(BASE_CLOUD_ROOT, owner_id)
-            if view == 'computers':
-                owner_root = os.path.join(owner_root, '.computers')
-            old_path = safe_join(owner_root, old_subpath, name)
+            old_path = _resolve_shared_or_recent_path(current_uid, owner_id, name, old_subpath, view)
         else:
             v_root = get_view_root(view, token)
             if not v_root:
@@ -1377,7 +1376,14 @@ def preview_file(view, name, subpath, trash_id, owner_id, token):
 
     ext = os.path.splitext(name)[1].lower()
     if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'):
-        return send_file(target_path), None
+        resp = send_file(target_path)
+        if ext == '.svg':
+            # XSS almacenado: los SVG se sirven inline en el mismo origen;
+            # el CSP bloquea scripts/eventos dentro del documento.
+            resp.headers['Content-Security-Policy'] = (
+                "default-src 'none'; script-src 'none'; object-src 'none'; img-src data:"
+            )
+        return resp, None
 
     if ext in ('.mp4', '.webm', '.mov', '.avi', '.mkv'):
         for attempt in [('00:00:01',), ('00:00:00',)]:
@@ -1664,11 +1670,7 @@ def get_multi_download_token(items, view, token):
 
         try:
             if owner_id and str(owner_id) != str(current_uid):
-                require_access(current_uid, owner_id, name)
-                owner_root = os.path.join(BASE_CLOUD_ROOT, owner_id)
-                if view == 'computers':
-                    owner_root = os.path.join(owner_root, '.computers')
-                target_path = safe_join(owner_root, subpath, name)
+                target_path = _resolve_shared_or_recent_path(current_uid, owner_id, name, subpath, view)
             else:
                 target_path = safe_join(user_root, subpath, name)
                 if not os.path.exists(target_path):
