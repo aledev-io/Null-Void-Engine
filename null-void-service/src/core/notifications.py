@@ -135,6 +135,19 @@ class SystemNotifier:
         except Exception as e:
             print(f"[Notifier] Error crítico en _check_events: {e}")
 
+    def _entry_id(self, category, title, date, time_val, user_id, sender_id=None):
+        """ID estable de la notificación, independiente de su timestamp.
+
+        Para chat identifica el hilo remitente→usuario: al agrupar un mensaje
+        nuevo la entrada conserva su ID y el estado "leído" del navegador
+        sigue siendo válido (antes cambiaba el timestamp y la notificación
+        reaparecía como no leída)."""
+        if category == 'chat':
+            key = f"chat|{title}|{user_id}"
+        else:
+            key = f"{category}|{title}|{date}|{time_val}|{user_id}"
+        return hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]
+
     def _add_to_history(self, title, date, time_val, body, category, user_id, **kwargs):
         """Guarda la notificación en un archivo JSON local por usuario"""
         try:
@@ -149,7 +162,9 @@ class SystemNotifier:
                 except (json.JSONDecodeError, IOError):
                     history = []
             
+            entry_id = self._entry_id(category, title, date, time_val, user_id, kwargs.get('sender_id'))
             new_entry = {
+                "id": entry_id,
                 "title": title,
                 "body": body,
                 "date": date,
@@ -170,6 +185,8 @@ class SystemNotifier:
                         break
                 
                 if existing_entry:
+                    if not existing_entry.get('id'):
+                        existing_entry['id'] = entry_id  # entrada creada antes de los IDs estables
                     msg_list = existing_entry.get('messages', [])
                     if not msg_list and existing_entry.get('body'):
                         lines = [line.strip() for line in existing_entry['body'].split('\n') if line.strip() and not line.strip().startswith('+')]
@@ -192,6 +209,22 @@ class SystemNotifier:
                         existing_entry['image'] = kwargs.get('image')
                     
                     history.insert(0, existing_entry)
+                    with open(user_history_path, 'w', encoding='utf-8') as f:
+                        json.dump(history, f, indent=4, ensure_ascii=False)
+                    return
+
+            # Si ya existe una entrada con el mismo ID, se actualiza en su
+            # sitio en vez de duplicar (p. ej. recordatorios que se repiten).
+            for idx, item in enumerate(history):
+                if item.get('id') == entry_id:
+                    existing = history.pop(idx)
+                    existing['body'] = body
+                    existing['time'] = time_val
+                    existing['date'] = date
+                    existing['timestamp'] = new_entry['timestamp']
+                    if kwargs.get('image'):
+                        existing['image'] = kwargs.get('image')
+                    history.insert(0, existing)
                     with open(user_history_path, 'w', encoding='utf-8') as f:
                         json.dump(history, f, indent=4, ensure_ascii=False)
                     return
