@@ -3548,6 +3548,7 @@ async function confirmCloudShare() {
 
 let linkDevicePollInterval = null;
 let _currentLinkDeviceOS = 'linux';
+let _linkDeviceCurrentOS = 'linux';
 let _currentLinkDeviceToken = null;
 let _existingDevicesAtOpen = new Set();
 
@@ -3654,11 +3655,10 @@ async function openLinkDeviceModal() {
         const userAgent = navigator.userAgent.toLowerCase();
         if (userAgent.includes('win')) {
             _currentLinkDeviceOS = 'windows';
-        } else if (userAgent.includes('mac')) {
-            _currentLinkDeviceOS = 'mac';
         } else {
             _currentLinkDeviceOS = 'linux';
         }
+        _linkDeviceCurrentOS = _currentLinkDeviceOS;
 
         setLinkDeviceOS(_currentLinkDeviceOS);
         if (linkDevicePollInterval) clearInterval(linkDevicePollInterval);
@@ -3688,10 +3688,14 @@ function setLinkDeviceOS(os) {
     btns.forEach(id => {
         const btn = document.getElementById(id);
         if (!btn) return;
-        const isActive = id === `os-btn-${os}`;
-        btn.style.background = isActive ? 'var(--indigo)' : 'transparent';
-        btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
-        btn.style.fontWeight = isActive ? '700' : '500';
+        const isCurrent = id === `os-btn-${os}`;
+        const isAllowed = (id === 'os-btn-linux' ? 'linux' : 'windows') === _linkDeviceCurrentOS;
+        btn.style.background = isCurrent ? 'var(--indigo)' : 'transparent';
+        btn.style.color = isCurrent ? '#fff' : 'var(--text-muted)';
+        btn.style.fontWeight = isCurrent ? '700' : '500';
+        btn.disabled = !isAllowed;
+        btn.style.cursor = isAllowed ? 'pointer' : 'not-allowed';
+        btn.style.opacity = isAllowed ? '1' : '0.4';
     });
     generateSyncCommand();
 }
