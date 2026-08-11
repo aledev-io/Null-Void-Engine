@@ -76,31 +76,36 @@ def get_invoices(uid: str, token: str = None) -> list[dict]:
                 cloud_files_set = set(cloud_files)
 
                 with get_db() as conn:
-                    # 1. Añadir nuevas facturas (Cloud -> DB)
+                    # 1. Añadir nuevas facturas (Cloud -> DB). Una única consulta
+                    # para conocer las ya registradas y un INSERT OR IGNORE
+                    # respaldado por uq_invoices_ref(user_id, reference): ni
+                    # N+1 por PDF ni duplicados.
+                    existing_refs = {
+                        r['reference']
+                        for r in conn.execute(
+                            "SELECT reference FROM invoices WHERE user_id = ? AND reference IS NOT NULL AND reference != ''",
+                            (uid,)
+                        ).fetchall()
+                    }
+                    new_rows = []
                     for rel in cloud_files:
+                        if rel in existing_refs:
+                            continue
                         file_path = os.path.join(business_root, rel)
                         filename = os.path.basename(rel)
-                        existing = conn.execute(
-                            "SELECT id FROM invoices WHERE user_id = ? AND reference = ?",
-                            (uid, rel)
-                        ).fetchone()
+                        parsed = parse_pdf(file_path)
+                        fallback_client = os.path.splitext(filename)[0].replace('_', ' ').title()
+                        client = parsed["client"] or fallback_client
+                        new_rows.append((
+                            uid, parsed["invoice_number"], parsed["date"], client,
+                            rel, parsed["total"], 'no_pagada', parsed["raw_text"],
+                            datetime.now().isoformat()
+                        ))
 
-                        if not existing:
-                            parsed = parse_pdf(file_path)
-                            fallback_client = os.path.splitext(filename)[0].replace('_', ' ').title()
-                            client = parsed["client"] or fallback_client
-                            inv_num = parsed["invoice_number"]
-                            date = parsed["date"]
-                            total = parsed["total"]
-                            raw_text = parsed["raw_text"]
-
-                            conn.execute("""
-                                INSERT INTO invoices (user_id, invoice_number, date, client, reference, total, status, raw_text, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (
-                                uid, inv_num, date, client, rel, total, 'no_pagada', raw_text,
-                                datetime.now().isoformat()
-                            ))
+                    conn.executemany("""
+                        INSERT OR IGNORE INTO invoices (user_id, invoice_number, date, client, reference, total, status, raw_text, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, new_rows)
 
                     # 2. Eliminar facturas huérfanas (Cloud Eliminado -> DB Eliminado)
                     db_refs = conn.execute("SELECT id, reference FROM invoices WHERE user_id = ?", (uid,)).fetchall()

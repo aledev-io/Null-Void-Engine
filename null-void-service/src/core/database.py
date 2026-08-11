@@ -13,13 +13,64 @@ from config.config import CONFIG
 DB_PATH = os.path.join(CONFIG.DATA_DIR, "manager.db")
 
 
+def _rebuild_table_with_check(conn, table: str, check_clause: str) -> None:
+    """Añade un CHECK constraint a una tabla existente sin perder datos.
+
+    SQLite no permite ALTER TABLE ... ADD CHECK; se reconstruye la tabla
+    reutilizando su DDL original e inyectando el CHECK antes del cierre.
+    Idempotente: si el DDL ya contiene CHECK, no hace nada."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+    ).fetchone()
+    if not row or not row['sql']:
+        return
+    if 'CHECK' in row['sql'].upper():
+        return
+
+    sql = row['sql'].rstrip().rstrip(';').rstrip()
+    if not sql.endswith(')'):
+        return
+    new_sql = sql[:-1] + f", {check_clause})"
+    new_table = table + '__new'
+
+    old_isolation = conn.isolation_level
+    conn.isolation_level = None  # autocommit: necesario para PRAGMA foreign_keys
+    try:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("BEGIN")
+        try:
+            conn.execute(new_sql.replace(table, new_table, 1))
+            cols = ", ".join(
+                r['name'] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()
+            )
+            conn.execute(f"INSERT INTO {new_table} ({cols}) SELECT {cols} FROM {table}")
+            conn.execute(f"DROP TABLE {table}")
+            conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+            # Reasentar la secuencia de AUTOINCREMENT si la hubiera
+            conn.execute(f"DELETE FROM sqlite_sequence WHERE name = '{table}'")
+            conn.execute(f"INSERT INTO sqlite_sequence (name, seq) SELECT '{table}', MAX(id) FROM '{table}'")
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.isolation_level = old_isolation
+
+
 def get_db() -> sqlite3.Connection:
     """Crea una conexión a la base de datos con acceso por nombre de columna."""
     conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError:
+        # Almacenamiento sin permisos de escritura (reinstall con volumen ro):
+        # se continúa con journal mode clásico en lugar de bloquear la app.
+        print(f"[database] AVISO: no se pudo activar WAL en '{DB_PATH}' "
+              "(¿permisos o montaje read-only?). Se usa journal mode por defecto.")
     return conn
 
 
@@ -86,7 +137,8 @@ def init_db() -> None:
                 client         TEXT,
                 reference      TEXT,
                 total          REAL,
-                status         TEXT DEFAULT 'no_pagada',
+                status         TEXT DEFAULT 'no_pagada'
+                               CHECK (status IN ('no_pagada', 'pagada', 'a_cuenta')),
                 raw_text       TEXT,
                 created_at     TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
@@ -225,7 +277,8 @@ def init_db() -> None:
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id      TEXT NOT NULL,
                 requested_gb INTEGER NOT NULL,
-                status       TEXT DEFAULT 'pending',
+                status       TEXT DEFAULT 'pending'
+                             CHECK (status IN ('pending', 'approved', 'rejected')),
                 created_at   REAL NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             );
@@ -344,7 +397,37 @@ def init_db() -> None:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN file_name TEXT")
             conn.execute("ALTER TABLE chat_messages ADD COLUMN file_size INTEGER")
 
+        # ─── CHECK constraints en tablas existentes (rebuild seguro) ───
+        # Para bases de datos legacy (las nuevas ya traen los CHECK en el CREATE TABLE).
+        _rebuild_table_with_check(
+            conn, 'invoices',
+            "CHECK (status IN ('no_pagada', 'pagada', 'a_cuenta'))"
+        )
+        _rebuild_table_with_check(
+            conn, 'quota_requests',
+            "CHECK (status IN ('pending', 'approved', 'rejected'))"
+        )
+
         # ─── Índices ───
+        # Limpiar duplicados de cloud_shared antes de imponer unicidad:
+        # un archivo solo se comparte una vez con el mismo usuario.
+        conn.execute("""
+            DELETE FROM cloud_shared WHERE rowid NOT IN (
+                SELECT MIN(rowid) FROM cloud_shared
+                GROUP BY owner_id, shared_with, file_name, file_path, view
+            )
+        """)
+        # Un usuario no puede registrar la misma factura (mismo PDF) dos veces.
+        # Solo se deduplican referencias no nulas: las facturas hechas a mano
+        # (sin reference) son varias de verdad, y los NULL no colisionan en un
+        # índice UNIQUE.
+        conn.execute("""
+            DELETE FROM invoices WHERE reference IS NOT NULL AND reference != '' AND rowid NOT IN (
+                SELECT MIN(rowid) FROM invoices
+                WHERE reference IS NOT NULL AND reference != ''
+                GROUP BY user_id, reference
+            )
+        """)
         indexes = [
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)",
             "CREATE INDEX IF NOT EXISTS idx_events_userid ON events(user_id)",
@@ -358,6 +441,14 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_chat_time ON chat_messages(created_at)",
             "CREATE INDEX IF NOT EXISTS idx_del_msg_message ON deleted_messages(message_id)",
             "CREATE INDEX IF NOT EXISTS idx_del_msg_user ON deleted_messages(user_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_cloud_shared ON cloud_shared(owner_id, shared_with, file_name, file_path, view)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_invoices_ref ON invoices(user_id, reference)",
+            # Índices compuestos para las consultas frecuentes:
+            "CREATE INDEX IF NOT EXISTS idx_chat_unread ON chat_messages(receiver_id, read)",
+            "CREATE INDEX IF NOT EXISTS idx_chat_pair ON chat_messages(sender_id, receiver_id)",
+            "CREATE INDEX IF NOT EXISTS idx_quota_status ON quota_requests(status, user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_mail_folder ON internal_mail(user_id, folder, is_read)",
+            "CREATE INDEX IF NOT EXISTS idx_shared_path ON cloud_shared(owner_id, file_path)",
         ]
         for idx in indexes:
             conn.execute(idx)

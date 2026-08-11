@@ -287,17 +287,13 @@ def clone_session_for_user(owner_uid: str, session_id: str, new_user_id: str, se
             (new_session_id, new_user_id, new_title, session['model'], now, now),
         )
         
-        # Clone messages
-        messages = conn.execute(
-            "SELECT * FROM ai_messages WHERE session_id = ? AND user_id = ? ORDER BY id ASC",
-            (session_id, owner_uid)
-        ).fetchall()
-        
-        for msg in messages:
-            conn.execute(
-                "INSERT INTO ai_messages (session_id, user_id, role, content, model, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (new_session_id, new_user_id, msg['role'], msg['content'], msg['model'], now),
-            )
+        # Clone messages (un solo INSERT...SELECT, sin bucle por mensaje)
+        conn.execute("""
+            INSERT INTO ai_messages (session_id, user_id, role, content, model, created_at)
+            SELECT ?, ?, role, content, model, ?
+            FROM ai_messages
+            WHERE session_id = ? AND user_id = ?
+        """, (new_session_id, new_user_id, now, session_id, owner_uid))
             
         # Vincular como sesión compartida
         conn.execute(
@@ -361,35 +357,36 @@ def get_user_api_keys(user_id: str) -> list:
 def get_user_notes(user_id: str) -> list:
     ensure_schema()
     with get_db() as conn:
-        # Fetch notes owned by the user or shared with the user
+        # Fetch notes owned by the user or shared with the user.
+        # GROUP_CONCAT trae los colaboradores en la misma consulta (sin N+1).
         rows = conn.execute("""
-            SELECT n.id, n.user_id, n.title, n.content, n.created_at, n.updated_at, n.pinned, n.is_shared, n.author, n.shared_by
+            SELECT n.id, n.user_id, n.title, n.content, n.created_at, n.updated_at,
+                   n.pinned, n.is_shared, n.author, n.shared_by,
+                   COALESCE(GROUP_CONCAT(c.user_id), '') AS collab_ids,
+                   COALESCE(GROUP_CONCAT(c.user_name), '') AS collab_names
             FROM ai_notes n
             LEFT JOIN ai_note_collaborators c ON n.id = c.note_id
             WHERE n.user_id = ? OR c.user_id = ?
             GROUP BY n.id
             ORDER BY n.updated_at DESC
         """, (user_id, user_id)).fetchall()
-        
+
         notes = []
         for r in rows:
-            note_id = r[0]
-            # Fetch collaborators for this note
-            collab_rows = conn.execute("SELECT user_id, user_name FROM ai_note_collaborators WHERE note_id = ?", (note_id,)).fetchall()
-            collaborators = [cr[0] for cr in collab_rows]
-            collaborators_names = [cr[1] for cr in collab_rows]
-            
+            collaborators = [u for u in r['collab_ids'].split(',') if u]
+            collaborators_names = [u for u in r['collab_names'].split(',') if u]
+
             notes.append({
-                "id": r[0],
-                "user_id": r[1],
-                "title": r[2],
-                "content": r[3],
-                "created": int(r[4]) if r[4] else 0,
-                "updated": int(r[5]) if r[5] else 0,
-                "pinned": bool(r[6]),
-                "is_shared": bool(r[7]),
-                "author": r[8],
-                "shared_by": r[9],
+                "id": r['id'],
+                "user_id": r['user_id'],
+                "title": r['title'],
+                "content": r['content'],
+                "created": int(r['created_at']) if r['created_at'] else 0,
+                "updated": int(r['updated_at']) if r['updated_at'] else 0,
+                "pinned": bool(r['pinned']),
+                "is_shared": bool(r['is_shared']),
+                "author": r['author'],
+                "shared_by": r['shared_by'],
                 "collaborators": collaborators,
                 "collaborators_names": collaborators_names
             })

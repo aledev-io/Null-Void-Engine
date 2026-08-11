@@ -210,20 +210,15 @@ def clear_conversation(user_id: str, contact_id: str):
     """Marca todos los mensajes actuales de la conversación como borrados para este usuario."""
     with get_db() as conn:
         if contact_id.startswith('group_'):
-            messages = conn.execute(
-                "SELECT id FROM chat_messages WHERE receiver_id = ?",
-                (contact_id,)
-            ).fetchall()
+            conn.execute("""
+                INSERT OR IGNORE INTO deleted_messages (message_id, user_id)
+                SELECT id, ? FROM chat_messages WHERE receiver_id = ?
+            """, (user_id, contact_id))
         else:
-            messages = conn.execute(f"""
-                SELECT id FROM chat_messages WHERE {_CHAT_PAIR_SQL}
-            """, (user_id, contact_id, contact_id, user_id)).fetchall()
-            
-        for msg in messages:
-            conn.execute(
-                "INSERT OR IGNORE INTO deleted_messages (message_id, user_id) VALUES (?, ?)",
-                (msg['id'], user_id)
-            )
+            conn.execute(f"""
+                INSERT OR IGNORE INTO deleted_messages (message_id, user_id)
+                SELECT id, ? FROM chat_messages WHERE {_CHAT_PAIR_SQL}
+            """, (user_id, user_id, contact_id, contact_id, user_id))
         conn.commit()
 
 
