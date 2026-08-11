@@ -625,6 +625,10 @@ def sync_agent_download():
 
 @cloud_bp.route('/sync-agent/download-client', methods=['GET'])
 def download_client_agent():
+    # El binario del agente solo se sirve por HTTPS: en HTTP un atacante de
+    # red podría sustituirlo (MITM). Además aplica el pin AGENT_CERT_HASH.
+    if not request.is_secure:
+        return jsonify(error="La descarga del agente solo está disponible por HTTPS. Accede con https:// y reintenta."), 403
     try:
         service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
         possible_paths = [

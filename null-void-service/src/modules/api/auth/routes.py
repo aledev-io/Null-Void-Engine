@@ -54,8 +54,10 @@ def api_login():
         "user_id": result["user_id"], "token": token,
     })
     # Cookies seguras: SameSite=Lax, Path='/', HttpOnly para el token.
-    # secure se activa solo cuando el despliegue usa HTTPS.
-    _cookie_secure = bool(getattr(CONFIG, "USE_HTTPS", False))
+    # secure se activa solo cuando la petición llegó realmente por TLS:
+    # si USE_HTTPS=true pero los certs faltan y el engine cae a HTTP,
+    # una cookie Secure no la enviaría el navegador y el login no funciona.
+    _cookie_secure = request.is_secure
     response.set_cookie("token", token, httponly=True, secure=_cookie_secure,
                         samesite='Lax', path='/', max_age=86400)
     # 'user' es legible por JS (la UI la consulta); el token sigue siendo HttpOnly.

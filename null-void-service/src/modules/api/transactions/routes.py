@@ -5,7 +5,7 @@ from .services import get_user_transactions, create_user_transaction, delete_use
 
 @transactions_bp.route('', methods=['GET'])
 def get_transactions():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     uid = sess.get_user_id(token)
     if not uid: 
         return jsonify(error='No autorizado'), 401
@@ -18,7 +18,7 @@ def get_transactions():
 
 @transactions_bp.route('', methods=['POST'])
 def create_transaction():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     uid = sess.get_user_id(token)
     if not uid: 
         return jsonify(error='No autorizado'), 401
@@ -32,7 +32,7 @@ def create_transaction():
 
 @transactions_bp.route('/<tx_id>', methods=['DELETE'])
 def delete_transaction(tx_id):
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     uid = sess.get_user_id(token)
     if not uid: 
         return jsonify(error='No autorizado'), 401

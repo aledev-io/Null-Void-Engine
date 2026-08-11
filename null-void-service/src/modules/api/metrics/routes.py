@@ -10,7 +10,7 @@ limiter.exempt(metrics_bp)
 def _check():
     token = request.cookies.get("token")
     if not token:
-        token = request.args.get("token")
+        token = request.cookies.get("token") or request.headers.get("X-Token")
     if not token:
         token = request.headers.get("X-Token")
     tab_id = request.args.get("tabId") or request.headers.get("X-Tab-Id")

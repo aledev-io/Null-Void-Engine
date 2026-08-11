@@ -10,7 +10,7 @@ export async function fetchNotificationHistory() {
     notifList.innerHTML = `<p style="text-align: center; color: var(--text-muted); font-weight: 500; padding: 40px;">${t('notif_loading')}</p>`;
 
     try {
-        const res = await fetch('/api/system/notifications/history?token=' + window.TOKEN + '&_t=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store' });
         const data = await res.json();
         
         let seenIds = [];
@@ -165,7 +165,7 @@ export async function fetchNotificationHistory() {
 
 export async function deleteNotification(id) {
     try {
-        await fetch('/api/system/notifications/delete?token=' + window.TOKEN, {
+        await fetch('/api/system/notifications/delete', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ id: id })
@@ -178,7 +178,7 @@ export async function clearAllNotifications() {
     const t = window.t_dash || (k => k);
     if (await NV_Confirm(t('notif_confirm_clear'))) {
         try {
-            await fetch('/api/system/notifications/clear?token=' + window.TOKEN, { method: 'POST', headers: window.HEADERS });
+            await fetch('/api/system/notifications/clear', { method: 'POST', headers: window.HEADERS });
             fetchNotificationHistory();
         } catch (e) { console.error("Error clearing notifications:", e); }
     }
@@ -207,7 +207,7 @@ export function markNotificationRead(id) {
 
 export async function markAllNotificationsRead() {
     try {
-        const res = await fetch('/api/system/notifications/history?token=' + window.TOKEN + '&_t=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store' });
         const data = await res.json();
         
         let seenIds = [];

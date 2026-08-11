@@ -6,7 +6,7 @@ let sortAsc = false;
 
 export async function fetchInvoices() {
     try {
-        const res = await fetch('/api/invoices/list?token=' + window.TOKEN, { headers: window.HEADERS });
+        const res = await fetch('/api/invoices/list', { headers: window.HEADERS });
         allInvoices = await res.json();
         populateInvoiceFilters(allInvoices);
         filterInvoices();
@@ -95,7 +95,7 @@ function updateInvoiceStats(data) {
 export async function toggleInvoiceStatus(id, current) {
     const next = current === 'no_pagada' ? 'pagada' : (current === 'pagada' ? 'a_cuenta' : 'no_pagada');
     try {
-        await fetch('/api/invoices/update_status?token=' + window.TOKEN, {
+        await fetch('/api/invoices/update_status', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ id, status: next })
@@ -194,7 +194,7 @@ export async function handleInvoiceFileChange(input) {
         formData.append('file', file);
 
         try {
-            const res = await fetch('/api/invoices/upload?token=' + window.TOKEN, { method: 'POST', body: formData });
+            const res = await fetch('/api/invoices/upload', { method: 'POST', body: formData });
             const data = await res.json();
             if (!data.ok) {
                 hasErrors = true;
@@ -396,7 +396,7 @@ export async function executeDelete() {
     if (selected.length === 0) return;
 
     try {
-        await fetch('/api/invoices/delete?token=' + window.TOKEN, {
+        await fetch('/api/invoices/delete', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ ids: selected })

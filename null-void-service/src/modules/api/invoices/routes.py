@@ -6,7 +6,7 @@ invoices_bp = Blueprint('invoices', __name__, url_prefix='/api/invoices')
 
 
 def _get_uid():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     return sess.get_user_id(token)
 
 
@@ -16,7 +16,7 @@ def get_invoices():
     uid = _get_uid()
     if not uid:
         return jsonify(error='No autorizado'), 401
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     return jsonify(services.get_invoices(uid, token))
 
 
@@ -45,7 +45,7 @@ def upload_invoice():
     if not file.filename.lower().endswith('.pdf'):
         return jsonify(error='Solo se permiten archivos PDF'), 400
 
-    token = request.args.get('token') or request.cookies.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     try:
         services.process_upload(uid, file, token)
     except ValueError as e:
@@ -60,7 +60,7 @@ def delete_invoices():
         return jsonify(error='No autorizado'), 401
 
     data = request.get_json()
-    token = request.args.get('token') or request.cookies.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     services.delete_invoices(uid, data.get('ids', []), token)
     return jsonify(ok=True)
 

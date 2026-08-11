@@ -159,7 +159,7 @@ function drawSparkline(canvasId, data, color) {
 
 async function fetchMetrics() {
     try {
-        const res = await fetch('/api/metrics/live?token=' + window.TOKEN);
+        const res = await fetch('/api/metrics/live');
         if (res.status === 401) {
             stopMetrics();
             location.href = '/';

@@ -1,6 +1,6 @@
 export async function fetchAdminAlerts() {
     try {
-        const res = await fetch('/api/events?token=' + window.TOKEN);
+        const res = await fetch('/api/events');
         let events = await res.json();
         window.allEvents = events;
         window.renderReminders();
@@ -203,7 +203,7 @@ window.toggleEventImportance = async function(id, currentStatus) {
         };
 
         const token = window.TOKEN || '';
-        const url = `/api/events/${id}` + (token ? `?token=${encodeURIComponent(token)}` : '');
+        const url = `/api/events/${id}`;
         await fetch(url, {
             method: 'PUT',
             headers: window.HEADERS || { 'Content-Type': 'application/json', 'X-Token': token },
@@ -223,7 +223,7 @@ window.deleteReminder = async function(id, e) {
 
     try {
         const token = window.TOKEN || '';
-        const url = `/api/events/${id}` + (token ? `?token=${encodeURIComponent(token)}` : '');
+        const url = `/api/events/${id}`;
         const res = await fetch(url, {
             method: 'DELETE',
             headers: window.HEADERS || { 'Content-Type': 'application/json', 'X-Token': token }

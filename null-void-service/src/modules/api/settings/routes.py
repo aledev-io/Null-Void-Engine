@@ -5,7 +5,7 @@ from .services import load_settings, save_settings_internal
 
 @settings_bp.route("/api/settings", methods=["GET"])
 def get_settings():
-    token = request.args.get("token") or request.cookies.get("token")
+    token = request.cookies.get("token") or request.headers.get("X-Token")
     uid = session.get_user_id(token)
     if not uid: 
         return jsonify(error="No autorizado"), 401
@@ -17,7 +17,7 @@ def get_settings():
 
 @settings_bp.route("/api/settings", methods=["POST"])
 def save_settings():
-    token = request.args.get("token") or request.cookies.get("token")
+    token = request.cookies.get("token") or request.headers.get("X-Token")
     uid = session.get_user_id(token)
     if not uid: 
         return jsonify(error="No autorizado"), 401

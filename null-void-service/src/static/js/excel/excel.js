@@ -404,7 +404,7 @@ function handleGridWheel(e) {
 
 export async function fetchSpreadsheet() {
     try {
-        const res = await fetch('/api/spreadsheet?token=' + window.TOKEN);
+        const res = await fetch('/api/spreadsheet');
         spreadsheetData = await res.json();
         historyStack = []; historyIndex = -1;
         selectionStart = selectionEnd = null;
@@ -417,7 +417,7 @@ async function saveSpreadsheet() {
     const btn = document.querySelector('button[onclick="saveSpreadsheet()"]');
     if (btn) btn.textContent = 'Guardando...';
     try {
-        await fetch('/api/spreadsheet?token=' + window.TOKEN, {
+        await fetch('/api/spreadsheet', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ name: 'Principal', content: spreadsheetData })
@@ -643,7 +643,7 @@ export async function runPythonScript() {
     btn.disabled = true;
 
     try {
-        const res = await fetch('/api/spreadsheet/run-python?token=' + window.TOKEN, {
+        const res = await fetch('/api/spreadsheet/run-python', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ code: code, data: spreadsheetData })

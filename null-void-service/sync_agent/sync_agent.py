@@ -35,6 +35,16 @@ def _db_store_link_token(token, original_token, username, expires, target_device
         conn.commit()
 
 
+def _db_get_device_for_token(token):
+    """Fila de cloud_devices del token, o None si no es un token de dispositivo."""
+    from src.core.database import get_db
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT d.id, d.name, d.user_id FROM cloud_device_tokens t "
+            "JOIN cloud_devices d ON t.device_id = d.id WHERE t.token = ?",
+            (token,)).fetchone()
+
+
 def _db_get_link_token(token, consume=False):
     """Obtiene y opcionalmente consume (elimina) un token de enlace de la DB."""
     from src.core.database import get_db
@@ -96,9 +106,6 @@ def get_agent_token():
     token = request.headers.get('Authorization')
     if token and token.startswith('Bearer '):
         return token.split(' ')[1]
-    q_token = request.args.get('token')
-    if q_token:
-        return q_token
     from src.modules.api.cloud.services import get_token as _get_flask_token
     return _get_flask_token()
 
@@ -117,14 +124,13 @@ def _get_user_root_by_username(username):
 
 
 def handle_ping(token, username, data):
-    device = data.get('device', 'Mi Dispositivo').strip()
+    dev = _db_get_device_for_token(token)
+    if not dev:
+        return jsonify(error="Acceso denegado: token de dispositivo inválido"), 403
+    safe_device = dev['name']
+    device_id = dev['id']
     os_name = data.get('os', 'Unknown')
     ip = request.remote_addr
-
-    try:
-        safe_device = _sanitize_device_name(device)
-    except ValueError:
-        return jsonify(error="Acceso denegado"), 403
 
     user_root = _get_user_root_by_username(username)
     if not user_root:
@@ -141,18 +147,9 @@ def handle_ping(token, username, data):
 
     from src.core.database import get_db
     with get_db() as conn:
-        user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (username,)).fetchone()
-        if user_row:
-            uid = user_row['user_id']
-            dev = conn.execute("SELECT id FROM cloud_devices WHERE user_id = ? AND name = ?", (uid, safe_device)).fetchone()
-            if dev:
-                conn.execute("UPDATE cloud_devices SET last_seen = ?, os = ?, ip_address = ?, version = ? WHERE id = ?", (time.time(), os_name, ip, client_ver, dev['id']))
-            else:
-                import uuid
-                new_id = str(uuid.uuid4())
-                conn.execute("INSERT INTO cloud_devices (id, user_id, name, os, last_seen, ip_address, version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (new_id, uid, safe_device, os_name, time.time(), ip, client_ver, time.time()))
-            conn.commit()
+        conn.execute("UPDATE cloud_devices SET last_seen = ?, os = ?, ip_address = ?, version = ? WHERE id = ?",
+                     (time.time(), os_name, ip, client_ver, device_id))
+        conn.commit()
 
     return jsonify(
         status="ok",
@@ -163,30 +160,24 @@ def handle_ping(token, username, data):
 
 
 def handle_disconnect(token, username, data):
-    device = data.get('device', 'Mi Dispositivo').strip()
-    try:
-        safe_device = _sanitize_device_name(device)
-    except ValueError:
-        return jsonify(error="Acceso denegado"), 403
+    dev = _db_get_device_for_token(token)
+    if not dev:
+        return jsonify(error="Acceso denegado: token de dispositivo inválido"), 403
 
     from src.core.database import get_db
     with get_db() as conn:
-        user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (username,)).fetchone()
-        if user_row:
-            uid = user_row['user_id']
-            conn.execute("UPDATE cloud_devices SET last_seen = 0 WHERE user_id = ? AND name = ?", (uid, safe_device))
-            conn.commit()
+        conn.execute("UPDATE cloud_devices SET last_seen = 0 WHERE id = ?", (dev['id'],))
+        conn.commit()
 
     return jsonify(status="disconnected")
 
 
 def handle_changes(token, username, data):
-    device = data.get('device', 'Mi Dispositivo').strip()
+    dev = _db_get_device_for_token(token)
+    if not dev:
+        return jsonify(error="Acceso denegado: token de dispositivo inválido"), 403
+    safe_device = dev['name']
     os_name = data.get('os', 'Unknown')
-    try:
-        safe_device = _sanitize_device_name(device)
-    except ValueError:
-        return jsonify(error="Acceso denegado"), 403
 
     user_root = _get_user_root_by_username(username)
     if not user_root:
@@ -221,10 +212,10 @@ def handle_changes(token, username, data):
 
 
 def handle_download(token, username):
-    try:
-        safe_device = _sanitize_device_name(request.args.get('device', ''))
-    except ValueError:
-        return jsonify(error="Acceso denegado"), 403
+    dev = _db_get_device_for_token(token)
+    if not dev:
+        return jsonify(error="Acceso denegado: token de dispositivo inválido"), 403
+    safe_device = dev['name']
     rel_path = request.args.get('path', '').replace('\\', '/').lstrip('/')
 
     user_root = _get_user_root_by_username(username)

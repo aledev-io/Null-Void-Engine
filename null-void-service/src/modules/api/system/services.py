@@ -23,8 +23,7 @@ def _safe_filename(basename):
 
 
 def _check_token():
-    token = (request.cookies.get('token') or request.headers.get('X-Token')
-             or request.args.get('token'))
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     user = sess.get_user(token)
     user_id = sess.get_user_id(token)
     return token, user, user_id

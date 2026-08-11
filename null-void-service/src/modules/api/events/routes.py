@@ -4,8 +4,7 @@ from . import events_bp
 from .services import get_user_events, create_user_event, update_user_event, delete_user_event
 
 def _get_token():
-    return request.cookies.get('token') or request.headers.get('X-Token') or request.args.get('token')
-
+    return request.cookies.get('token') or request.headers.get('X-Token')
 @events_bp.route('', methods=['GET'])
 def get_events():
     token = _get_token()

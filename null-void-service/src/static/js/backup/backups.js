@@ -18,7 +18,7 @@ if (!window.__nvFetchCredentialsPatched) {
 
 export async function loadBackupConfig() {
     try {
-        const res = await fetch('/api/backup/automation?token=' + TOKEN);
+        const res = await fetch('/api/backup/automation');
         const data = await res.json();
         if (!data.ok) return;
         _bkpAutoAutomations = Array.isArray(data.automations)
@@ -169,7 +169,7 @@ export async function toggleBkpAuto(id) {
     const entry = _bkpAutoAutomations.find(x => x.id === id);
     if (!entry) return;
     try {
-        const res = await fetch('/api/backup/automation?token=' + TOKEN, {
+        const res = await fetch('/api/backup/automation', {
             method: 'POST',
             headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
             body: JSON.stringify(Object.assign({}, entry, { enabled: !entry.enabled }))
@@ -189,7 +189,7 @@ export async function deleteBkpAuto(id) {
     if (!entry) return;
     if (!await NV_Confirm(_t('bkp_delete_confirm').replace('{0}', entry.name || '?'))) return;
     try {
-        const res = await fetch('/api/backup/automation/' + encodeURIComponent(id) + '?token=' + TOKEN, {
+        const res = await fetch('/api/backup/automation/' + encodeURIComponent(id), {
             method: 'DELETE',
             headers: HEADERS
         });
@@ -312,7 +312,7 @@ export function _getSelectedBackupType() {
 
 export async function _loadBkpMetaInfo() {
     try {
-        const res = await fetch('/api/backup/meta?token=' + TOKEN);
+        const res = await fetch('/api/backup/meta');
         const data = await res.json();
         if (!data.ok || !data.meta) return;
         const fmt = ts => ts ? new Date(ts).toLocaleString() : '—';
@@ -1244,7 +1244,7 @@ export async function toggleBkpDestMode() {
 
 export async function _loadCloudFoldersForBackup() {
     try {
-        const res = await fetch('/api/cloud/folders?view=drive&token=' + TOKEN);
+        const res = await fetch('/api/cloud/folders?view=drive');
         const data = await res.json();
         if (data.tree) {
             _bkpFolderTree = data.tree;
@@ -1476,7 +1476,7 @@ export async function doBackup() {
     if (pctTxt) pctTxt.innerText = _t('bkp_scanning');
     try {
         const destMode = document.querySelector('input[name="bkp_dest_mode"]:checked').value;
-        const res = await fetch('/api/backup/cloud?token=' + TOKEN, {
+        const res = await fetch('/api/backup/cloud', {
             method: 'POST',
             headers: HEADERS,
             body: JSON.stringify({
@@ -1610,7 +1610,7 @@ export async function saveBkpAutomation() {
         const cloudPath = (document.getElementById('bkp-cloud-path') || {}).value || '';
         const backupType = _getSelectedBackupType();
         const id = (_bkpAutoConfig && _bkpAutoConfig.id) ? String(_bkpAutoConfig.id) : '';
-        const res = await fetch('/api/backup/automation?token=' + TOKEN, {
+        const res = await fetch('/api/backup/automation', {
             method: 'POST',
             headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({ id, name: String(name).trim(), enabled, frequency, days, time, copies_limit: copiesLimit, backup_type: backupType, dest_mode: destMode, cloud_path: cloudPath, source_paths: _bkpAutoSourcePaths, exclude_exts: _bkpAutoExcludeExts, exclude_paths: _bkpAutoExcludePaths })

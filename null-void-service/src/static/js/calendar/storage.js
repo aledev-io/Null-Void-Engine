@@ -54,25 +54,24 @@ function _diffEvents(previous, current) {
 async function _syncToAPI(previous, current) {
   const { added, updated, deleted } = _diffEvents(previous, current);
   const token = _getToken();
-  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
 
   const requests = [
     ...added.map(ev =>
-      fetch(`${API_BASE}${tokenQuery}`, {
+      fetch(`${API_BASE}`, {
         method: 'POST',
         headers: _apiHeaders(),
         body: JSON.stringify(ev),
       })
     ),
     ...updated.map(ev =>
-      fetch(`${API_BASE}/${ev.id}${tokenQuery}`, {
+      fetch(`${API_BASE}/${ev.id}`, {
         method: 'PUT',
         headers: _apiHeaders(),
         body: JSON.stringify(ev),
       })
     ),
     ...deleted.map(ev =>
-      fetch(`${API_BASE}/${ev.id}${tokenQuery}`, { method: 'DELETE', headers: _apiHeaders() })
+      fetch(`${API_BASE}/${ev.id}`, { method: 'DELETE', headers: _apiHeaders() })
     ),
   ];
 
@@ -134,8 +133,7 @@ export const Storage = {
   async syncFromAPI() {
     try {
       const token = _getToken();
-      const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-      const res = await fetch(`${API_BASE}${tokenQuery}`, { headers: _apiHeaders() });
+          const res = await fetch(`${API_BASE}`, { headers: _apiHeaders() });
       if (!res.ok) return;
       const events = await res.json();
       const incoming = JSON.stringify(events);

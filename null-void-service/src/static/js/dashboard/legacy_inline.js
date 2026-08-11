@@ -257,7 +257,7 @@ window.addEventListener('storage', function(e) {
 
     async function updateNotificationBadge() {
         try {
-            const res = await fetch('/api/system/notifications/history?token=' + window.TOKEN + '&_t=' + Date.now(), { cache: 'no-store' });
+            const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store' });
             if (!res.ok) return;
             const data = await res.json();
             const badge = document.getElementById('notif-badge-count');

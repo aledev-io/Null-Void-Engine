@@ -240,7 +240,7 @@ def get_avatar(identifier):
 @system_bp.route('/notifications/history', methods=['GET'])
 @limiter.exempt
 def get_notifications_history():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     result = services.get_notifications_history(token)
     if result is None:
         return jsonify(error="No autenticado"), 401
@@ -249,8 +249,7 @@ def get_notifications_history():
 
 @system_bp.route('/notifications/delete', methods=['POST'])
 def delete_notification():
-    token = (request.cookies.get('token') or request.args.get('token')
-             or request.headers.get('X-Token'))
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     notif_id = request.get_json().get('id')
     result = services.delete_notification(token, notif_id)
     if result is None:
@@ -262,8 +261,7 @@ def delete_notification():
 
 @system_bp.route('/notifications/clear', methods=['POST'])
 def clear_notifications():
-    token = (request.cookies.get('token') or request.args.get('token')
-             or request.headers.get('X-Token'))
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     result = services.clear_notifications(token)
     if result is None:
         return jsonify(error="No autenticado"), 401
@@ -330,7 +328,7 @@ def shutdown():
 
 @system_bp.route('/status', methods=['GET'])
 def status():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     if not sess.get_user(token):
         return jsonify(error="No autorizado"), 401
     return jsonify(services.system_status())

@@ -6,7 +6,7 @@ from .repository import SpreadsheetRepository
 spreadsheet_bp = Blueprint('spreadsheet', __name__, url_prefix='/api/spreadsheet')
 
 def _get_uid():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     return sess.get_user_id(token)
 
 @spreadsheet_bp.route('', methods=['GET'])
@@ -64,7 +64,7 @@ def _validate_sandbox_code(code: str) -> None:
 
 @spreadsheet_bp.route('/run-python', methods=['POST'])
 def run_python():
-    token = request.cookies.get('token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     user = sess.get_user(token)
     if not user:
         return jsonify(error='No autorizado'), 401

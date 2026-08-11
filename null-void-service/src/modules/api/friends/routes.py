@@ -9,7 +9,7 @@ limiter.exempt(friends_bp)
 
 
 def _get_user():
-    token = request.cookies.get('token') or request.headers.get('X-Token') or request.args.get('token')
+    token = request.cookies.get('token') or request.headers.get('X-Token')
     user = sess.get_user(token)
     user_id = sess.get_user_id(token)
     return user, user_id

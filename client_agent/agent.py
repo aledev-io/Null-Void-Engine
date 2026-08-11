@@ -126,21 +126,16 @@ def _pinned_request(method, url, cert_hash, verify, **kw):
     return res
 
 
-def perform_registration(test_urls, token_or_user, device_name=None, local_dir=None, password=None):
+def perform_registration(test_urls, temp_token, device_name=None, local_dir=None):
     """Realiza la solicitud HTTP de registro al servidor Nube y guarda el config.json."""
     if not device_name:
         device_name = get_device_name()
 
     payload = {
         "device": device_name,
-        "os": platform.system()
+        "os": platform.system(),
+        "temp_token": temp_token
     }
-
-    if password:
-        payload["username"] = token_or_user
-        payload["password"] = password
-    else:
-        payload["temp_token"] = token_or_user
     
     last_err = "No se pudo conectar con los servidores."
     expected_cert_hash = _AGENT_ENV.get('cert_hash')
@@ -299,6 +294,10 @@ class SyncClient:
         self.observer = None
         self.stop_event = threading.Event()
 
+        # Subidas fallidas pendientes de reintento: rel_path -> [proximo_intento, reintentos]
+        self.failed_uploads = {}
+        self.uploading = set()
+
         # --- Estado en vivo para la interfaz ---
         self.connected = False
         self.paused = True
@@ -412,8 +411,12 @@ class SyncClient:
         return False
 
     def upload_file(self, local_path):
+        rel_path = None
         try:
             rel_path = os.path.relpath(local_path, self.local_dir).replace("\\", "/")
+            if rel_path in self.uploading:
+                return True  # ya hay una subida en vuelo de este archivo
+            self.uploading.add(rel_path)
             server_subpath = self.device_name
             sub_dir = os.path.dirname(rel_path)
             if sub_dir: server_subpath += "/" + sub_dir
@@ -431,14 +434,25 @@ class SyncClient:
                 print(f"[Null-Void Sync] Successfully uploaded: {rel_path}")
                 log(f"¡Archivo subido con éxito: {rel_path}!")
                 self._bump_stat("uploaded")
+                self.failed_uploads.pop(rel_path, None)
             else:
-                print(f"[Null-Void Sync] Failed to upload {rel_path}: HTTP {res.status_code}")
-                log(f"Error al subir {rel_path}: HTTP {res.status_code}")
+                try:
+                    detail = res.json().get("error", res.text)
+                except Exception:
+                    detail = res.text
+                print(f"[Null-Void Sync] Failed to upload {rel_path}: HTTP {res.status_code} - {detail}")
+                log(f"Error al subir {rel_path}: HTTP {res.status_code} - {detail}")
+                self.failed_uploads.setdefault(rel_path, [time.time() + 30, 0])
             return success
         except Exception as e:
             print(f"[Null-Void Sync] Error uploading {local_path}: {str(e)}")
             log(f"Excepción al subir {local_path}: {str(e)}")
+            if rel_path:
+                self.failed_uploads.setdefault(rel_path, [time.time() + 30, 0])
             return False
+        finally:
+            if rel_path:
+                self.uploading.discard(rel_path)
 
     def delete_file(self, rel_path):
         server_subpath = self.device_name
@@ -623,6 +637,8 @@ class SyncClient:
                     self.server_known_files = srv_files
                     self.last_sync_time = time.time()
                 
+                self._retry_failed_uploads()
+                
                 time.sleep(3)
         except KeyboardInterrupt:
             self.stop_event.set()
@@ -634,6 +650,23 @@ class SyncClient:
         if self.observer: self.observer.stop()
         if self.observer: self.observer.join()
         self.worker_thread.join(timeout=2)
+
+    def _retry_failed_uploads(self):
+        """ Reintenta subidas fallidas con backoff (30s, 60s, 120s... tope 8 min). """
+        now = time.time()
+        for rel_path in list(self.failed_uploads.keys()):
+            entry = self.failed_uploads[rel_path]
+            if now < entry[0]:
+                continue
+            local_path = os.path.join(self.local_dir, rel_path.replace("/", os.sep))
+            if not os.path.exists(local_path) or os.path.isdir(local_path):
+                del self.failed_uploads[rel_path]
+                continue
+            if self.upload_file(local_path):
+                del self.failed_uploads[rel_path]
+            else:
+                entry[1] += 1
+                entry[0] = now + min(30 * (2 ** min(entry[1] - 1, 4)), 480)
 
 
 class SyncHandler(FileSystemEventHandler):
