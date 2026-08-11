@@ -179,6 +179,72 @@ def upload_abort(upload_id):
     return jsonify(ok=True)
 
 
+@cloud_bp.route('/versions', methods=['GET'])
+@limiter.limit("300 per minute", key_func=get_limiter_key)
+@login_required
+def list_versions():
+    view = request.args.get('view', 'drive')
+    subpath = request.args.get('path', '')
+    name = request.args.get('name', '')
+    versions, err = services.list_versions(view, subpath, name, request.user_token)
+    if versions is None:
+        return jsonify(error=err), 403
+    return jsonify(versions=versions)
+
+
+@cloud_bp.route('/versions/download', methods=['GET'])
+@limiter.limit("300 per minute", key_func=get_limiter_key)
+@login_required
+def download_version():
+    view = request.args.get('view', 'drive')
+    subpath = request.args.get('path', '')
+    name = request.args.get('name', '')
+    vid = request.args.get('v', '')
+    if not services._validate_version_id(vid):
+        return jsonify(error="Versión inválida"), 400
+    if not services._check_agent_scope(view, subpath, request.user_token, name):
+        return jsonify(error="Acceso denegado"), 403
+    user_root = services.get_user_root(request.user_token)
+    if not user_root:
+        return jsonify(error="Acceso denegado"), 403
+    key_dir = services._versions_dir(user_root, view, subpath.strip('/'), name)
+    version_path = os.path.join(key_dir, vid)
+    if not os.path.isfile(version_path):
+        return jsonify(error="Versión no encontrada"), 404
+    stem, ext = os.path.splitext(name)
+    return send_file(version_path, as_attachment=True, download_name=f"{stem}_v{vid[1:].split('_')[0]}{ext}")
+
+
+@cloud_bp.route('/versions/restore', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
+@login_required
+def restore_version():
+    data = request.get_json(silent=True) or {}
+    view = data.get('view', 'drive')
+    subpath = data.get('path', '')
+    name = data.get('name', '')
+    vid = data.get('v', '')
+    ok, err = services.restore_version(view, subpath, name, vid, request.user_token)
+    if ok is None:
+        return jsonify(error=err or "No se pudo restaurar"), 400
+    return jsonify(ok=True)
+
+
+@cloud_bp.route('/versions/delete', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
+@login_required
+def delete_version():
+    data = request.get_json(silent=True) or {}
+    view = data.get('view', 'drive')
+    subpath = data.get('path', '')
+    name = data.get('name', '')
+    vid = data.get('v', '')
+    ok, err = services.delete_version(view, subpath, name, vid, request.user_token)
+    if ok is None:
+        return jsonify(error=err or "No se pudo eliminar la versión"), 400
+    return jsonify(ok=True)
+
+
 @cloud_bp.route('/mkdir', methods=['POST'])
 @login_required
 def make_dir():
