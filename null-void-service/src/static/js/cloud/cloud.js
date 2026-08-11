@@ -3637,7 +3637,7 @@ async function openLinkDeviceModal() {
                     }
                 }
             } catch (err) { }
-        }, 2500);
+        }, 5000);
     }
 }
 
