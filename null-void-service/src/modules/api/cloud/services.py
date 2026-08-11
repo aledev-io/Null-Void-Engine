@@ -250,7 +250,7 @@ def get_token():
         auth = request.headers.get('Authorization')
         if auth and auth.startswith('Bearer '):
             token = auth.split(' ')[1]
-    return token or request.args.get('token')
+    return token or request.headers.get('X-Token')
 
 
 def _resolve_shared_or_recent_path(current_uid, owner_id, name, subpath, view):
@@ -344,7 +344,11 @@ def get_user_quota(token=None):
     username = sess.get_user(token) if token else None
     if not username:
         return 10
-    return repository.get_user_quota_from_db(username)
+    quota = repository.get_user_quota_from_db(username)
+    # Un 0 legado en la BD se trata como "sin asignar" para no bloquear subidas.
+    if quota < 1:
+        return 10
+    return quota
 
 
 def get_dir_size(path):
@@ -372,6 +376,37 @@ def get_dir_size(path):
         user_size_cache[user_id] = {"value": total, "time": now}
         
     return total
+
+
+def _path_size(path):
+    """Tamaño real de un archivo o carpeta (sin caché)."""
+    if not os.path.exists(path):
+        return 0
+    if os.path.isfile(path):
+        return os.path.getsize(path)
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if not os.path.islink(fp):
+                try:
+                    total += os.path.getsize(fp)
+                except OSError:
+                    pass
+    return total
+
+
+def bump_size_cache(user_id, delta):
+    """Ajusta el tamaño cacheado del usuario tras subir/borrar, refrescando su TTL.
+
+    Evita que subidas en ráfaga se cuelen por encima de la cuota dentro de la
+    ventana del caché (10s) y que borrados no liberen espacio hasta expirar.
+    """
+    with cache_lock:
+        cache = user_size_cache.get(user_id)
+        if cache:
+            cache["value"] = max(0, cache["value"] + delta)
+            cache["time"] = time.time()
 
 
 def get_folder_size_fast(folder_path):
@@ -549,7 +584,41 @@ def list_recent(token):
     return unique[:20]
 
 
+def resolve_agent_scope(token):
+    """Si el token es de un agente (cloud_device_tokens), devuelve (device_name, user_id).
+    Si es de sesión web (o inválido), devuelve (None, None)."""
+    if not token:
+        return None, None
+    from src.core.database import get_db
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT d.name, d.user_id FROM cloud_device_tokens t "
+                "JOIN cloud_devices d ON t.device_id = d.id WHERE t.token = ?",
+                (token,)).fetchone()
+        if row:
+            return row['name'], row['user_id']
+    except Exception:
+        pass
+    return None, None
+
+
+def _check_agent_scope(view, subpath, token, name=''):
+    """Un token de dispositivo solo puede tocar SU propia carpeta (.computers/<device>)."""
+    dev_name, _ = resolve_agent_scope(token)
+    if not dev_name:
+        return True
+    if view != 'computers':
+        return False
+    parts = [seg for seg in str(subpath or '').strip('/').split('/') if seg]
+    if parts:
+        return parts[0] == dev_name
+    return name == dev_name
+
+
 def list_files(view, subpath, token):
+    if not _check_agent_scope(view, subpath, token):
+        return None, None
     user_root = get_view_root(view, token)
     if not user_root:
         return None, None
@@ -603,9 +672,7 @@ def list_files(view, subpath, token):
             for item in starred_data:
                 if item.get('name') == name and item.get('path') == subpath:
                     item_owner = item.get('owner_id')
-                    if (not owner_id and not item_owner) or \
-                       (str(owner_id) == str(item_owner)) or \
-                       (owner_id and str(owner_id) == str(current_uid) and not item_owner):
+                    if (not item_owner) or (str(current_uid) == str(item_owner)):
                         is_starred = True
                         break
 
@@ -637,9 +704,13 @@ def list_trash(token, user_root):
             fp = safe_join(trash_path, item['id'])
             if os.path.exists(fp):
                 info = os.stat(fp)
+                origin = item.get('origin', '')
+                if not origin and item.get('view') == 'computers' and not item.get('original_path'):
+                    origin = item['name'].replace(' 💻', '')
                 files.append({
                     "id": item['id'], "name": item['name'],
                     "original_path": item['original_path'],
+                    "origin": origin,
                     "is_dir": os.path.isdir(fp), "size": info.st_size,
                     "mtime": item['deleted_at'], "ext": os.path.splitext(item['name'])[1].lower(),
                     "owner": "Papelera", "view": item.get('view', 'drive'), "trash": True,
@@ -651,6 +722,8 @@ def list_trash(token, user_root):
 
 
 def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
+    if not _check_agent_scope(view, subpath, token):
+        return None, None
     user_root = get_view_root(view, token)
     if not user_root:
         return None, None
@@ -692,7 +765,15 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
         final_file_path = _unique_path(final_file_path)
     final_filename = os.path.basename(final_file_path)
 
-    if current_usage + file_size > limit_bytes:
+    # Overwrite (agente): el archivo existente ya cuenta en current_usage;
+    # al reemplazarlo no debe sumarse dos veces.
+    existing_size = 0
+    if overwrite_existing and os.path.exists(final_file_path):
+        try:
+            existing_size = os.path.getsize(final_file_path)
+        except OSError:
+            existing_size = 0
+    if current_usage - existing_size + file_size > limit_bytes:
         return False, "Espacio insuficiente en Null-Void Cloud"
 
     pool_dir = os.path.join(BASE_CLOUD_ROOT, '.pool')
@@ -726,6 +807,10 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
 
     os.link(pool_file_path, final_file_path)
 
+    # Refrescar el caché: la próxima subida ya ve el espacio consumido.
+    user_id = os.path.basename(get_user_root(token))
+    bump_size_cache(user_id, file_size - existing_size)
+
     current_user = sess.get_user(token)
     current_uid = sess.get_user_id(token)
     add_activity(current_user, current_uid, "act_subiste", final_filename, subpath)
@@ -745,6 +830,8 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
 
 
 def make_dir(view, name, subpath, token):
+    if not _check_agent_scope(view, subpath, token, name):
+        return None
     user_root = get_view_root(view, token)
     if not user_root:
         return None
@@ -774,6 +861,8 @@ def make_dir(view, name, subpath, token):
 
 
 def delete_item(view, name, subpath, trash_id, token):
+    if not _check_agent_scope(view, subpath, token, name):
+        return None
     user_root = get_view_root(view, token)
     if not user_root:
         return None
@@ -810,7 +899,7 @@ def delete_item(view, name, subpath, trash_id, token):
             try:
                 shutil.move(target_path, os.path.join(trash_base, new_trash_id))
                 trash_data = _load_json(base_root, '.trash.json')
-                trash_data.append({"id": new_trash_id, "name": os.path.basename(target_path), "original_path": "", "view": "computers", "deleted_at": time.time()})
+                trash_data.append({"id": new_trash_id, "name": os.path.basename(target_path), "original_path": "", "view": "computers", "origin": device_name or os.path.basename(target_path), "deleted_at": time.time()})
                 _save_json(base_root, '.trash.json', trash_data)
             except Exception:
                 # Si el movimiento falla, no perdemos el dispositivo: la fila ya
@@ -898,9 +987,14 @@ def delete_permanent(trash_id, token):
 
     if os.path.exists(trash_path):
         if os.path.isdir(trash_path):
+            freed = _path_size(trash_path)
             shutil.rmtree(trash_path)
         else:
+            freed = os.path.getsize(trash_path)
             os.remove(trash_path)
+    else:
+        freed = 0
+    bump_size_cache(current_uid, -freed)
 
     trash_data = _load_json(base_root, '.trash.json')
     trash_data = [item for item in trash_data if item['id'] != trash_id]
@@ -943,14 +1037,21 @@ def empty_trash(token):
     base_root = get_user_root(token)
     trash_path = os.path.join(base_root, '.trash')
     if os.path.exists(trash_path):
+        freed = _path_size(trash_path)
         shutil.rmtree(trash_path)
+    else:
+        freed = 0
     os.makedirs(trash_path, exist_ok=True)
     _save_json(base_root, '.trash.json', [])
+    current_uid = sess.get_user_id(token)
+    bump_size_cache(current_uid, -freed)
     clean_pool_async()
     return True
 
 
 def rename_item(view, old_name, new_name, subpath, token):
+    if not _check_agent_scope(view, subpath, token, old_name):
+        return None
     user_root = get_view_root(view, token)
     if not user_root:
         return None
@@ -991,6 +1092,8 @@ def rename_item(view, old_name, new_name, subpath, token):
 
 
 def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=None):
+    if not (_check_agent_scope(view, old_subpath, token, name) and _check_agent_scope(view, new_subpath, token)):
+        return None
     current_uid = sess.get_user_id(token)
     if not current_uid:
         return None
@@ -1043,6 +1146,8 @@ def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=No
 
 
 def move_item(view, name, old_subpath, new_subpath, token):
+    if not (_check_agent_scope(view, old_subpath, token, name) and _check_agent_scope(view, new_subpath, token)):
+        return None
     user_root = get_view_root(view, token)
     if not user_root:
         return None
@@ -2236,6 +2341,8 @@ def list_shared_by_me(token):
 
 
 def zip_item(view, name, subpath, token, zip_name=None):
+    if not _check_agent_scope(view, subpath, token, name):
+        return None
     user_root = get_view_root(view, token)
     if not user_root:
         return None
@@ -2350,6 +2457,8 @@ def _zip_stream_write(zf, abs_file, arc_name):
 
 
 def unzip_item(view, name, subpath, token):
+    if not _check_agent_scope(view, subpath, token, name):
+        return None
     user_root = get_view_root(view, token)
     if not user_root:
         return None

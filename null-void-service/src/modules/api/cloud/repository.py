@@ -14,9 +14,11 @@ def get_user_quota_from_db(username):
 
 
 def update_user_quota(username, limit_gb):
+    # Impedir asignar 0 (o negativos): bloquearía todas las subidas del usuario.
+    limit_gb = max(1, int(limit_gb))
     with get_db() as conn:
         conn.execute(
-            "UPDATE users SET quota_gb = ? WHERE username = ?", (int(limit_gb), username)
+            "UPDATE users SET quota_gb = ? WHERE username = ?", (limit_gb, username)
         )
         conn.commit()
 
@@ -71,18 +73,13 @@ def is_shared_with_user(owner_id, shared_with_uid, file_name):
 
 
 def share_file_with_users(owner_id, name, path, view, shared_with_uids):
+    # La unicidad se garantiza en el esquema (uq_cloud_shared): un usuario solo
+    # puede compartir el mismo archivo una vez; los reintentos se ignoran.
     with get_db() as conn:
         for uid in shared_with_uids:
-            # Check if already shared
-            exists = conn.execute(
-                "SELECT 1 FROM cloud_shared WHERE owner_id = ? AND shared_with = ? AND file_name = ? AND file_path = ? AND view = ?",
-                (owner_id, uid, name, path, view)
-            ).fetchone()
-            if exists:
-                continue
             share_id = str(uuid.uuid4())
             conn.execute("""
-                INSERT INTO cloud_shared (id, owner_id, shared_with, file_name, file_path, view, created_at)
+                INSERT OR IGNORE INTO cloud_shared (id, owner_id, shared_with, file_name, file_path, view, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (share_id, owner_id, uid, name, path, view, time.time()))
         conn.commit()
@@ -121,23 +118,35 @@ def get_file_shares(owner_id, file_name, file_path):
 
 
 def get_shares_in_path(owner_id, file_path):
-    inherited = []
-    if file_path:
-        parts = file_path.strip('/').split('/')
-        with get_db() as conn:
-            for i in range(len(parts)):
-                f_path = '/'.join(parts[:i])
-                f_name = parts[i]
-                rows = conn.execute("""
-                    SELECT shared_with FROM cloud_shared
-                    WHERE owner_id = ? AND file_path = ? AND file_name = ?
-                """, (owner_id, f_path, f_name)).fetchall()
-                for r in rows:
-                    user_obj = {'shared_with': r['shared_with']}
-                    if user_obj not in inherited:
-                        inherited.append(user_obj)
+    """Comparticiones del propietario en la ruta dada.
 
+    Devuelve (result, inherited):
+      - inherited: usuarios con los que se compartió cualquier carpeta
+        antecesora de file_path (incluida la propia carpeta).
+      - result:    dict file_name -> [usuarios compartidos] para las
+        comparticiones directas DENTRO de file_path (más las heredadas).
+    Una sola consulta para los antecesores (sin N+1 por nivel de ruta): un
+    share de la carpeta 'a/b' con file_name 'c' representa la ruta 'a/b/c',
+    que es antecesora de T si es igual a T o si T empieza por 'a/b/c/'."""
+    inherited = []
+    target = (file_path or '').strip('/')
     with get_db() as conn:
+        if target:
+            rows = conn.execute("""
+                WITH share_paths AS (
+                    SELECT shared_with,
+                           file_path || CASE WHEN file_path = '' THEN '' ELSE '/' END || file_name AS fullpath
+                    FROM cloud_shared
+                    WHERE owner_id = ?
+                )
+                SELECT DISTINCT shared_with FROM share_paths
+                WHERE fullpath = ?
+                   OR (length(?) > length(fullpath)
+                       AND substr(?, 1, length(fullpath) + 1) = fullpath || '/')
+                ORDER BY length(fullpath) ASC
+            """, (owner_id, target, target, target)).fetchall()
+            inherited = [{'shared_with': r['shared_with']} for r in rows]
+
         rows = conn.execute("""
             SELECT file_name, shared_with FROM cloud_shared
             WHERE owner_id = ? AND file_path = ?

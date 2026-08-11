@@ -410,21 +410,79 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
         linkBtn.style.display = currentCloudView === 'trash' ? 'none' : 'flex';
     }
 
+    // Rutas acumuladas de cada nivel (para navegar a cualquier nivel previo)
+    const accumulated = [];
+    let acc = '';
+    for (let i = 0; i < parts.length; i++) {
+        acc += (i === 0 ? '' : '/') + parts[i];
+        accumulated.push(acc);
+    }
+
+    // Colapso de ruta tipo Google Drive: si la ruta supera MAX_FLAT
+    // niveles, las carpetas intermedias se ocultan bajo el botón "…" con un
+    // menú desplegable para saltar a cualquier nivel previo.
+    const MAX_FLAT = 4;
+    const FIRST_VISIBLE = 2;
+    const LAST_VISIBLE = 2;
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const firstVisible = isMobile ? 0 : FIRST_VISIBLE;
+    const lastVisible = isMobile ? 2 : LAST_VISIBLE;
+
+    const needsCollapse = parts.length > MAX_FLAT;
+    const visibleSegs = [];
+    const hiddenSegs = [];
+
+    if (needsCollapse) {
+        for (let i = 0; i < firstVisible; i++) visibleSegs.push({ name: parts[i], index: i, path: accumulated[i] });
+        for (let i = parts.length - lastVisible; i < parts.length; i++) visibleSegs.push({ name: parts[i], index: i, path: accumulated[i] });
+        for (let i = firstVisible; i < parts.length - lastVisible; i++) hiddenSegs.push({ name: parts[i], index: i, path: accumulated[i] });
+        if (hiddenSegs.length === 0) {
+            // Extremos solapados: se muestra la ruta completa en plano
+            visibleSegs.length = 0;
+            for (let i = 0; i < parts.length; i++) visibleSegs.push({ name: parts[i], index: i, path: accumulated[i] });
+        }
+    } else {
+        for (let i = 0; i < parts.length; i++) visibleSegs.push({ name: parts[i], index: i, path: accumulated[i] });
+    }
+
+    // Secuencia final de renderizado (segmentos + nodo "…" en su posición)
+    const renderSegs = [];
+    if (needsCollapse && hiddenSegs.length > 0) {
+        if (firstVisible > 0) {
+            for (const seg of visibleSegs) {
+                renderSegs.push({ type: 'seg', seg });
+                if (seg.index === firstVisible - 1) renderSegs.push({ type: 'more', hidden: hiddenSegs });
+            }
+        } else {
+            renderSegs.push({ type: 'more', hidden: hiddenSegs });
+            for (const seg of visibleSegs) renderSegs.push({ type: 'seg', seg });
+        }
+    } else {
+        for (const seg of visibleSegs) renderSegs.push({ type: 'seg', seg });
+    }
+
+    const sepHtml = hideMobile => `<span${hideMobile ? ' class="hide-mobile"' : ''} style="margin: 0 8px; opacity: 0.5;">›</span>`;
+
     let html = `<span class="breadcrumb-item ${!path ? 'active' : ''} ${parts.length > 0 ? 'hide-mobile' : 'hide-desktop'}" onclick="${rootAction}">${rootName}</span>`;
 
-    let currentAccumulated = '';
-    parts.forEach((p, i) => {
-        let currentAccumulated = '';
-    parts.forEach((p, i) => {
-        currentAccumulated += (i === 0 ? '' : '/') + p;
-        if (i === 0) {
-            html += `<span class="${parts.length > 0 ? 'hide-mobile' : ''}" style="margin: 0 8px; opacity: 0.5;">›</span>`;
+    let isFirst = true;
+    for (const entry of renderSegs) {
+        if (entry.type === 'more') {
+            if (!isFirst) html += sepHtml(false);
+            const menuItems = entry.hidden.map(seg =>
+                `<div class="breadcrumb-more-item" title="${esc(seg.name)}" onclick="closeBreadcrumbMenus(); navigateCloud('${jsStr(seg.path)}')">${esc(seg.name)}</div>`
+            ).join('');
+            html += `<span class="breadcrumb-more">
+                <span class="breadcrumb-more-btn" onclick="toggleBreadcrumbMenu(this)" title="${esc(window.t_cloud('nav_show_more', 'Mostrar carpetas intermedias'))}">…</span>
+                <div class="breadcrumb-more-menu">${menuItems}</div>
+            </span>`;
         } else {
-            html += `<span style="margin: 0 8px; opacity: 0.5;">›</span>`;
+            const seg = entry.seg;
+            html += sepHtml(seg.index === 0 && parts.length > 0);
+            html += `<span class="breadcrumb-item breadcrumb-truncate ${seg.index === parts.length - 1 ? 'active' : ''}" onclick="navigateCloud('${jsStr(seg.path)}')">${esc(seg.name)}</span>`;
         }
-        html += `<span class="breadcrumb-item ${i === parts.length - 1 ? 'active' : ''}" onclick="navigateCloud('${jsStr(currentAccumulated)}')">${esc(p)}</span>`;
-    });
-    });
+        isFirst = false;
+    }
 
     container.innerHTML = html;
 
@@ -486,6 +544,45 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
                 console.error("Error drop breadcrumb:", err);
             }
         });
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Menú desplegable del breadcrumb colapsado (nodo "…"): muestra las carpetas
+// intermedias ocultas y permite saltar a cualquier nivel previo. Se posiciona
+// con position:fixed para no quedar recortado por el overflow del contenedor.
+// ---------------------------------------------------------------------------
+
+function toggleBreadcrumbMenu(btn) {
+    const wrapper = btn.closest('.breadcrumb-more');
+    const menu = wrapper && wrapper.querySelector('.breadcrumb-more-menu');
+    if (!menu) return;
+
+    const wasOpen = menu.classList.contains('open');
+    closeBreadcrumbMenus();
+    if (wasOpen) return;
+
+    menu.classList.add('open');
+    menu.style.display = 'block';
+    menu.style.visibility = 'hidden';
+    const menuWidth = menu.offsetWidth;
+    const menuHeight = menu.offsetHeight;
+
+    const rect = btn.getBoundingClientRect();
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuWidth - 8);
+    let top = rect.bottom + 6;
+    if (top + menuHeight > window.innerHeight - 8) top = Math.max(8, rect.top - menuHeight - 6);
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.visibility = '';
+}
+
+function closeBreadcrumbMenus() {
+    document.querySelectorAll('.breadcrumb-more-menu').forEach(menu => {
+        menu.classList.remove('open');
+        menu.style.display = 'none';
     });
 }
 
@@ -919,7 +1016,7 @@ function renderListRow(f, isRecent, getFileTemplateData) {
             <span class="cloud-file-icon" style="font-size: 1.2rem;">${d.icon}</span>
             <div style="display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0;">
                 <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${d.cleanName}</span>
-                ${(!isRecent && f.path !== undefined) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${window.t_cloud('in_lower', 'en')} ${d.cleanDisplayPath}</span>` : ''}
+                ${(!isRecent && (f.path !== undefined || (f.trash && f.origin))) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${(f.trash && f.origin) ? window.t_cloud('trash_origin_from', 'sale de') + ' ' + esc(f.origin) : window.t_cloud('in_lower', 'en') + ' ' + d.cleanDisplayPath}</span>` : ''}
             </div>
         </div>
         <div class="cloud-file-owner" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim); display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
@@ -1230,7 +1327,7 @@ async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, is
             formData.append('view', baseUploadView);
 
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', `/api/cloud/upload?token=${TOKEN}`, true);
+            xhr.open('POST', `/api/cloud/upload`, true);
             xhr.setRequestHeader('X-Token', HEADERS['X-Token']);
 
             xhr.upload.onprogress = (e) => {
@@ -2510,7 +2607,7 @@ function showSyncInstructionsAlert(deviceName) {
             </div>
             <p style="margin-bottom: 12px; color: #94a3b8; font-size: 0.85rem;">Si deseas que el Agente de Sincronización siga ejecutándose en tu ordenador incluso si cierras la ventana de tu terminal física, ejecútalo usando <b>nohup</b> en segundo plano:</p>
             <div style="position: relative; margin-bottom: 16px;">
-                <pre id="adv-sync-cmd" style="background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.78rem; color: #818cf8; word-break: break-all; white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.05); margin: 0; padding-right: 70px; min-height: 50px;">nohup python3 -c "$(curl -fsSLk '${window.location.origin}/api/cloud/sync-agent/script?device=${encodeURIComponent(cleanName)}&token=${TOKEN}')" &amp;</pre>
+                <pre id="adv-sync-cmd" style="background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.78rem; color: #818cf8; word-break: break-all; white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.05); margin: 0; padding-right: 70px; min-height: 50px;">nohup python3 -c "$(curl -fsSLk '${window.location.origin}/api/cloud/sync-agent/script?device=${encodeURIComponent(cleanName)}')" &amp;</pre>
                 <button onclick="navigator.clipboard.writeText(document.getElementById('adv-sync-cmd').innerText.trim()); NV_Alert('¡Comando avanzado copiado!');" style="position: absolute; right: 6px; top: 6px; padding: 4px 8px; border-radius: 4px; border: none; background: var(--indigo); color: #fff; font-size: 0.7rem; font-weight: 600; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">Copiar</button>
             </div>
             <div style="font-weight: 600; color: #ffffff; margin-bottom: 6px; font-size: 0.85rem;">Instrucciones rápidas:</div>
@@ -4599,6 +4696,13 @@ function initCloud() {
         }
     });
 
+    // Cierre global del menú "…" del breadcrumb (click fuera, scroll o resize)
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.breadcrumb-more')) closeBreadcrumbMenus();
+    });
+    window.addEventListener('scroll', closeBreadcrumbMenus, true);
+    window.addEventListener('resize', closeBreadcrumbMenus);
+
     window.addEventListener('language_changed', () => {
         if (typeof fetchCloudFiles === 'function') {
             fetchCloudFiles(currentCloudPath || '', currentCloudView || 'drive');
@@ -4629,6 +4733,7 @@ function initCloud() {
         handleUnshareItem, revokeCloudShare,
         toggleCloudFileSelection,
         handleZipItem, handleUnzipItem,
+        toggleBreadcrumbMenu, closeBreadcrumbMenus,
         toggleVideoQualityMenu: function (e) {
             if (e) e.stopPropagation();
             const menu = document.getElementById('video-quality-menu');
