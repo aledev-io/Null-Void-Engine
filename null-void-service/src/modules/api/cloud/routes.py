@@ -650,29 +650,26 @@ def download_client_agent():
                     return p
             return None
 
-        # Ejecutable nativo de escritorio (PySide6/Qt): nv-agent en Linux,
-        # nv-agent.exe en Windows y nv-agent-mac en macOS. Se compila bajo
-        # demanda con client_agent/compile.sh (no forma parte de Docker).
         if is_windows:
             exe = _first_existing([
                 os.path.join(dist_dir, 'Null-Void-Agent.exe'),
                 os.path.join(dist_dir, 'nv-agent.exe')
             ])
-            if exe:
-                return send_file(exe, as_attachment=True, download_name='Null-Void-Agent.exe')
-        else:
-            linux = _first_existing([
-                os.path.join(dist_dir, 'Null-Void-Agent-Linux'),
-                os.path.join(dist_dir, 'nv-agent')
-            ])
-            if linux:
-                return send_file(linux, as_attachment=True, download_name='Null-Void-Agent-Linux')
-
-        # Último recurso: el script del agente (ejecución desde Python).
-        py_script = os.path.join(client_agent_dir, 'agent.py')
-        if os.path.exists(py_script):
-            return send_file(py_script, as_attachment=True, download_name='nullvoid_sync_agent.py')
-        return jsonify(error="Agent file not found"), 404
+            if not exe:
+                return jsonify(error="El ejecutable de Windows no está compilado. Ejecuta client_agent/build_windows_agent.bat en un PC Windows y vuelve a intentarlo."), 404
+            return send_file(exe, as_attachment=True, download_name='Null-Void-Agent.exe')
+        if is_mac:
+            mac = _first_existing([os.path.join(dist_dir, 'Null-Void-Agent-Mac')])
+            if not mac:
+                return jsonify(error="El ejecutable de macOS no está compilado. Ejecuta client_agent/compile.sh en un Mac y vuelve a intentarlo."), 404
+            return send_file(mac, as_attachment=True, download_name='Null-Void-Agent-Mac')
+        linux = _first_existing([
+            os.path.join(dist_dir, 'Null-Void-Agent-Linux'),
+            os.path.join(dist_dir, 'nv-agent')
+        ])
+        if not linux:
+            return jsonify(error="El ejecutable de Linux no está compilado. Ejecuta client_agent/compile.sh y vuelve a intentarlo."), 404
+        return send_file(linux, as_attachment=True, download_name='Null-Void-Agent-Linux')
     except Exception as e:
         logger.error(f"Error sirviendo el cliente de sync: {e}", exc_info=True)
         return jsonify(error="Error interno al preparar el cliente"), 500

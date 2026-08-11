@@ -3547,6 +3547,35 @@ let _currentLinkDeviceOS = 'linux';
 let _currentLinkDeviceToken = null;
 let _existingDevicesAtOpen = new Set();
 
+async function downloadClientAgent() {
+    try {
+        const res = await fetch('/api/cloud/sync-agent/download-client', { headers: HEADERS, cache: 'no-store' });
+        if (!res.ok) {
+            let msg = 'No se pudo preparar la descarga.';
+            try {
+                const data = await res.json();
+                if (data && data.error) msg = data.error;
+            } catch (e) { }
+            await NV_Alert(msg);
+            return;
+        }
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename="?([^";]+)"?/);
+        const name = m ? m[1] : (navigator.userAgent.includes('Win') ? 'Null-Void-Agent.exe' : 'Null-Void-Agent-Linux');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        await NV_Alert('Error al descargar el agente.');
+    }
+}
+
 async function openLinkDeviceModal() {
     const modal = document.getElementById('cloud-link-device-modal');
     if (modal) {
@@ -4725,7 +4754,7 @@ function initCloud() {
         loadCloudFoldersTree, openCloudMove,
         openCloudPreview, openCloudShare, executeNewItemAction,
         renderListRow, renderFolderNode,
-        closeLinkDeviceModal, setLinkDeviceOS,
+        closeLinkDeviceModal, setLinkDeviceOS, downloadClientAgent,
         copySyncCommand, toggleCloudInfoPanel, switchCloudInfoTab,
         confirmCloudShare, closeCloudShareModal, handleCreateFolder,
         generateSyncCommand, searchUsersForSharing,
