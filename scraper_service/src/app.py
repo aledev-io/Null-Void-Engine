@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from services import _scrape_task, _scrape_all_laptops_daily
 from scraper_db import get_db_connection, update_user_task_date
+from config import ENGINE_BASE_URL
 import gevent
 from gevent.pywsgi import WSGIServer
 import datetime
@@ -46,7 +47,7 @@ def scraper_worker():
         # Notify start
         try:
             import requests
-            requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={"is_scraping": True}, headers=_internal_headers(), timeout=3, verify=False)
+            requests.post(f"{ENGINE_BASE_URL}/api/scraper/webhook/state", json={"is_scraping": True}, headers=_internal_headers(), timeout=3, verify=False)
         except:
             pass
             
@@ -59,7 +60,7 @@ def scraper_worker():
         if task_queue.empty():
             try:
                 import requests
-                requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={"is_scraping": False}, headers=_internal_headers(), timeout=3, verify=False)
+                requests.post(f"{ENGINE_BASE_URL}/api/scraper/webhook/state", json={"is_scraping": False}, headers=_internal_headers(), timeout=3, verify=False)
             except:
                 pass
                 

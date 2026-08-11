@@ -11,6 +11,7 @@ import os
 CANCEL_ROUTINE = False
 import time
 from scraper_db import save_products, get_all_products, SCRAPER_DIR
+from config import ENGINE_BASE_URL
 
 IMAGES_DIR = os.path.join(SCRAPER_DIR, 'images')
 LOG_PATH = os.path.join(SCRAPER_DIR, 'scraper_logs.txt')
@@ -400,7 +401,7 @@ def _scrape_pccomp_routine(terms_list, cancellable=True):
 def _notify_progress(current, total, current_term, products_found):
     try:
         import requests
-        requests.post("https://127.0.0.1:5000/api/scraper/webhook/state", json={
+        requests.post(f"{ENGINE_BASE_URL}/api/scraper/webhook/state", json={
             "is_scraping": True,
             "progress": {"current": current, "total": total, "current_term": current_term, "products_found": products_found}
         }, timeout=3, verify=False)
@@ -900,7 +901,7 @@ def _scrape_athome_task(location="Howald", min_surface=45, user_id=None):
                                         except Exception as e:
                                             print(f"[Juicy Offer] Error enviando Telegram: {e}")
                                     try:
-                                        requests.post("http://127.0.0.1:5000/api/scraper/webhook/state", 
+                                        requests.post(f"{ENGINE_BASE_URL}/api/scraper/webhook/state", 
                                                       json={"is_juicy": True, "title": title, "price": price, "surface": surface, "link": link, "user": user_id}, 
                                                       timeout=3)
                                     except: pass

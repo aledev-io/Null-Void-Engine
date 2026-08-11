@@ -133,16 +133,17 @@ def create_app():
     with app.app_context():
         init_db()
         migrate_users_to_db(CONFIG.CREDENTIALS)
-        from modules.api.scraper.scraper_db import init_db as init_scraper_db
-        init_scraper_db()
-    sessions_file = os.path.join(CONFIG.DATA_DIR, 'sessions.json')
-    if os.path.exists(sessions_file):
+        # El scraper es auxiliar: si su almacenamiento falla (volumen ro),
+        # la app arranca igual y se recupera cuando se corrija.
         try:
-            os.remove(sessions_file)
-            sess._sessions = {}
-            sess._user_index = {}
-        except Exception:
-            pass
+            from modules.api.scraper.scraper_db import init_db as init_scraper_db
+            init_scraper_db()
+        except Exception as e:
+            print(f"[app] AVISO: BD del scraper no disponible ({e}). "
+                  "El módulo scraper se activará cuando el almacenamiento sea escribible.")
+
+    # No se borran al arrancar: un reinicio del contenedor no debe expulsar
+    # a los usuarios con un "Sesión expirada" inesperado.
 
     if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         notifier.start()

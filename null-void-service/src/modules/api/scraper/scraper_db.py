@@ -14,9 +14,38 @@ SCRAPER_DB_SQLITE = os.path.join(SCRAPER_DIR, 'scraper.db')
 def get_db_connection():
     conn = sqlite3.connect(SCRAPER_DB_SQLITE)
     conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;") 
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+    except sqlite3.OperationalError:
+        # WAL necesita crear ficheros .wal/.shm: si el directorio quedó
+        # read-only (permisos heredados de un reinstall, montaje ro), se
+        # intenta reparar los permisos y, si no puede, se sigue con el journal
+        # mode clásico en vez de bloquear el arranque.
+        _repair_scraper_permissions()
+        conn.close()  # se reabre para que tome los nuevos permisos;
+        conn = sqlite3.connect(SCRAPER_DB_SQLITE)
+        conn.execute("PRAGMA foreign_keys = ON;")
+        try:
+            conn.execute("PRAGMA journal_mode = WAL;")
+        except sqlite3.OperationalError:
+            print(f"[scraper_db] AVISO: '{SCRAPER_DB_SQLITE}' no acepta WAL "
+                  "(almacenamiento de solo lectura o sin permisos). El módulo "
+                  "scraper funcionará en modo lectura mientras no se corrija.")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _repair_scraper_permissions():
+    """Repara permisos de escritura de la BD (típico tras un reinstall).
+
+    No lanza excepciones: si no se puede reparar (montaje read-only), se
+    ignora y se sigue con la vía degradada."""
+    for target in (SCRAPER_DB_SQLITE, SCRAPER_DIR):
+        try:
+            mode = 0o777 if os.path.isdir(target) else 0o666
+            os.chmod(target, mode)
+        except OSError:
+            pass
 
 def init_db():
     conn = get_db_connection()
