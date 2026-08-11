@@ -93,6 +93,7 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = CONFIG.SECRET_KEY
     app.config['TEMPLATES_AUTO_RELOAD'] = True
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024 # 50 GB global size limit
 
     socketio.init_app(app)
