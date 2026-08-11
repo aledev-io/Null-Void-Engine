@@ -3552,6 +3552,8 @@ let _currentLinkDeviceToken = null;
 let _existingDevicesAtOpen = new Set();
 
 async function downloadClientAgent() {
+    const modal = document.getElementById('cloud-link-device-modal');
+    const useToast = !modal || modal.style.display === 'none';
     const btn = document.getElementById('btn-download-agent');
     const originalLabel = btn ? btn.innerHTML : '';
     const setBtnBusy = (busy) => {
@@ -3562,9 +3564,26 @@ async function downloadClientAgent() {
             ? '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:cloud-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Descargando Agente...'
             : originalLabel;
     };
+    const showToast = (msg) => {
+        if (useToast) showCloudProgressToast(msg);
+    };
+    const toastSuccess = () => {
+        const toast = document.getElementById('cloud-progress-toast');
+        const textEl = toast && toast.querySelector('.cloud-toast-text');
+        if (toast) {
+            const spinner = toast.querySelector('.cloud-toast-spinner');
+            if (spinner) spinner.style.display = 'none';
+            if (textEl) textEl.innerText = window.currentLang === "en" ? 'Download started ✓' : 'Descarga iniciada ✓';
+            toast.style.animation = 'none';
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => { toast.style.display = 'none'; }, 300);
+            }, 2200);
+        }
+    };
 
     setBtnBusy(true);
-    showCloudProgressToast(window.currentLang === "en" ? "Preparing agent download..." : "Descargando Agente Base...");
+    showToast(window.currentLang === "en" ? "Preparing agent download..." : "Descargando Agente Base...");
 
     let res = null;
     try {
@@ -3598,17 +3617,8 @@ async function downloadClientAgent() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
         setBtnBusy(false);
-        const toast = document.getElementById('cloud-progress-toast');
-        const textEl = toast && toast.querySelector('.cloud-toast-text');
-        if (toast) {
-            const spinner = toast.querySelector('.cloud-toast-spinner');
-            if (spinner) spinner.style.display = 'none';
-            if (textEl) textEl.innerText = window.currentLang === "en" ? 'Download started ✓' : 'Descarga iniciada ✓';
-            toast.style.animation = 'none';
-            setTimeout(() => {
-                toast.style.animation = 'slideOutRight 0.3s ease';
-                setTimeout(() => { toast.style.display = 'none'; }, 300);
-            }, 2200);
+        if (useToast) {
+            toastSuccess();
         }
     } catch (e) {
         console.error('downloadClientAgent blob error', e);
