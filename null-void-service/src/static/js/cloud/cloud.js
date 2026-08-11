@@ -1312,6 +1312,108 @@ function renderAdminQuotaRequests(requests) {
 }
 
 
+// Archivos mayores de este umbral se suben por chunks reanudables
+const CHUNKED_UPLOAD_THRESHOLD = 15 * 1024 * 1024; // 15 MB
+const CHUNK_UPLOAD_SIZE = 8 * 1024 * 1024;         // 8 MB
+
+function uploadDirectFile(file, uploadPath, baseUploadView, onProgress) {
+    return new Promise((resolve) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('path', uploadPath);
+        formData.append('view', baseUploadView);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/cloud/upload`, true);
+        xhr.setRequestHeader('X-Token', HEADERS['X-Token']);
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        xhr.onload = () => resolve({ ok: xhr.status === 200 || xhr.status === 201, status: xhr.status, body: xhr.responseText });
+        xhr.onerror = () => resolve({ ok: false, status: 0, body: '' });
+        xhr.send(formData);
+    });
+}
+
+async function uploadChunkedFile(file, uploadPath, baseUploadView, onProgress) {
+    const createRes = await fetch('/api/cloud/upload/create', {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ filename: file.name, path: uploadPath, view: baseUploadView, size: file.size })
+    });
+    const createData = await _cloudJson(createRes);
+    if (!createRes.ok) {
+        throw new Error(createData.error || (window.currentLang === 'en' ? 'Could not start the upload.' : 'No se pudo iniciar la subida.'));
+    }
+    const uploadId = createData.upload_id;
+    const total = file.size;
+    let offset = 0;
+    let stalls = 0;
+
+    const sendChunk = (from, to) => new Promise((resolve) => {
+        const fd = new FormData();
+        fd.append('file', file.slice(from, to), file.name);
+        fd.append('offset', String(from));
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/cloud/upload/chunk/${uploadId}`, true);
+        xhr.setRequestHeader('X-Token', HEADERS['X-Token']);
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress((from + e.loaded) / total); };
+        xhr.onload = () => resolve({ ok: xhr.status === 200, status: xhr.status, body: xhr.responseText });
+        xhr.onerror = () => resolve({ ok: false, status: 0, body: '' });
+        xhr.send(fd);
+    });
+
+    try {
+        while (offset < total) {
+            const end = Math.min(offset + CHUNK_UPLOAD_SIZE, total);
+            const res = await sendChunk(offset, end);
+            if (res.ok) { offset = end; continue; }
+
+            // El servidor ya tenía más datos: reanudar desde su offset real
+            if (res.status === 409) {
+                try {
+                    const j = JSON.parse(res.body);
+                    if (typeof j.received === 'number' && j.received > offset) {
+                        offset = j.received;
+                        onProgress(offset / total);
+                        continue;
+                    }
+                } catch (e) { }
+            }
+
+            // Fallo de red/5xx: reconsultar estado con backoff y reanudar
+            let resumed = false;
+            for (let attempt = 1; attempt <= 6 && !resumed; attempt++) {
+                await new Promise(r => setTimeout(r, 600 * attempt));
+                try {
+                    const st = await fetch(`/api/cloud/upload/status/${uploadId}`, { headers: HEADERS });
+                    const sj = await _cloudJson(st);
+                    if (typeof sj.received === 'number') {
+                        if (sj.received > offset) {
+                            stalls = 0;
+                            offset = sj.received;
+                        } else {
+                            stalls++;
+                        }
+                        resumed = true;
+                        onProgress(offset / total);
+                    }
+                } catch (e) { }
+            }
+            if (!resumed || stalls >= 3) {
+                throw new Error(window.currentLang === 'en' ? 'Upload interrupted; could not resume.' : 'Subida interrumpida; no se pudo reanudar.');
+            }
+        }
+
+        const done = await fetch(`/api/cloud/upload/complete/${uploadId}`, { method: 'POST', headers: HEADERS });
+        const doneData = await _cloudJson(done);
+        if (!done.ok) {
+            throw new Error(doneData.error || (window.currentLang === 'en' ? 'Could not finish the upload.' : 'No se pudo finalizar la subida.'));
+        }
+    } catch (e) {
+        try { await fetch(`/api/cloud/upload/abort/${uploadId}`, { method: 'POST', headers: HEADERS }); } catch (err) { }
+        throw e;
+    }
+}
+
 async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, isFolder = false) {
     const panel = document.getElementById('cloud-global-upload-panel');
     const title = document.getElementById('global-upload-title');
@@ -1359,86 +1461,52 @@ async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, is
         }
 
         await new Promise((resolve) => {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('path', uploadPath);
-            formData.append('view', baseUploadView);
+            (async () => {
+                const pctEl = index < maxDomRows ? document.getElementById(`${rowId}-pct`) : null;
+                const barEl = index < maxDomRows ? document.getElementById(`${rowId}-bar`) : null;
+                const setPct = (pct, color, label) => {
+                    if (!pctEl) return;
+                    pctEl.innerText = label !== undefined ? label : Math.round(pct) + '%';
+                    pctEl.style.color = color || 'var(--indigo)';
+                    if (barEl) {
+                        barEl.style.width = Math.round(pct) + '%';
+                        if (color) barEl.style.background = color;
+                    }
+                };
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', `/api/cloud/upload`, true);
-            xhr.setRequestHeader('X-Token', HEADERS['X-Token']);
-
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable && index < maxDomRows) {
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    const pctEl = document.getElementById(`${rowId}-pct`);
-                    const barEl = document.getElementById(`${rowId}-bar`);
-                    if (pctEl) pctEl.innerText = pct + '%';
-                    if (barEl) barEl.style.width = pct + '%';
-                }
-            };
-
-            xhr.onload = async () => {
-                let isError = xhr.status !== 200 && xhr.status !== 201;
-                let errMsg = 'Error';
-                let isQuotaError = false;
-
-                if (isError) {
-                    try {
-                        const resJson = JSON.parse(xhr.responseText);
-                        if (resJson.error) {
-                            if (resJson.error.includes("Espacio insuficiente")) {
-                                isQuotaError = true;
-                                errMsg = window.currentLang === 'en' ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más";
-                            } else {
-                                errMsg = resJson.error;
+                try {
+                    if (file.size > CHUNKED_UPLOAD_THRESHOLD) {
+                        await uploadChunkedFile(file, uploadPath, baseUploadView, (p) => setPct(p * 100));
+                    } else {
+                        const res = await uploadDirectFile(file, uploadPath, baseUploadView, (p) => setPct(p * 100));
+                        if (!res.ok) {
+                            let errMsg = 'Error';
+                            let isQuotaError = false;
+                            try {
+                                const resJson = JSON.parse(res.body);
+                                if (resJson.error) {
+                                    if (resJson.error.includes("Espacio insuficiente")) {
+                                        isQuotaError = true;
+                                        errMsg = window.currentLang === 'en' ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más";
+                                    } else {
+                                        errMsg = resJson.error;
+                                    }
+                                }
+                            } catch (e) { }
+                            console.error(`Upload error for ${file.name}:`, errMsg);
+                            if (isQuotaError) {
+                                NV_Alert(errMsg, window.currentLang === 'en' ? 'Upload Failed' : 'Error al subir');
                             }
+                            throw new Error(errMsg);
                         }
-                    } catch (e) { }
-                    console.error(`Upload error for ${file.name}:`, errMsg);
-
-                    if (index < maxDomRows) {
-                        const pctEl = document.getElementById(`${rowId}-pct`);
-                        const barEl = document.getElementById(`${rowId}-bar`);
-                        if (pctEl) {
-                            pctEl.innerText = 'Error';
-                            pctEl.style.color = '#ef4444';
-                            pctEl.title = errMsg;
-                        }
-                        if (barEl) barEl.style.background = '#ef4444';
                     }
-
-                    if (isQuotaError) {
-                        NV_Alert(errMsg, window.currentLang === 'en' ? 'Upload Failed' : 'Error al subir');
-                    }
-                } else {
-                    if (index < maxDomRows) {
-                        const pctEl = document.getElementById(`${rowId}-pct`);
-                        const barEl = document.getElementById(`${rowId}-bar`);
-                        if (pctEl) {
-                            pctEl.innerText = window.currentLang === 'en' ? 'Completed' : 'Completado';
-                            pctEl.style.color = '#10b981';
-                        }
-                        if (barEl) barEl.style.background = '#10b981';
-                    }
-                }
-                completed++;
-                title.innerText = window.currentLang === "en" ? `Uploading ${completed} of ${files.length} items...` : `Subiendo ${completed} de ${files.length} elementos...`;
-                if (completed === files.length) {
-                    title.innerText = window.currentLang === "en" ? `Finished uploading ${files.length} items.` : `Finalizada la subida de ${files.length} elementos.`;
-                    setTimeout(() => fetchCloudFiles(currentCloudPath, currentCloudView), 500);
-                    updateCloudQuotaInfo();
-                }
-                resolve();
-            };
-
-            xhr.onerror = () => {
-                if (index < maxDomRows) {
-                    const pctEl = document.getElementById(`${rowId}-pct`);
-                    const barEl = document.getElementById(`${rowId}-bar`);
+                    setPct(100, '#10b981', window.currentLang === 'en' ? 'Completed' : 'Completado');
+                } catch (err) {
+                    console.error(`Upload error for ${file.name}:`, err.message || err);
                     if (pctEl) {
                         pctEl.innerText = 'Error';
                         pctEl.style.color = '#ef4444';
+                        pctEl.title = err.message || 'Error';
                     }
                     if (barEl) barEl.style.background = '#ef4444';
                 }
@@ -1450,9 +1518,7 @@ async function uploadFilesWithProgress(files, baseUploadPath, baseUploadView, is
                     updateCloudQuotaInfo();
                 }
                 resolve();
-            };
-
-            xhr.send(formData);
+            })();
         });
 
         await processNext();

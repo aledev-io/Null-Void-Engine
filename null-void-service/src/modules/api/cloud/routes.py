@@ -112,6 +112,73 @@ def upload_file():
     return jsonify(ok=True)
 
 
+@cloud_bp.route('/upload/create', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
+@login_required
+def upload_create():
+    data = request.get_json(silent=True) or {}
+    view = data.get('view', 'drive')
+    subpath = data.get('path', '')
+    filename = data.get('filename', '')
+    try:
+        size = int(data.get('size') or 0)
+    except (TypeError, ValueError):
+        size = 0
+    overwrite = data.get('overwrite') is True or data.get('overwrite') == 'true'
+    upload_id, err = services.create_upload_session(view, subpath, request.user_token, filename, size, overwrite)
+    if upload_id is None:
+        return jsonify(error=err or "Error al crear la sesión de subida"), 400
+    return jsonify(upload_id=upload_id, chunk_size=services.UPLOAD_CHUNK_SIZE)
+
+
+@cloud_bp.route('/upload/status/<upload_id>', methods=['GET'])
+@limiter.limit("300 per minute", key_func=get_limiter_key)
+@login_required
+def upload_status(upload_id):
+    meta, err = services.get_upload_status(upload_id, request.user_token)
+    if not meta:
+        return jsonify(error=err), 404
+    return jsonify(received=meta["received"], size=meta["size"], filename=meta["filename"])
+
+
+@cloud_bp.route('/upload/chunk/<upload_id>', methods=['POST'])
+@limiter.limit("10000 per hour", key_func=get_limiter_key)
+@login_required
+def upload_chunk(upload_id):
+    if 'file' not in request.files:
+        return jsonify(error="No hay archivo"), 400
+    try:
+        offset = int(request.form.get('offset') or 0)
+    except (TypeError, ValueError):
+        return jsonify(error="Offset inválido"), 400
+    res, err = services.append_upload_chunk(upload_id, request.user_token, request.files['file'], offset)
+    if isinstance(res, tuple) and res and res[0] == "mismatch":
+        return jsonify(error="Offset incorrecto", received=res[1]), 409
+    if res is None:
+        return jsonify(error=err or "Error al guardar el chunk"), 400
+    return jsonify(received=res["received"])
+
+
+@cloud_bp.route('/upload/complete/<upload_id>', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
+@login_required
+def upload_complete(upload_id):
+    ok, err = services.complete_upload(upload_id, request.user_token)
+    if ok is None or err:
+        return jsonify(error=err or "Error al finalizar la subida"), 400
+    return jsonify(ok=True)
+
+
+@cloud_bp.route('/upload/abort/<upload_id>', methods=['POST'])
+@limiter.limit("120 per minute", key_func=get_limiter_key)
+@login_required
+def upload_abort(upload_id):
+    ok, err = services.abort_upload(upload_id, request.user_token)
+    if ok is None:
+        return jsonify(error=err), 400
+    return jsonify(ok=True)
+
+
 @cloud_bp.route('/mkdir', methods=['POST'])
 @login_required
 def make_dir():
