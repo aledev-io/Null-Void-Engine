@@ -470,29 +470,62 @@ def _save_json(user_root, filename, data):
                     pass
 
 
+def _update_json(user_root, filename, update_fn, default=None):
+    """Actualización atómica (leer → modificar → escribir) bajo FileLock.
+
+    A diferencia de _load_json + _save_json por separado, mantiene el candado
+    fcntl durante TODA la operación: dos peticiones simultáneas (o el agente de
+    sincronización) que toquen el mismo metadato no pueden pisarse entre sí.
+    update_fn recibe la lista actual y debe devolver la nueva lista.
+    """
+    path = os.path.join(user_root, filename)
+    lock_path = path + ".lock"
+
+    with FileLock(lock_path):
+        data = list(default) if default is not None else []
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.error(f"[OPERATIONAL][ERROR] Error al leer metadatos {filename}: {e}")
+                data = list(default) if default is not None else []
+        try:
+            new_data = update_fn(data)
+        except Exception as e:
+            logger.error(f"[OPERATIONAL][ERROR] Error al actualizar metadatos {filename}: {e}")
+            return data
+        tmp_path = path + f".{uuid.uuid4().hex}.tmp"
+        try:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(new_data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+        except OSError as e:
+            logger.error(f"[OPERATIONAL][CRITICAL] Fallo de IO/Disco al guardar {filename}: {e}")
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+        return new_data
+
+
 def add_activity(user, user_id, action, name, path="", owner_id=None):
     if not user_id:
         return
     user_root = os.path.join(BASE_CLOUD_ROOT, user_id)
     os.makedirs(user_root, exist_ok=True)
-    activity = _load_json(user_root, '.activity.json')
-    activity.insert(0, {
+    entry = {
         "user": user, "user_id": user_id, "action": action,
         "name": name, "path": path, "time": time.time(),
         "owner_id": owner_id,
-    })
-    _save_json(user_root, '.activity.json', activity[:50])
+    }
+    _update_json(user_root, '.activity.json', lambda acts: ([entry] + list(acts))[:50])
 
     if owner_id and str(owner_id) != str(user_id) and owner_id != 'null':
         owner_root = os.path.join(BASE_CLOUD_ROOT, str(owner_id))
         if os.path.exists(owner_root):
-            owner_activity = _load_json(owner_root, '.activity.json')
-            owner_activity.insert(0, {
-                "user": user, "user_id": user_id, "action": action,
-                "name": name, "path": path, "time": time.time(),
-                "owner_id": owner_id,
-            })
-            _save_json(owner_root, '.activity.json', owner_activity[:50])
+            _update_json(owner_root, '.activity.json', lambda acts: ([entry] + list(acts))[:50])
             try:
                 from modules import socketio
                 socketio.emit('activity_update', {'name': name, 'action': action, 'user': user}, room=f"user_{owner_id}")
@@ -898,9 +931,8 @@ def delete_item(view, name, subpath, trash_id, token):
             new_trash_id = str(uuid.uuid4())
             try:
                 shutil.move(target_path, os.path.join(trash_base, new_trash_id))
-                trash_data = _load_json(base_root, '.trash.json')
-                trash_data.append({"id": new_trash_id, "name": os.path.basename(target_path), "original_path": "", "view": "computers", "origin": device_name or os.path.basename(target_path), "deleted_at": time.time()})
-                _save_json(base_root, '.trash.json', trash_data)
+                trash_entry = {"id": new_trash_id, "name": os.path.basename(target_path), "original_path": "", "view": "computers", "origin": device_name or os.path.basename(target_path), "deleted_at": time.time()}
+                _update_json(base_root, '.trash.json', lambda d: list(d) + [trash_entry])
             except Exception:
                 # Si el movimiento falla, no perdemos el dispositivo: la fila ya
                 # se borró, pero la carpeta de datos queda en su sitio (visible).
@@ -932,9 +964,8 @@ def delete_item(view, name, subpath, trash_id, token):
     
     shutil.move(target_path, os.path.join(trash_base, new_trash_id))
 
-    trash_data = _load_json(base_root, '.trash.json')
-    trash_data.append({"id": new_trash_id, "name": name, "original_path": subpath, "view": view, "deleted_at": time.time()})
-    _save_json(base_root, '.trash.json', trash_data)
+    trash_entry = {"id": new_trash_id, "name": name, "original_path": subpath, "view": view, "deleted_at": time.time()}
+    _update_json(base_root, '.trash.json', lambda d: list(d) + [trash_entry])
     invalidate_user_index(current_uid)
     return True
 
@@ -996,9 +1027,7 @@ def delete_permanent(trash_id, token):
         freed = 0
     bump_size_cache(current_uid, -freed)
 
-    trash_data = _load_json(base_root, '.trash.json')
-    trash_data = [item for item in trash_data if item['id'] != trash_id]
-    _save_json(base_root, '.trash.json', trash_data)
+    _update_json(base_root, '.trash.json', lambda d: [i for i in d if i['id'] != trash_id])
     invalidate_user_index(current_uid)
     clean_pool_async()
     return True
@@ -1009,26 +1038,38 @@ def restore_item(trash_id, token):
         return None, "ID requerido"
     current_uid = sess.get_user_id(token)
     base_root = get_user_root(token)
-    trash_data = _load_json(base_root, '.trash.json')
-    item = next((i for i in trash_data if i['id'] == trash_id), None)
-    if not item:
-        return None, "Elemento no encontrado en papelera"
+    result = {"err": None}
 
-    view_root = get_view_root(item.get('view', 'drive'), token)
-    
-    try:
-        target_dir = safe_join(view_root, item['original_path'])
-        target_path = safe_join(target_dir, item['name'])
-    except ValueError:
-        return None, "Ruta inválida detectada en el metadato de restauración"
+    def _restore(data):
+        item = next((i for i in data if i['id'] == trash_id), None)
+        if not item:
+            result["err"] = "Elemento no encontrado en papelera"
+            return data
 
-    os.makedirs(target_dir, exist_ok=True)
-    if os.path.exists(target_path):
-        target_path = os.path.join(target_dir, f"Restaurado_{int(time.time())}_{item['name']}")
+        view_root = get_view_root(item.get('view', 'drive'), token)
+        try:
+            target_dir = safe_join(view_root, item['original_path'])
+            target_path = safe_join(target_dir, item['name'])
+        except ValueError:
+            result["err"] = "Ruta inválida detectada en el metadato de restauración"
+            return data
 
-    shutil.move(os.path.join(base_root, '.trash', trash_id), target_path)
-    trash_data = [i for i in trash_data if i['id'] != trash_id]
-    _save_json(base_root, '.trash.json', trash_data)
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            if os.path.exists(target_path):
+                target_path = os.path.join(target_dir, f"Restaurado_{int(time.time())}_{item['name']}")
+            shutil.move(os.path.join(base_root, '.trash', trash_id), target_path)
+        except OSError as e:
+            logger.error(f"[OPERATIONAL][ERROR] Error al restaurar {trash_id}: {e}")
+            result["err"] = "Error al restaurar el elemento"
+            return data
+
+        return [i for i in data if i['id'] != trash_id]
+
+    _update_json(base_root, '.trash.json', _restore)
+
+    if result["err"]:
+        return None, result["err"]
     invalidate_user_index(current_uid)
     return True, None
 
@@ -1191,31 +1232,33 @@ def toggle_star(name, subpath, view, owner_id, token):
         return None, None
     subpath = subpath.strip('/')
     current_uid = sess.get_user_id(token)
-    starred_data = _load_json(base_root, '.starred.json')
-    
-    match_idx = -1
-    for idx, item in enumerate(starred_data):
-        if item.get('name') == name and item.get('path') == subpath:
-            item_owner = item.get('owner_id')
-            if (not owner_id and not item_owner) or \
-               (str(owner_id) == str(item_owner)) or \
-               (not item_owner):
-                match_idx = idx
-                break
-                
-    if match_idx != -1:
-        starred_data.pop(match_idx)
-        is_starred = False
-    else:
-        new_item = {"name": name, "path": subpath}
-        if owner_id and str(owner_id) != str(current_uid):
-            new_item["owner_id"] = owner_id
-            new_item["view"] = view
-        starred_data.append(new_item)
-        is_starred = True
-        
-    _save_json(base_root, '.starred.json', starred_data)
-    return True, is_starred
+    result = {"is_starred": False}
+
+    def _toggle(starred_data):
+        match_idx = -1
+        for idx, item in enumerate(starred_data):
+            if item.get('name') == name and item.get('path') == subpath:
+                item_owner = item.get('owner_id')
+                if (not owner_id and not item_owner) or \
+                   (str(owner_id) == str(item_owner)) or \
+                   (not item_owner):
+                    match_idx = idx
+                    break
+
+        if match_idx != -1:
+            starred_data.pop(match_idx)
+            result["is_starred"] = False
+        else:
+            new_item = {"name": name, "path": subpath}
+            if owner_id and str(owner_id) != str(current_uid):
+                new_item["owner_id"] = owner_id
+                new_item["view"] = view
+            starred_data.append(new_item)
+            result["is_starred"] = True
+        return starred_data
+
+    _update_json(base_root, '.starred.json', _toggle)
+    return True, result["is_starred"]
 
 
 def toggle_protect(name, subpath, view, token):
@@ -1225,24 +1268,31 @@ def toggle_protect(name, subpath, view, token):
     subpath = subpath.strip('/')
     view = resolve_protect_view(base_root, view, subpath, name)
 
-    protected_data = _load_json(base_root, '.protected.json')
     item_key = {"name": name, "path": subpath, "view": view}
+    result = {"is_prot": False, "ancestor": None}
 
-    # El elemento no tiene protección propia: si aparece como protegido es porque
-    # una carpeta superior está bloqueada; sólo la carpeta raíz puede desbloquearse.
-    if item_key not in protected_data:
-        ancestor = find_protected_ancestor(protected_data, view, subpath, name)
-        if ancestor:
-            return False, ('protected_ancestor', ancestor['name'])
+    def _toggle(protected_data):
+        # El elemento no tiene protección propia: si aparece como protegido es porque
+        # una carpeta superior está bloqueada; sólo la carpeta raíz puede desbloquearse.
+        if item_key not in protected_data:
+            ancestor = find_protected_ancestor(protected_data, view, subpath, name)
+            if ancestor:
+                result["ancestor"] = ancestor
+                return protected_data
 
-    if item_key in protected_data:
-        protected_data.remove(item_key)
-        is_prot = False
-    else:
-        protected_data.append(item_key)
-        is_prot = True
-    _save_json(base_root, '.protected.json', protected_data)
-    return True, is_prot
+        if item_key in protected_data:
+            protected_data.remove(item_key)
+            result["is_prot"] = False
+        else:
+            protected_data.append(item_key)
+            result["is_prot"] = True
+        return protected_data
+
+    _update_json(base_root, '.protected.json', _toggle)
+
+    if result["ancestor"]:
+        return False, ('protected_ancestor', result["ancestor"]['name'])
+    return True, result["is_prot"]
 
 
 def list_starred(token):
