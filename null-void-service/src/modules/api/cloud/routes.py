@@ -58,7 +58,7 @@ def list_recent():
 
 
 @cloud_bp.route('/files', methods=['GET'])
-@limiter.limit("600 per hour", key_func=get_limiter_key)
+@limiter.limit("2400 per hour", key_func=get_limiter_key)
 @login_required
 def list_files():
     view = request.args.get('view', 'drive')

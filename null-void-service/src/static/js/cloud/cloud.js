@@ -129,6 +129,10 @@ async function fetchCloudWithRetry(url, options, retries = 3) {
         try {
             const res = await fetch(url, options);
             if (res.ok) return res;
+            if (res.status === 429) {
+                console.warn(`[Cloud] Límite de peticiones (429) en ${url}, sin reintentos`);
+                return null;
+            }
             console.warn(`[Cloud] Respuesta ${res.status} de ${url}, intento ${attempt}/${retries}`);
         } catch (error) {
             console.warn(`[Cloud] Red caída en ${url}, intento ${attempt}/${retries}`);
@@ -287,7 +291,7 @@ async function fetchCloudFiles(path = '', view = 'home') {
                     clearInterval(window.cloudFolderRefreshInterval);
                     window.cloudFolderRefreshInterval = null;
                 }
-            }, 3000);
+            }, 10000);
         }
 
         // Actividad reciente: refresco periódico para mantenerla al día
@@ -311,7 +315,7 @@ async function fetchCloudFiles(path = '', view = 'home') {
                 } catch (e) {
                     console.error("[Cloud] Error refrescando actividad reciente:", e);
                 }
-            }, 20000);
+            }, 30000);
         }
 
     } catch (err) {
