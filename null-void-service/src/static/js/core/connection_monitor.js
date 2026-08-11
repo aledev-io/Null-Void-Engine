@@ -6,14 +6,23 @@
  *
  * Se inyecta automáticamente en todas las páginas HTML vía @app.after_request
  * (ver app.py) y no depende de módulos ES: es un script clásico autocontenido.
+ *
+ * Criterios para mostrar el banner (evita falsos positivos):
+ *  - Varios fallos consecutivos (no 2 sueltos): un servidor lento o saturado
+ *    (p. ej. long-polling de socket.io ocupando conexiones) no debe
+ *    considerarse caído a la primera.
+ *  - Antes de mostrarlo, una comprobación final con margen de tiempo extra.
+ *  - En pestañas en segundo plano no se comprueba ni se muestra: solo se
+ *    reanuda cuando la pestaña vuelve a ser visible.
  */
 (function () {
     if (window.__nvConnectionMonitorLoaded) return;
     window.__nvConnectionMonitorLoaded = true;
 
     var HEARTBEAT_INTERVAL_MS = 5000;   // cada 5 s comprobamos el servidor
-    var HEARTBEAT_TIMEOUT_MS = 4000;    // si no responde en 4 s, se considera caído
-    var FAILS_TO_SHOW = 2;              // 2 fallos consecutivos antes de mostrar el banner
+    var HEARTBEAT_TIMEOUT_MS = 8000;    // tiempo máximo de respuesta de una sonda
+    var FAILS_TO_SHOW = 3;              // fallos consecutivos antes de mostrar el aviso
+    var VERIFY_TIMEOUT_MS = 12000;      // margen extra para la comprobación final
 
     // Ruta estática ligera: siempre existe y su respuesta confirma que el
     // servidor está vivo. El query param evita que la caché la sirva sin red.
@@ -30,6 +39,10 @@
             if (window.t && window.I18n) return window.t(key) || fallback;
         } catch (e) { /* i18n no disponible en esta página */ }
         return fallback;
+    }
+
+    function isPageHidden() {
+        return typeof document.hidden !== 'undefined' && document.hidden;
     }
 
     function buildBanner() {
@@ -86,8 +99,8 @@
     }
 
     function showReconnecting() {
+        if (hidden || isPageHidden()) return;
         var b = ensureBanner();
-        if (hidden) return;
         setText();
         b.style.display = 'flex';
     }
@@ -149,32 +162,57 @@
         }
     }
 
-    function heartbeat() {
-        var controller = new AbortController();
-        var timeout = setTimeout(function () { controller.abort(); }, HEARTBEAT_TIMEOUT_MS);
+    /** Una sola comprobación: resuelve true si el servidor respondió. */
+    function probe(timeoutMs) {
+        return new Promise(function (resolve) {
+            var controller = new AbortController();
+            var timeout = setTimeout(function () { controller.abort(); }, timeoutMs);
+            fetch(HEARTBEAT_URL + Date.now(), {
+                method: 'GET',
+                cache: 'no-store',
+                credentials: 'include',
+                mode: 'same-origin',
+                signal: controller.signal
+            }).then(function () {
+                clearTimeout(timeout);
+                resolve(true);
+            }).catch(function () {
+                clearTimeout(timeout);
+                resolve(false);
+            });
+        });
+    }
 
-        fetch(HEARTBEAT_URL + Date.now(), {
-            method: 'GET',
-            cache: 'no-store',
-            credentials: 'include',
-            mode: 'same-origin',
-            signal: controller.signal
-        }).then(function (res) {
-            clearTimeout(timeout);
-            consecutiveFails = 0;
-            markOnline();
-        }).catch(function () {
-            clearTimeout(timeout);
-            consecutiveFails += 1;
-            if (consecutiveFails >= FAILS_TO_SHOW) {
-                markOffline();
+    function heartbeat() {
+        if (isPageHidden()) return; // no sondear con la pestaña oculta
+        probe(HEARTBEAT_TIMEOUT_MS).then(function (ok) {
+            if (ok) {
+                consecutiveFails = 0;
+                markOnline();
+                return;
             }
+            consecutiveFails += 1;
+            if (consecutiveFails < FAILS_TO_SHOW) return;
+            if (wasOffline) return; // ya visible: la siguiente sonda decidirá
+
+            // Comprobación final con margen: un servidor lento o saturado
+            // no debe disparar el aviso a la primera.
+            probe(VERIFY_TIMEOUT_MS).then(function (ok2) {
+                if (ok2) {
+                    consecutiveFails = 0;
+                    markOnline();
+                } else {
+                    markOffline();
+                }
+            });
         });
     }
 
     function handleBrowserOffline() {
-        consecutiveFails = FAILS_TO_SHOW; // sin red del navegador: fuera inmediatamente
-        markOffline();
+        if (wasOffline) return;
+        // navigator.onLine da falsos negativos: que decida la verificación real.
+        consecutiveFails = FAILS_TO_SHOW - 1;
+        heartbeat();
     }
 
     function handleBrowserOnline() {
@@ -196,6 +234,10 @@
         window.addEventListener('online', handleBrowserOnline);
         window.addEventListener('offline', handleBrowserOffline);
         window.addEventListener('languageChanged', setText);
+        window.addEventListener('focus', heartbeat);
+        document.addEventListener('visibilitychange', function () {
+            if (!isPageHidden()) heartbeat();
+        });
 
         // Bucle de comprobación periódica
         timer = setInterval(heartbeat, HEARTBEAT_INTERVAL_MS);
