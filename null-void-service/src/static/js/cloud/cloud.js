@@ -38,6 +38,40 @@ if (!window.__nvFetchCredentialsPatched) {
     };
 }
 
+// Traducción de errores del servidor: el backend responde en español, el
+// frontend mapea a la traducción correcta según el idioma activo.
+const _SERVER_ERR_TRANSLATIONS = {
+    "Acceso denegado": "Access denied",
+    "Datos insuficientes": "Insufficient data",
+    "El archivo supera el límite de 50GB": "The file exceeds the 50GB limit",
+    "El nombre no puede estar vacío": "The name cannot be empty",
+    "Falta el nombre del archivo": "File name missing",
+    "Falta especificar el archivo a descomprimir": "No file specified to extract",
+    "Falta especificar el elemento a comprimir": "No item specified to compress",
+    "Falta nombre de archivo": "File name missing",
+    "Falta usuario a revocar": "No user to revoke",
+    "La descarga del agente solo está disponible por HTTPS. Accede con https:// y reintenta.": "The agent download is only available over HTTPS. Access via https:// and retry.",
+    "El ejecutable de Windows no está compilado. Ejecuta client_agent/build_windows_agent.bat en un PC Windows y vuelve a intentarlo.": "The Windows executable is not compiled yet. Run client_agent/build_windows_agent.bat on a Windows PC and try again.",
+    "El ejecutable de macOS no está compilado. Ejecuta client_agent/compile.sh en un Mac y vuelve a intentarlo.": "The macOS executable is not compiled yet. Run client_agent/compile.sh on a Mac and try again.",
+    "El ejecutable de Linux no está compilado. Ejecuta client_agent/compile.sh y vuelve a intentarlo.": "The Linux executable is not compiled yet. Run client_agent/compile.sh and try again.",
+    "Error interno al preparar el cliente": "Internal error preparing the client",
+    "No autorizado": "Not authorized",
+    "No autorizado o archivo no encontrado": "Not authorized or file not found",
+    "No autorizado o no encontrado": "Not authorized or not found",
+    "No autorizado o ruta no válida": "Not authorized or invalid path",
+    "No autorizado o sesión expirada": "Not authorized or session expired",
+    "No existe": "Does not exist",
+    "No hay archivo": "No file",
+    "Ruta compartida no encontrada": "Shared path not found",
+    "Ya tienes una petición pendiente": "You already have a pending request"
+};
+
+function _tServerErr(msg) {
+    if (!msg) return msg;
+    if (window.currentLang !== 'en') return msg;
+    return _SERVER_ERR_TRANSLATIONS[msg] || msg;
+}
+
 // Parseo JSON defensivo: nunca lanza aunque el servidor responda HTML o vacío.
 async function _cloudJson(res, fallback = {}) {
     if (!res) return fallback;
@@ -810,7 +844,7 @@ function renderCloudFiles(files, isRecent = false) {
                     <span class="cloud-folder-row-icon">${d.icon}</span>
                     <span class="cloud-folder-row-name">${d.cleanName}</span>
                     ${f.starred ? '<span style="color:#fbbf24;font-size:0.75rem;flex-shrink:0;">★</span>' : ''}
-                    ${f.protected ? `<span title="Este elemento está protegido contra eliminación" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
+                    ${f.protected ? `<span title="${window.t_cloud('protect_lock_title', 'Este elemento está protegido contra eliminación')}" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
                     <button class="cloud-folder-row-menu" onclick="handleCloudAction(event, '${d.safeName}', true, '${d.safePath}')">⋮</button>
                 </div>`;
             }).join('');
@@ -831,7 +865,7 @@ function renderCloudFiles(files, isRecent = false) {
                         <span class="cloud-file-card-icon">${d.icon}</span>
                         <span class="cloud-file-card-name">${d.cleanName}</span>
                         ${f.starred ? '<span style="color:#fbbf24;font-size:0.75rem;flex-shrink:0;">★</span>' : ''}
-                        ${f.protected ? `<span title="Este elemento está protegido contra eliminación" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
+                        ${f.protected ? `<span title="${window.t_cloud('protect_lock_title', 'Este elemento está protegido contra eliminación')}" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
                         <button class="cloud-file-card-menu" onclick="handleCloudAction(event, '${d.safeName}', false, '${d.safePath}')">⋮</button>
                     </div>
                     <div class="cloud-file-card-preview">
@@ -1028,7 +1062,7 @@ function renderListRow(f, isRecent, getFileTemplateData) {
             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">${currentCloudView === 'shared_by_me' ? window.t_cloud('shared_with_label', 'Compartido con') + ' ' + esc(d.sharedWithName || d.ownerDisplay || '') : esc(d.ownerDisplay || window.t_cloud('me', 'Yo'))}</span>
             <span style="margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 10px; color: var(--text-muted);">
                 ${f.starred ? '<span style="color: #fbbf24; font-size: 0.8rem; display:inline-flex;">★</span>' : ''}
-                ${f.protected ? `<span title="Este elemento está protegido contra eliminación" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
+                ${f.protected ? `<span title="${window.t_cloud('protect_lock_title', 'Este elemento está protegido contra eliminación')}" class="cloud-protected-lock" style="display:inline-flex; flex-shrink:0; cursor:help;">${protectSvgIcon(true, 13)}</span>` : ''}
                 ${d.statusBadge}
             </span>
         </div>
@@ -1521,7 +1555,7 @@ async function deleteCloudItem(name, path, isDir, trashId = null, fileView = nul
             closeCloudInfoPanel();
         } else {
             const data = await _cloudJson(res);
-            await NV_Alert(data.error || window.currentLang === "en" ? "Error processing request." : "Error al procesar la solicitud.");
+            await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error processing request." : "Error al procesar la solicitud."));
         }
     } catch (err) {
         console.error("Error en deleteCloudItem:", err);
@@ -1554,7 +1588,7 @@ async function handleUnshareItem(item) {
                 closeCloudInfoPanel();
             } else {
                 const data = await _cloudJson(res);
-                await NV_Alert(data.error || window.currentLang === "en" ? "Error ignoring item." : "Error al ignorar el elemento.");
+                await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error ignoring item." : "Error al ignorar el elemento."));
             }
         } catch (e) {
             console.error("Error ignoring shared item:", e);
@@ -1667,7 +1701,7 @@ async function renameCloudItem(oldName, path, fileView = null, isDir = false) {
                 closeRenamePanel();
             } else {
                 const data = await _cloudJson(res);
-                errorEl.textContent = data.error || 'Error al renombrar.';
+                errorEl.textContent = _tServerErr(data.error) || (window.currentLang === "en" ? "Error renaming." : "Error al renombrar.");
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = 'Aceptar';
             }
@@ -1703,7 +1737,7 @@ async function restoreCloudItem(trashId) {
             closeCloudInfoPanel();
         } else {
             const data = await _cloudJson(res);
-            await NV_Alert(data.error || window.currentLang === "en" ? "Error restoring." : "Error al restaurar.");
+            await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error restoring." : "Error al restaurar."));
         }
     } catch (err) { }
 }
@@ -1738,7 +1772,7 @@ async function toggleCloudProtect(name, path, fileView = null) {
                 await NV_Alert(window.t_cloud('cloud_protect_ancestor', window.currentLang === 'en' ? 'You cannot unlock this item: it is inside the protected folder "{0}". Unprotect that folder first.' : 'No puedes desbloquear este elemento: está dentro de la carpeta «{0}», que está protegida. Desprotege primero esa carpeta.').replace('{0}', esc(data.ancestor_name || '')));
                 return;
             }
-            await NV_Alert(data.error || (window.currentLang === "en" ? "Cannot change the protection of this item." : "No se puede cambiar el estado de protección de este elemento."));
+            await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Cannot change the protection of this item." : "No se puede cambiar el estado de protección de este elemento."));
         }
     } catch (err) {
         await NV_Alert(window.currentLang === "en" ? "Error changing protection state." : "Error al cambiar estado de protección.");
@@ -1811,7 +1845,7 @@ async function handleCreateFolder() {
         });
         const data = await _cloudJson(res);
         if (data.error) {
-            await NV_Alert("Error: " + data.error);
+            await NV_Alert("Error: " + _tServerErr(data.error));
             return;
         }
 
@@ -3247,7 +3281,7 @@ async function moveCloudItem(name, oldPath, newPath) {
         }
         else {
             const data = await _cloudJson(res);
-            await NV_Alert(data.error || window.currentLang === "en" ? "Error moving" : "Error al mover");
+            await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error moving" : "Error al mover"));
         }
     } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error moving" : "Error de red al mover"); }
 }
@@ -3277,7 +3311,7 @@ async function copyCloudItem(name, oldPath, newPath) {
         }
         else {
             const data = await _cloudJson(res);
-            await NV_Alert(data.error || window.currentLang === "en" ? "Error saving copy" : "Error al guardar copia");
+            await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error saving copy" : "Error al guardar copia"));
         }
     } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error saving copy" : "Error de red al guardar copia"); }
 }
@@ -3483,7 +3517,7 @@ async function revokeCloudShare(uid, username, event) {
 
             fetchCloudFiles(currentCloudPath, currentCloudView);
         } else {
-            NV_Alert(data.error || window.currentLang === "en" ? "Error revoking access" : "Error al revocar acceso");
+            NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error revoking access" : "Error al revocar acceso"));
         }
     } catch (err) {
         NV_Alert(window.currentLang === "en" ? "Connection error" : "Error de conexión");
@@ -3539,7 +3573,7 @@ async function confirmCloudShare() {
             await NV_Alert(window.currentLang === "en" ? `File shared with ${selectedUsersToShare.length} user(s).` : `Archivo compartido con ${selectedUsersToShare.length} usuario(s).`);
         } else {
             const data = await _cloudJson(res);
-            await NV_Alert("Error: " + (data.error || window.currentLang === "en" ? "Could not share." : "No se pudo compartir."));
+            await NV_Alert("Error: " + (_tServerErr(data.error) || (window.currentLang === "en" ? "Could not share." : "No se pudo compartir.")));
         }
     } catch (err) {
         await NV_Alert(window.currentLang === "en" ? "Connection error sharing." : "Error de conexión al compartir.");
@@ -3598,10 +3632,10 @@ async function downloadClientAgent() {
         res = null;
     }
     if (!res || !res.ok) {
-        let msg = res && res.status === 403 ? 'La descarga solo está disponible por HTTPS. Entra con https:// y reintenta.' : 'No se pudo preparar la descarga.';
+        let msg = res && res.status === 403 ? (window.currentLang === 'en' ? 'The download is only available over HTTPS. Access via https:// and retry.' : 'La descarga solo está disponible por HTTPS. Entra con https:// y reintenta.') : (window.currentLang === 'en' ? 'Could not prepare the download.' : 'No se pudo preparar la descarga.');
         try {
             const data = res && await res.json();
-            if (data && data.error) msg = data.error;
+            if (data && data.error) msg = _tServerErr(data.error);
         } catch (e) { }
         hideCloudProgressToast();
         setBtnBusy(false);
@@ -4112,7 +4146,7 @@ async function downloadSelectedAsZip() {
         } else {
             const data = await _cloudJson(res);
             hideCloudProgressToast();
-            await NV_Alert(data.error || window.currentLang === "en" ? "Error preparing download." : "Error al preparar la descarga.");
+            await NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error preparing download." : "Error al preparar la descarga."));
         }
     } catch (err) {
         hideCloudProgressToast();
@@ -4662,10 +4696,10 @@ async function handleZipItem() {
         if (data.ok) {
             fetchCloudFiles(currentCloudPath, currentCloudView);
         } else {
-            NV_Alert(data.error || 'Error al comprimir', 'Error');
+            NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error compressing." : "Error al comprimir"), window.currentLang === "en" ? "Error" : "Error");
         }
     } catch (e) {
-        NV_Alert('Error de conexión al comprimir', 'Error');
+        NV_Alert(window.currentLang === "en" ? "Connection error compressing." : "Error de conexión al comprimir", window.currentLang === "en" ? "Error" : "Error");
     }
 }
 
@@ -4674,7 +4708,7 @@ async function handleUnzipItem() {
     const item = currentCloudContextItem;
 
     const confirm = await NV_Confirm(
-        `¿Deseas descomprimir el archivo "${item.name}" en la carpeta actual?`,
+        window.currentLang === 'en' ? `Do you want to extract the file "${item.name}" into the current folder?` : `¿Deseas descomprimir el archivo "${item.name}" en la carpeta actual?`,
         window.t_cloud('title_unzip', 'Descomprimir .ZIP')
     );
     if (!confirm) return;

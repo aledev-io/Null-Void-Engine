@@ -1511,7 +1511,7 @@
                 <!-- Selector de Diseño (Lista / Cuadrícula) -->
                 <div id="cloud-layout-toggle-group"
                     {% if request.args.get('view', 'home') in ['home', 'computers', 'backups'] %}style="display: none; background: var(--bg-secondary); padding: 4px; border-radius: 20px; border: 1px solid var(--border); margin-right: 5px; gap: 2px;"{% else %}style="display: flex; background: var(--bg-secondary); padding: 4px; border-radius: 20px; border: 1px solid var(--border); margin-right: 5px; gap: 2px;"{% endif %}>
-                    <button onclick="setCloudLayout('list')" id="btn-cloud-layout-list" title="Diseño de lista"
+                    <button onclick="setCloudLayout('list')" id="btn-cloud-layout-list" title="Diseño de lista" data-i18n-title="title_layout_list"
                         data-i18n-title="layout_list"
                         style="width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--indigo); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1524,7 +1524,7 @@
                             <line x1="3" y1="18" x2="3.01" y2="18"></line>
                         </svg>
                     </button>
-                    <button onclick="setCloudLayout('grid')" id="btn-cloud-layout-grid" title="Diseño de cuadrícula"
+                    <button onclick="setCloudLayout('grid')" id="btn-cloud-layout-grid" title="Diseño de cuadrícula" data-i18n-title="title_layout_grid"
                         data-i18n-title="layout_grid"
                         style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -2363,7 +2363,7 @@
                 <div id="info-panel-body" class="info-content">
                     <div style="text-align: center; opacity: 0.3; margin-top: 50px;">
                         <span style="font-size: 4rem;">ℹ️</span>
-                        <p>Haz clic derecho en un archivo y selecciona "Información" para ver sus detalles</p>
+                        <p data-i18n="cloud_empty_info">Haz clic derecho en un archivo y selecciona "Información" para ver sus detalles</p>
                     </div>
                 </div>
             </div>
