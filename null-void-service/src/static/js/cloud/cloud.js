@@ -3552,6 +3552,20 @@ let _currentLinkDeviceToken = null;
 let _existingDevicesAtOpen = new Set();
 
 async function downloadClientAgent() {
+    const btn = document.getElementById('btn-download-agent');
+    const originalLabel = btn ? btn.innerHTML : '';
+    const setBtnBusy = (busy) => {
+        if (!btn) return;
+        btn.style.pointerEvents = busy ? 'none' : '';
+        btn.style.opacity = busy ? '0.7' : '';
+        btn.innerHTML = busy
+            ? '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:cloud-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Descargando Agente...'
+            : originalLabel;
+    };
+
+    setBtnBusy(true);
+    showCloudProgressToast(window.currentLang === "en" ? "Preparing agent download..." : "Descargando Agente Base...");
+
     let res = null;
     try {
         res = await fetch('/api/cloud/sync-agent/download-client', { headers: HEADERS, cache: 'no-store' });
@@ -3565,6 +3579,8 @@ async function downloadClientAgent() {
             const data = res && await res.json();
             if (data && data.error) msg = data.error;
         } catch (e) { }
+        hideCloudProgressToast();
+        setBtnBusy(false);
         await NV_Alert(msg);
         return;
     }
@@ -3581,8 +3597,23 @@ async function downloadClientAgent() {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setBtnBusy(false);
+        const toast = document.getElementById('cloud-progress-toast');
+        const textEl = toast && toast.querySelector('.cloud-toast-text');
+        if (toast) {
+            const spinner = toast.querySelector('.cloud-toast-spinner');
+            if (spinner) spinner.style.display = 'none';
+            if (textEl) textEl.innerText = window.currentLang === "en" ? 'Download started ✓' : 'Descarga iniciada ✓';
+            toast.style.animation = 'none';
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => { toast.style.display = 'none'; }, 300);
+            }, 2200);
+        }
     } catch (e) {
         console.error('downloadClientAgent blob error', e);
+        hideCloudProgressToast();
+        setBtnBusy(false);
         window.location.href = '/api/cloud/sync-agent/download-client';
     }
 }
