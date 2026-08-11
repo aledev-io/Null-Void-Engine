@@ -3548,17 +3548,23 @@ let _currentLinkDeviceToken = null;
 let _existingDevicesAtOpen = new Set();
 
 async function downloadClientAgent() {
+    let res = null;
     try {
-        const res = await fetch('/api/cloud/sync-agent/download-client', { headers: HEADERS, cache: 'no-store' });
-        if (!res.ok) {
-            let msg = 'No se pudo preparar la descarga.';
-            try {
-                const data = await res.json();
-                if (data && data.error) msg = data.error;
-            } catch (e) { }
-            await NV_Alert(msg);
-            return;
-        }
+        res = await fetch('/api/cloud/sync-agent/download-client', { headers: HEADERS, cache: 'no-store' });
+    } catch (e) {
+        console.error('downloadClientAgent fetch error', e);
+        res = null;
+    }
+    if (!res || !res.ok) {
+        let msg = res && res.status === 403 ? 'La descarga solo está disponible por HTTPS. Entra con https:// y reintenta.' : 'No se pudo preparar la descarga.';
+        try {
+            const data = res && await res.json();
+            if (data && data.error) msg = data.error;
+        } catch (e) { }
+        await NV_Alert(msg);
+        return;
+    }
+    try {
         const blob = await res.blob();
         const cd = res.headers.get('Content-Disposition') || '';
         const m = cd.match(/filename="?([^";]+)"?/);
@@ -3570,9 +3576,10 @@ async function downloadClientAgent() {
         document.body.appendChild(a);
         a.click();
         a.remove();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
-        await NV_Alert('Error al descargar el agente.');
+        console.error('downloadClientAgent blob error', e);
+        window.location.href = '/api/cloud/sync-agent/download-client';
     }
 }
 
