@@ -9,12 +9,12 @@ ai_bp = Blueprint("ai_bp", __name__)
 
 
 def _get_uid():
-    token = request.cookies.get("token") or request.args.get("token")
+    token = request.cookies.get("token") or request.headers.get("X-Token")
     return sess.get_user_id(token)
 
 
 def _get_user():
-    token = request.cookies.get("token") or request.args.get("token")
+    token = request.cookies.get("token") or request.headers.get("X-Token")
     username = sess.get_user(token)
     user_id = sess.get_user_id(token)
     return username, user_id, token
