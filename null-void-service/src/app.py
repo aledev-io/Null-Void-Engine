@@ -8,7 +8,13 @@ try:
     from gevent.hub import Hub
     _orig_handle_error = Hub.handle_error
     def _custom_handle_error(self, context, type, value, tb):
-        if type is not None and (issubclass(type, ssl.SSLError) or issubclass(type, ConnectionResetError)):
+        if type is not None and issubclass(type, ssl.SSLError):
+            if "HTTP_REQUEST" in str(value):
+                return
+            sys.stderr.write(f"[-] SSL Handshake Warning: {value}\n")
+            sys.stderr.flush()
+            return
+        if type is not None and issubclass(type, ConnectionResetError):
             sys.stderr.write(f"[-] SSL Handshake Warning: {value}\n")
             sys.stderr.flush()
             return
