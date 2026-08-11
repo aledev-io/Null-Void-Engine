@@ -3549,10 +3549,13 @@ async function confirmCloudShare() {
 let linkDevicePollInterval = null;
 let _currentLinkDeviceOS = 'linux';
 let _linkDeviceCurrentOS = 'linux';
+let _agentDownloading = false;
 let _currentLinkDeviceToken = null;
 let _existingDevicesAtOpen = new Set();
 
 async function downloadClientAgent() {
+    if (_agentDownloading) return;
+    _agentDownloading = true;
     const modal = document.getElementById('cloud-link-device-modal');
     const useToast = !modal || modal.style.display === 'none';
     const btn = document.getElementById('btn-download-agent');
@@ -3561,6 +3564,7 @@ async function downloadClientAgent() {
         if (!btn) return;
         btn.style.pointerEvents = busy ? 'none' : '';
         btn.style.opacity = busy ? '0.7' : '';
+        btn.disabled = busy;
         btn.innerHTML = busy
             ? '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:cloud-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Descargando Agente...'
             : originalLabel;
@@ -3601,6 +3605,7 @@ async function downloadClientAgent() {
         } catch (e) { }
         hideCloudProgressToast();
         setBtnBusy(false);
+        _agentDownloading = false;
         await NV_Alert(msg);
         return;
     }
@@ -3618,6 +3623,7 @@ async function downloadClientAgent() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
         setBtnBusy(false);
+        _agentDownloading = false;
         if (useToast) {
             toastSuccess();
         }
@@ -3625,6 +3631,7 @@ async function downloadClientAgent() {
         console.error('downloadClientAgent blob error', e);
         hideCloudProgressToast();
         setBtnBusy(false);
+        _agentDownloading = false;
         window.location.href = '/api/cloud/sync-agent/download-client';
     }
 }
