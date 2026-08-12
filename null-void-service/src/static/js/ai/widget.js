@@ -14,6 +14,8 @@ function wEsc(s) {
 
 let widgetOpen = false;
 let widgetStreaming = false;
+let widgetCancelled = false;
+let widgetReader = null;
 let widgetMessages = [];
 let widgetSessionId = null;
 let widgetModels = [];
@@ -125,9 +127,11 @@ async function widgetSend() {
 
     const typingEl = showWidgetTyping();
     widgetStreaming = true;
+    widgetCancelled = false;
     let full = '';
     let stream = null;
     let queueStatusEl = null;
+    widgetSetSendState(true);
 
     try {
         const res = await fetch('/api/ai/chat', {
@@ -157,7 +161,9 @@ async function widgetSend() {
             throw new Error(msg);
         }
 
-        const reader = res.body.getReader();
+        if (widgetCancelled) throw new Error('cancel');
+
+        widgetReader = res.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
         while (true) {
@@ -213,18 +219,24 @@ async function widgetSend() {
             }
         }
     } catch (e) {
-        console.error('[AI Widget] Error de conexión:', e);
-        full = e && e.message && /Error del servidor|⚠️/.test(e.message)
-            ? e.message
-            : WIDGET_T(
-                'No se pudo conectar con el asistente. Comprueba que el servicio de IA esté activo.',
-                'Could not reach the assistant. Check that the AI service is running.'
-            );
+        if (widgetCancelled) {
+            full = '';
+        } else {
+            console.error('[AI Widget] Error de conexión:', e);
+            full = e && e.message && /Error del servidor|⚠️/.test(e.message)
+                ? e.message
+                : WIDGET_T(
+                    'No se pudo conectar con el asistente. Comprueba que el servicio de IA esté activo.',
+                    'Could not reach the assistant. Check that the AI service is running.'
+                );
+        }
     } finally {
         widgetStreaming = false;
+        widgetReader = null;
+        widgetSetSendState(false);
         if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
         if (queueStatusEl && queueStatusEl.parentNode) queueStatusEl.parentNode.removeChild(queueStatusEl);
-        if (full) {
+        if (full && !widgetCancelled) {
             if (stream) {
                 const t = document.createElement('span');
                 t.className = 'msg-time';
@@ -235,6 +247,37 @@ async function widgetSend() {
             }
             widgetMessages.push({ role: 'assistant', content: full });
         }
+    }
+}
+
+async function widgetCancel() {
+    if (!widgetStreaming) return;
+    widgetCancelled = true;
+    if (widgetSessionId) {
+        try {
+            await fetch('/api/ai/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Token': window.TOKEN || '' },
+                body: JSON.stringify({ session_id: widgetSessionId }),
+            });
+        } catch (e) { /* sin red: se aborta igualmente el stream local */ }
+    }
+    if (widgetReader) {
+        try { await widgetReader.cancel(); } catch (e) { /* ya cerrado */ }
+    }
+}
+
+function widgetSetSendState(streaming) {
+    const sendBtn = widgetEl('ai-widget-send');
+    if (!sendBtn) return;
+    if (streaming) {
+        sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
+        sendBtn.classList.add('stop');
+        sendBtn.title = WIDGET_T('Detener generación', 'Stop generation');
+    } else {
+        sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>';
+        sendBtn.classList.remove('stop');
+        sendBtn.title = WIDGET_T('Enviar', 'Send');
     }
 }
 
@@ -299,7 +342,10 @@ function initAIWidget() {
         });
     }
     if (sendBtn) {
-        sendBtn.addEventListener('click', () => widgetSend());
+        sendBtn.addEventListener('click', () => {
+            if (widgetStreaming) widgetCancel();
+            else widgetSend();
+        });
     }
     const sel = widgetEl('ai-widget-model');
     if (sel) {
