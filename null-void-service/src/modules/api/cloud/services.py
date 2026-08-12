@@ -14,6 +14,8 @@ import hashlib
 import stat
 import struct
 import zlib
+import re
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from flask import request, send_file, jsonify, after_this_request, Response
@@ -2020,6 +2022,174 @@ def invalidate_user_index(user_id):
     """ Borra el índice en memoria para obligar a una recarga limpia en la próxima búsqueda. """
     with index_lock:
         search_index.pop(user_id, None)
+    # El contenido del usuario cambió: reprogramar el índice de texto completo
+    _schedule_content_index(user_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Índice de contenido (FTS5): extrae texto plano de .txt/.md/.pdf/.docx y lo
+# indexa en background para buscar DENTRO de los documentos, no solo por
+# nombre. El barrido periódico + la reprogramación en cada mutación mantienen
+# el índice al día sin bloquear peticiones.
+# ─────────────────────────────────────────────────────────────────────────────
+_CONTENT_INDEX_SWEEP_SECONDS = 1200          # barrido completo cada 20 min
+_CONTENT_EXTRACT_LIMIT = 20 * 1024 * 1024    # no indexar archivos > 20 MB
+_CONTENT_TEXT_LIMIT = 256 * 1024             # máx. texto indexado por documento
+_content_index_running = set()
+_content_index_guard = threading.Lock()
+_content_sweeper_started = False
+
+
+def _ensure_fts_table():
+    from src.core.database import get_db
+    with get_db() as conn:
+        conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS cloud_doc_fts USING fts5("
+            "user_id UNINDEXED, view UNINDEXED, path, name, content)"
+        )
+        conn.commit()
+
+
+def _extract_text(fp, ext):
+    """Extrae texto plano del documento. Devuelve None si el formato no se
+    puede indexar o falla la extracción."""
+    try:
+        if ext in ('.txt', '.md', '.log', '.json', '.csv', '.ini', '.conf', '.py', '.sh', '.xml'):
+            with open(fp, 'rb') as f:
+                raw = f.read(_CONTENT_TEXT_LIMIT + 1)
+            try:
+                text = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                text = raw.decode('latin-1', errors='replace')
+            return text[:_CONTENT_TEXT_LIMIT]
+
+        if ext == '.pdf':
+            try:
+                r = subprocess.run(['pdftotext', '-l', '10', fp, '-'],
+                                   capture_output=True, timeout=30)
+                if r.returncode == 0:
+                    return r.stdout.decode('utf-8', errors='replace')[:_CONTENT_TEXT_LIMIT]
+            except Exception:
+                pass
+            return None
+
+        if ext == '.docx':
+            try:
+                with zipfile.ZipFile(fp) as zf:
+                    xml = zf.read('word/document.xml').decode('utf-8', errors='replace')
+                text = re.sub(r'<[^>]+>', ' ', xml)
+                for ent, ch in (('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'),
+                                ('&quot;', '"'), ('&apos;', "'")):
+                    text = text.replace(ent, ch)
+                return re.sub(r'\s+', ' ', text).strip()[:_CONTENT_TEXT_LIMIT]
+            except Exception:
+                return None
+    except OSError:
+        return None
+    return None
+
+
+def _index_user_content(user_id):
+    """Indexa (o re-indexa) el contenido de todos los documentos del usuario
+    y elimina filas obsoletas de archivos borrados o renombrados."""
+    user_root = os.path.join(BASE_CLOUD_ROOT, user_id)
+    if not os.path.isdir(user_root):
+        return
+    try:
+        _ensure_fts_table()
+    except sqlite3.OperationalError:
+        return
+
+    from src.core.database import get_db
+    indexed = set()
+    texts = {}
+    with get_db() as conn:
+        for view_dir, view in (('', 'drive'), ('.computers', 'computers'),
+                               ('.backups', 'backups'), ('.business', 'business')):
+            target = os.path.join(user_root, view_dir)
+            if not os.path.isdir(target):
+                continue
+            for root, dirs, files in os.walk(target):
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                rel = os.path.relpath(root, target).replace('\\', '/')
+                if rel == '.':
+                    rel = ''
+                for f in files:
+                    if f.startswith('.'):
+                        continue
+                    fp = os.path.join(root, f)
+                    try:
+                        st = os.stat(fp)
+                    except OSError:
+                        continue
+                    if st.st_size > _CONTENT_EXTRACT_LIMIT:
+                        continue
+                    text = _extract_text(fp, os.path.splitext(f)[1].lower())
+                    if text is None or not text.strip():
+                        continue
+                    indexed.add((view, rel, f))
+                    texts[(view, rel, f)] = text
+
+        # 1) eliminar filas de archivos que ya no existen (borrados/renombrados)
+        for row in conn.execute(
+                "SELECT view, path, name FROM cloud_doc_fts WHERE user_id = ?",
+                (user_id,)).fetchall():
+            if (row['view'], row['path'], row['name']) not in indexed:
+                conn.execute(
+                    "DELETE FROM cloud_doc_fts WHERE user_id = ? AND view = ? AND path = ? AND name = ?",
+                    (user_id, row['view'], row['path'], row['name']))
+
+        # 2) upsert del contenido actual
+        for key in indexed:
+            conn.execute(
+                "DELETE FROM cloud_doc_fts WHERE user_id = ? AND view = ? AND path = ? AND name = ?",
+                (user_id, key[0], key[1], key[2]))
+            conn.execute(
+                "INSERT INTO cloud_doc_fts (user_id, view, path, name, content) VALUES (?, ?, ?, ?, ?)",
+                (user_id, key[0], key[1], key[2], texts[key]))
+        conn.commit()
+
+
+def _schedule_content_index(user_id):
+    """Lanza el indexado de contenido en un hilo de fondo (uno a la vez por
+    usuario; si ya hay uno en marcha, se descarta el encolado: el barrido
+    periódico lo cubre)."""
+    with _content_index_guard:
+        if user_id in _content_index_running:
+            return
+        _content_index_running.add(user_id)
+
+    def _worker():
+        try:
+            _index_user_content(user_id)
+        except Exception as e:
+            logger.error(f"[Cloud] Error indexando contenido de {user_id}: {e}")
+        finally:
+            with _content_index_guard:
+                _content_index_running.discard(user_id)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _start_content_index_sweeper():
+    """Barrido periódico: reindexa todos los usuarios (archivos nuevos,
+    modificados o borrados fuera del flujo API, p. ej. por el agente)."""
+    global _content_sweeper_started
+    if _content_sweeper_started:
+        return
+    _content_sweeper_started = True
+
+    def _loop():
+        while True:
+            time.sleep(_CONTENT_INDEX_SWEEP_SECONDS)
+            try:
+                for uid in os.listdir(BASE_CLOUD_ROOT):
+                    if os.path.isdir(os.path.join(BASE_CLOUD_ROOT, uid)):
+                        _schedule_content_index(uid)
+            except Exception as e:
+                logger.error(f"[Cloud] Error en barrido del índice de contenido: {e}")
+
+    threading.Thread(target=_loop, daemon=True).start()
 
 
 def search_files(query, token):
@@ -2033,34 +2203,73 @@ def search_files(query, token):
         return []
     with index_lock:
         if user_id not in search_index:
+            # El índice de nombres aún no está: se construye en background,
+            # pero la búsqueda por contenido (FTS) sigue disponible ya.
             threading.Thread(target=build_user_search_index, args=(user_id,)).start()
-            return []
-            
-        user_map = search_index[user_id]
+            user_map = None
+        else:
+            user_map = search_index[user_id]
 
     starred_data = _load_json(user_root, '.starred.json')
     protected_data = _load_json(user_root, '.protected.json')
     current_user = sess.get_user(token)
     results = []
 
-    with index_lock:
-        for filename_lowercased, items in user_map.items():
-            if query in filename_lowercased:
-                for item in items:
-                    view_root = get_view_root(item['view'], token)
-                    fp = os.path.join(view_root, item['path'], item['name'])
-                    try:
-                        info = os.stat(fp)
-                        results.append({
-                            "name": item['name'], "path": item['path'], "is_dir": item['is_dir'],
-                            "size": info.st_size if not item['is_dir'] else 0, "mtime": info.st_mtime,
-                            "ext": os.path.splitext(item['name'])[1].lower(), "owner": current_user,
-                            "starred": {"name": item['name'], "path": item['path']} in starred_data,
-                            "protected": {"name": item['name'], "path": item['path'], "view": item['view']} in protected_data,
-                            "view": item['view'],
-                        })
-                    except OSError:
-                        pass
+    if user_map is not None:
+        with index_lock:
+            for filename_lowercased, items in user_map.items():
+                if query in filename_lowercased:
+                    for item in items:
+                        view_root = get_view_root(item['view'], token)
+                        fp = os.path.join(view_root, item['path'], item['name'])
+                        try:
+                            info = os.stat(fp)
+                            results.append({
+                                "name": item['name'], "path": item['path'], "is_dir": item['is_dir'],
+                                "size": info.st_size if not item['is_dir'] else 0, "mtime": info.st_mtime,
+                                "ext": os.path.splitext(item['name'])[1].lower(), "owner": current_user,
+                                "starred": {"name": item['name'], "path": item['path']} in starred_data,
+                                "protected": {"name": item['name'], "path": item['path'], "view": item['view']} in protected_data,
+                                "view": item['view'],
+                            })
+                        except OSError:
+                            pass
+
+    results.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+
+    # Búsqueda por CONTENIDO (FTS5): coincide dentro de documentos indexados
+    # (.txt/.md/.pdf/.docx) cuando la query no acierta solo por nombre.
+    existing_keys = {(r['view'], r['path'], r['name']) for r in results}
+    from src.core.database import get_db
+    try:
+        _ensure_fts_table()
+        fts_q = '"' + query.replace('"', '""') + '"*'
+        rows = get_db().execute(
+            "SELECT view, path, name, snippet(cloud_doc_fts, 4, '', '', '…', 12) AS snip "
+            "FROM cloud_doc_fts WHERE user_id = ? AND cloud_doc_fts MATCH ? "
+            "ORDER BY rank LIMIT 30",
+            (user_id, fts_q)).fetchall()
+        for row in rows:
+            key = (row['view'], row['path'], row['name'])
+            if key in existing_keys:
+                continue
+            fp = os.path.join(get_view_root(row['view'], token), row['path'], row['name'])
+            try:
+                info = os.stat(fp)
+            except OSError:
+                continue
+            results.append({
+                "name": row['name'], "path": row['path'], "is_dir": False,
+                "size": info.st_size, "mtime": info.st_mtime,
+                "ext": os.path.splitext(row['name'])[1].lower(), "owner": current_user,
+                "starred": {"name": row['name'], "path": row['path']} in starred_data,
+                "protected": {"name": row['name'], "path": row['path'], "view": row['view']} in protected_data,
+                "view": row['view'], "match_type": "content",
+                "snippet": row['snip'] or '',
+            })
+            existing_keys.add(key)
+    except sqlite3.OperationalError as e:
+        logger.warning(f"[Cloud] FTS no disponible: {e}")
 
     results.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
     return results[:50]
@@ -3106,3 +3315,6 @@ def unzip_item(view, name, subpath, token):
     except Exception as e:
         logger.error(f"Error al descomprimir {name} en {subpath}: {e}")
         return "Error al descomprimir el archivo"
+
+# Barrido periódico del índice de contenido (hilo daemon al cargar el módulo)
+_start_content_index_sweeper()

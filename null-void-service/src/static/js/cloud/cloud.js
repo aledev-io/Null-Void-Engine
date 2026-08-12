@@ -1054,6 +1054,7 @@ function renderListRow(f, isRecent, getFileTemplateData) {
             <span class="cloud-file-icon" style="font-size: 1.2rem;">${d.icon}</span>
             <div style="display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0;">
                 <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${d.cleanName}</span>
+                ${f.snippet ? `<span style="font-size: 0.68rem; color: var(--indigo); opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${window.t_cloud('search_match_content', 'Coincide en el contenido')} — «${esc(f.snippet)}»</span>` : ''}
                 ${(!isRecent && (f.path !== undefined || (f.trash && f.origin))) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${(f.trash && f.origin) ? window.t_cloud('trash_origin_from', 'sale de') + ' ' + esc(f.origin) : window.t_cloud('in_lower', 'en') + ' ' + d.cleanDisplayPath}</span>` : ''}
             </div>
         </div>
