@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget flotante "Nexus AI" del Dashboard: chat con el agente local (Ollama)
 // vía /api/ai/chat (streaming SSE, líneas JSON). Autocontenido, sin
-// dependencias: solo un botón flotante + modal + consumo del stream.
+// dependencias: solo un botón flotante + panel + consumo del stream.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET_T = (es, en) => (window.currentLang === 'en' ? en : es);
@@ -21,6 +21,11 @@ let widgetModel = null;
 
 function widgetEl(id) {
     return document.getElementById(id);
+}
+
+function timeNow() {
+    const d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
 async function loadAIModels() {
@@ -47,15 +52,17 @@ async function loadAIModels() {
 
 function appendWidgetMessage(role, text) {
     const box = widgetEl('ai-widget-messages');
-    if (!box) return;
+    if (!box) return null;
     const el = document.createElement('div');
-    el.className = role === 'user' ? 'ai-widget-msg user' : 'ai-widget-msg assistant';
+    el.className = role === 'user' ? 'msg user' : 'msg assistant';
     const bubble = document.createElement('div');
-    bubble.className = 'ai-widget-bubble';
+    bubble.className = 'msg-text';
     bubble.textContent = text;
-    bubble.style.whiteSpace = 'pre-wrap';
-    bubble.style.wordBreak = 'break-word';
     el.appendChild(bubble);
+    const t = document.createElement('span');
+    t.className = 'msg-time';
+    t.textContent = timeNow();
+    el.appendChild(t);
     box.appendChild(el);
     box.scrollTop = box.scrollHeight;
     return bubble;
@@ -65,17 +72,27 @@ function showWidgetTyping() {
     const box = widgetEl('ai-widget-messages');
     if (!box) return null;
     const el = document.createElement('div');
-    el.className = 'ai-widget-msg assistant';
-    el.id = 'ai-widget-typing';
+    el.className = 'typing';
+    el.setAttribute('aria-hidden', 'true');
+    el.appendChild(document.createElement('span'));
+    el.appendChild(document.createElement('span'));
+    el.appendChild(document.createElement('span'));
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+    return el;
+}
+
+function makeStreamBubble() {
+    const box = widgetEl('ai-widget-messages');
+    if (!box) return null;
+    const el = document.createElement('div');
+    el.className = 'msg assistant';
     const bubble = document.createElement('div');
-    bubble.className = 'ai-widget-bubble';
-    bubble.textContent = '';
-    bubble.style.whiteSpace = 'pre-wrap';
-    bubble.style.wordBreak = 'break-word';
+    bubble.className = 'msg-text';
     el.appendChild(bubble);
     box.appendChild(el);
     box.scrollTop = box.scrollHeight;
-    return bubble;
+    return { el, bubble };
 }
 
 function widgetWelcome() {
@@ -97,9 +114,10 @@ async function widgetSend() {
     widgetMessages.push({ role: 'user', content: text });
     appendWidgetMessage('user', text);
 
-    const typingBubble = showWidgetTyping();
+    const typingEl = showWidgetTyping();
     widgetStreaming = true;
     let full = '';
+    let stream = null;
 
     try {
         const res = await fetch('/api/ai/chat', {
@@ -152,8 +170,12 @@ async function widgetSend() {
                     }
                     const delta = (j.message && j.message.content) || '';
                     if (delta) {
+                        if (!stream) {
+                            if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
+                            stream = makeStreamBubble();
+                        }
                         full += delta;
-                        if (typingBubble) typingBubble.textContent = full;
+                        stream.bubble.textContent = full;
                         const box = widgetEl('ai-widget-messages');
                         if (box) box.scrollTop = box.scrollHeight;
                     }
@@ -170,10 +192,16 @@ async function widgetSend() {
             );
     } finally {
         widgetStreaming = false;
-        const typing = widgetEl('ai-widget-typing');
-        if (typing) typing.remove();
+        if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
         if (full) {
-            appendWidgetMessage('assistant', full);
+            if (stream) {
+                const t = document.createElement('span');
+                t.className = 'msg-time';
+                t.textContent = timeNow();
+                stream.el.appendChild(t);
+            } else {
+                appendWidgetMessage('assistant', full);
+            }
             widgetMessages.push({ role: 'assistant', content: full });
         }
     }
@@ -184,8 +212,12 @@ function toggleAIWidget(forceOpen) {
     const toggle = widgetEl('ai-widget-toggle');
     if (!modal) return;
     widgetOpen = forceOpen !== undefined ? forceOpen : !widgetOpen;
+    modal.classList.toggle('open', widgetOpen);
     modal.style.display = widgetOpen ? 'flex' : 'none';
-    if (toggle) toggle.setAttribute('aria-expanded', widgetOpen ? 'true' : 'false');
+    if (toggle) {
+        toggle.style.display = widgetOpen ? 'none' : 'flex';
+        toggle.setAttribute('aria-expanded', widgetOpen ? 'true' : 'false');
+    }
     if (widgetOpen) {
         widgetWelcome();
         const input = widgetEl('ai-widget-input');
@@ -199,6 +231,11 @@ function initAIWidget() {
     const input = widgetEl('ai-widget-input');
     const sendBtn = widgetEl('ai-widget-send');
     const closeBtn = widgetEl('ai-widget-close');
+
+    const statusEl = widgetEl('ai-widget-status');
+    if (statusEl) {
+        statusEl.textContent = WIDGET_T('En línea — modelo local', 'Online — local model');
+    }
 
     if (modal && toggle) {
         toggle.addEventListener('click', () => toggleAIWidget());

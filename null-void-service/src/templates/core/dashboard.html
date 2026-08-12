@@ -929,22 +929,36 @@
              WIDGET FLOTANTE NEXUS AI (chat con el agente local)
              ══════════════════════════════════════════════════════════════ -->
         <style>
+            :root {
+                --nv-bg: #0d0d14;
+                --nv-surface: #15151f;
+                --nv-surface-2: #1b1b28;
+                --nv-border: #282836;
+                --nv-text: #e9e9f0;
+                --nv-muted: #8b8b9c;
+                --nv-indigo: #6366f1;
+                --nv-violet: #8b5cf6;
+                --nv-success: #22c55e;
+                --nv-radius: 10px;
+                --nv-font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            }
+
             .ai-widget-toggle {
                 position: fixed;
-                bottom: 20px;
-                right: 20px;
+                bottom: 24px;
+                right: 24px;
                 z-index: 99998;
-                width: 60px;
-                height: 60px;
+                width: 52px;
+                height: 52px;
                 border-radius: 50%;
                 border: none;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: linear-gradient(135deg, var(--accent, #6366f1), var(--accent-dark, #4f46e5));
+                background: linear-gradient(135deg, var(--nv-indigo), var(--nv-violet));
                 color: #fff;
-                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5);
+                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
                 transition: transform 0.2s, box-shadow 0.2s;
             }
             .ai-widget-toggle:hover {
@@ -952,207 +966,292 @@
                 box-shadow: 0 12px 30px rgba(99, 102, 241, 0.6);
             }
             .ai-widget-toggle:focus-visible {
-                outline: 2px solid var(--accent, #6366f1);
+                outline: 2px solid var(--nv-indigo);
                 outline-offset: 3px;
             }
 
-            .ai-widget-modal {
+            /* ---------- Panel de chat ---------- */
+            .chat-panel {
                 position: fixed;
-                bottom: 92px;
-                right: 20px;
+                bottom: 24px;
+                right: 24px;
                 z-index: 99999;
-                width: min(380px, calc(100vw - 32px));
-                height: min(540px, calc(100vh - 140px));
+                width: 360px;
+                max-width: calc(100vw - 32px);
+                height: 520px;
+                max-height: calc(100vh - 48px);
+                background: var(--nv-surface);
+                border: 1px solid var(--nv-border);
+                border-radius: var(--nv-radius);
                 display: none;
                 flex-direction: column;
-                background: var(--bg-card, #1e1e2d);
-                border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-                border-radius: 16px;
-                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
                 overflow: hidden;
-                backdrop-filter: blur(12px);
+                box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+                font-family: var(--nv-font);
+            }
+            .chat-panel.open {
+                display: flex;
             }
 
-            .ai-widget-header {
+            .chat-header {
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                padding: 12px 14px;
-                background: linear-gradient(135deg, var(--accent, #6366f1), var(--accent-dark, #4f46e5));
-                color: #fff;
+                padding: 14px 16px;
+                background: var(--nv-surface-2);
+                border-bottom: 1px solid var(--nv-border);
                 flex-shrink: 0;
             }
-            .ai-widget-header .ai-widget-avatar {
+            .chat-avatar {
                 width: 34px;
                 height: 34px;
-                border-radius: 50%;
-                background: rgba(255, 255, 255, 0.22);
+                border-radius: 8px;
+                background: linear-gradient(135deg, var(--nv-indigo), var(--nv-violet));
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
             }
-            .ai-widget-header .ai-widget-titles {
-                display: flex;
-                flex-direction: column;
-                min-width: 0;
-                flex: 1;
+            .chat-avatar svg {
+                width: 18px;
+                height: 18px;
             }
-            .ai-widget-header .ai-widget-titles b {
-                font-size: 0.92rem;
-                line-height: 1.2;
-            }
-            .ai-widget-header .ai-widget-titles span {
-                font-size: 0.66rem;
-                opacity: 0.85;
-            }
-            .ai-widget-model {
-                background: rgba(0, 0, 0, 0.25);
-                border: 1px solid rgba(255, 255, 255, 0.25);
-                color: #fff;
-                font-size: 0.68rem;
-                border-radius: 8px;
-                padding: 4px 6px;
-                max-width: 110px;
-                cursor: pointer;
-                flex-shrink: 0;
-            }
-            .ai-widget-model option {
-                color: #111;
-            }
-            .ai-widget-close {
-                background: none;
-                border: none;
-                color: #fff;
-                cursor: pointer;
-                padding: 4px;
-                display: flex;
-                font-size: 1.1rem;
-                line-height: 1;
-                opacity: 0.9;
-                flex-shrink: 0;
-            }
-            .ai-widget-close:hover {
-                opacity: 1;
-            }
-
-            .ai-widget-messages {
-                flex: 1;
-                overflow-y: auto;
-                padding: 14px;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                font-size: 0.85rem;
-                background: var(--bg-main, #16161f);
-            }
-            .ai-widget-msg {
-                display: flex;
-                max-width: 100%;
-            }
-            .ai-widget-msg.user {
-                justify-content: flex-end;
-            }
-            .ai-widget-bubble {
-                max-width: 85%;
-                padding: 9px 12px;
-                border-radius: 12px;
-                line-height: 1.45;
-                color: var(--text-main, #e5e7eb);
-                background: var(--surface-hi, #24243a);
-                border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-            }
-            .ai-widget-msg.user .ai-widget-bubble {
-                background: var(--accent, #6366f1);
-                border: none;
-                color: #fff;
-                border-bottom-right-radius: 4px;
-            }
-            .ai-widget-msg.assistant .ai-widget-bubble {
-                border-bottom-left-radius: 4px;
-            }
-
-            .ai-widget-inputbar {
-                display: flex;
-                gap: 8px;
-                padding: 12px 14px;
-                background: var(--surface-hi, #24243a);
-                border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-                flex-shrink: 0;
-            }
-            .ai-widget-inputbar input {
+            .chat-header-info {
                 flex: 1;
                 min-width: 0;
-                background: var(--bg-card, #1e1e2d);
-                border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-                color: var(--text-main, #e5e7eb);
-                padding: 8px 14px;
-                border-radius: 20px;
-                font-size: 0.82rem;
+            }
+            .chat-header-info .name {
+                font-size: 13.5px;
+                font-weight: 600;
+                color: var(--nv-text);
+                line-height: 1.3;
+            }
+            .chat-header-status {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 11.5px;
+                color: var(--nv-muted);
+            }
+            .status-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--nv-success);
+                flex-shrink: 0;
+            }
+            .chat-header select {
+                background: var(--nv-bg);
+                border: 1px solid var(--nv-border);
+                color: var(--nv-muted);
+                font-size: 11.5px;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-family: var(--nv-font);
+                max-width: 130px;
+                cursor: pointer;
+                flex-shrink: 0;
                 outline: none;
             }
-            .ai-widget-inputbar input:focus-visible {
-                border-color: var(--accent, #6366f1);
+            .chat-header select:focus-visible {
+                border-color: var(--nv-indigo);
             }
-            .ai-widget-send {
+            .chat-header select option {
+                background: var(--nv-surface-2);
+                color: var(--nv-text);
+            }
+            .chat-close {
+                background: none;
+                border: none;
+                color: var(--nv-muted);
+                cursor: pointer;
+                font-size: 16px;
+                line-height: 1;
+                padding: 4px;
+                flex-shrink: 0;
+                font-family: var(--nv-font);
+            }
+            .chat-close:hover {
+                color: var(--nv-text);
+            }
+
+            .chat-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                background: var(--nv-bg);
+            }
+            .msg {
+                max-width: 82%;
+                font-size: 13.5px;
+                line-height: 1.5;
+                padding: 10px 12px;
+                border-radius: var(--nv-radius);
+                align-self: flex-start;
+            }
+            .msg.assistant {
+                background: var(--nv-surface-2);
+                border: 1px solid var(--nv-border);
+                color: var(--nv-text);
+                border-bottom-left-radius: 3px;
+            }
+            .msg.user {
+                align-self: flex-end;
+                background: linear-gradient(135deg, var(--nv-indigo), var(--nv-violet));
+                color: #fff;
+                border-bottom-right-radius: 3px;
+            }
+            .msg-text {
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            .msg-time {
+                display: block;
+                font-size: 10px;
+                color: var(--nv-muted);
+                margin-top: 4px;
+            }
+            .msg.user .msg-time {
+                color: rgba(255, 255, 255, 0.65);
+            }
+
+            .typing {
+                align-self: flex-start;
+                display: flex;
+                gap: 4px;
+                padding: 12px 14px;
+                background: var(--nv-surface-2);
+                border: 1px solid var(--nv-border);
+                border-radius: var(--nv-radius);
+                border-bottom-left-radius: 3px;
+            }
+            .typing span {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--nv-muted);
+                animation: nv-blink 1.2s infinite ease-in-out;
+            }
+            .typing span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            .typing span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+            @keyframes nv-blink {
+                0%, 80%, 100% { opacity: 0.25; }
+                40% { opacity: 1; }
+            }
+
+            .chat-input {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px;
+                border-top: 1px solid var(--nv-border);
+                background: var(--nv-surface-2);
+                flex-shrink: 0;
+            }
+            .chat-input input {
+                flex: 1;
+                min-width: 0;
+                background: var(--nv-bg);
+                border: 1px solid var(--nv-border);
+                color: var(--nv-text);
+                font-family: var(--nv-font);
+                font-size: 13.5px;
+                padding: 10px 12px;
+                border-radius: 8px;
+                outline: none;
+            }
+            .chat-input input:focus-visible {
+                border-color: var(--nv-indigo);
+            }
+            .chat-input input::placeholder {
+                color: var(--nv-muted);
+            }
+            .chat-send {
                 width: 36px;
                 height: 36px;
-                border-radius: 50%;
+                border-radius: 8px;
                 border: none;
-                cursor: pointer;
-                background: linear-gradient(135deg, var(--accent, #6366f1), var(--accent-dark, #4f46e5));
+                background: linear-gradient(135deg, var(--nv-indigo), var(--nv-violet));
                 color: #fff;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                cursor: pointer;
                 flex-shrink: 0;
-                transition: transform 0.15s;
+                transition: filter 0.15s;
             }
-            .ai-widget-send:hover {
-                transform: scale(1.06);
+            .chat-send:hover {
+                filter: brightness(1.1);
             }
-            .ai-widget-send:disabled {
+            .chat-send:disabled {
                 opacity: 0.6;
                 cursor: not-allowed;
             }
+            .chat-send svg {
+                width: 16px;
+                height: 16px;
+            }
+
+            .chat-messages::-webkit-scrollbar {
+                width: 6px;
+            }
+            .chat-messages::-webkit-scrollbar-thumb {
+                background: var(--nv-border);
+                border-radius: 3px;
+            }
+            .chat-messages::-webkit-scrollbar-track {
+                background: transparent;
+            }
 
             @media (max-width: 480px) {
-                .ai-widget-modal {
-                    bottom: 84px;
+                .chat-panel {
+                    bottom: 12px;
                     right: 12px;
                     width: calc(100vw - 24px);
+                    max-height: calc(100vh - 24px);
+                }
+                .ai-widget-toggle {
+                    bottom: 16px;
+                    right: 16px;
                 }
             }
         </style>
 
         <div id="ai-agent-widget">
-            <div id="ai-widget-modal" class="ai-widget-modal" role="dialog" aria-label="Nexus AI">
-                <div class="ai-widget-header">
-                    <div class="ai-widget-avatar">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <div id="ai-widget-modal" class="chat-panel" role="dialog" aria-label="Nexus AI">
+                <div class="chat-header">
+                    <div class="chat-avatar">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
                             <path d="M12 2.4 Q13.56 13.56 21.6 12 Q10.44 13.56 12 21.6 Q10.44 10.44 2.4 12 Q13.56 10.44 12 2.4 Z"/>
                             <circle cx="5.6" cy="16.2" r="1.1"/>
                         </svg>
                     </div>
-                    <div class="ai-widget-titles">
-                        <b>Nexus AI</b>
-                        <span>Asistente local inteligente</span>
+                    <div class="chat-header-info">
+                        <div class="name">Nexus AI</div>
+                        <div class="chat-header-status"><span class="status-dot"></span><span id="ai-widget-status">En línea — modelo local</span></div>
                     </div>
-                    <select id="ai-widget-model" class="ai-widget-model" aria-label="Modelo" title="Modelo"></select>
-                    <button id="ai-widget-close" class="ai-widget-close" aria-label="Cerrar">✕</button>
+                    <select id="ai-widget-model" aria-label="Modelo" title="Modelo"></select>
+                    <button id="ai-widget-close" class="chat-close" aria-label="Cerrar">✕</button>
                 </div>
-                <div id="ai-widget-messages" class="ai-widget-messages" aria-live="polite"></div>
-                <div class="ai-widget-inputbar">
+                <div id="ai-widget-messages" class="chat-messages" aria-live="polite"></div>
+                <div class="chat-input">
                     <input id="ai-widget-input" type="text" autocomplete="off" placeholder="Escribe un mensaje..." aria-label="Mensaje">
-                    <button id="ai-widget-send" class="ai-widget-send" aria-label="Enviar">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+                    <button id="ai-widget-send" class="chat-send" aria-label="Enviar">
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
                         </svg>
                     </button>
                 </div>
             </div>
             <button id="ai-widget-toggle" class="ai-widget-toggle" aria-label="Nexus AI" aria-expanded="false">
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 2.4 Q13.56 13.56 21.6 12 Q10.44 13.56 12 21.6 Q10.44 10.44 2.4 12 Q13.56 10.44 12 2.4 Z"/>
                     <circle cx="5.6" cy="16.2" r="1.1"/>
                 </svg>
