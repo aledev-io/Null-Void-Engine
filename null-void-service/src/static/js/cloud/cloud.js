@@ -818,7 +818,7 @@ function renderCloudFiles(files, isRecent = false) {
                         <div class="card-info">
                             <span class="card-name">${highlightMatch(f.name, window._cloudSearchQuery)}</span>
                             <span class="card-meta">${window.t_cloud(f.action_type || 'act_abrio', f.action_type || 'Visto')} · ${timeAgo(f.action_time || f.mtime)}</span>
-                            ${f.match_type ? `<span style="display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; overflow: hidden;">${searchMatchBadge(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
+                            ${f.match_type === 'content' ? `<span style="display: block; margin-top: 1px; min-width: 0; overflow: hidden;">${searchMatchLine(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
                         </div>
                     </div>
                 `;
@@ -1068,13 +1068,13 @@ function highlightMatch(text, query) {
     }
 }
 
-function searchMatchBadge(matchType, snippet, query) {
+function searchMatchLine(matchType, snippet, query) {
+    // Línea sutil integrada bajo el nombre: solo el fragmento resaltado.
+    // Sin pastillas ni etiquetas: la palabra clave en amarillo ya indica
+    // por qué coincide, y en las coincidencias por nombre no hace falta nada
+    // (el propio nombre va resaltado).
     if (matchType === 'content') {
-        return `<span class="cloud-search-badge">${window.t_cloud('search_match_content_short', 'En el contenido')}</span> ` +
-            `<span class="cloud-search-snippet">${highlightMatch(snippet, query)}</span>`;
-    }
-    if (matchType === 'name') {
-        return `<span class="cloud-search-badge name">${window.t_cloud('search_match_name_short', 'En el nombre')}</span>`;
+        return `<span class="cloud-search-snippet">${highlightMatch(snippet, query)}</span>`;
     }
     return '';
 }
@@ -1092,7 +1092,7 @@ function renderListRow(f, isRecent, getFileTemplateData) {
             <span class="cloud-file-icon" style="font-size: 1.2rem;">${d.icon}</span>
             <div style="display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0;">
                 <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${highlightMatch(d.cleanName, window._cloudSearchQuery)}</span>
-                ${f.match_type ? `<span style="display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; overflow: hidden;">${searchMatchBadge(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
+                ${f.match_type === 'content' ? `<span style="display: block; margin-top: 1px; min-width: 0; overflow: hidden;">${searchMatchLine(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
                 ${(!isRecent && (f.path !== undefined || (f.trash && f.origin))) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${(f.trash && f.origin) ? window.t_cloud('trash_origin_from', 'sale de') + ' ' + esc(f.origin) : window.t_cloud('in_lower', 'en') + ' ' + d.cleanDisplayPath}</span>` : ''}
             </div>
         </div>
