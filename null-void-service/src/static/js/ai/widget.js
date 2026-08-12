@@ -23,6 +23,7 @@ let widgetModel = null;
 let widgetModelsLoaded = false;
 let widgetModelRetries = 0;
 let widgetHbTimer = null;
+let widgetSessions = [];
 
 function widgetEl(id) {
     return document.getElementById(id);
@@ -31,6 +32,116 @@ function widgetEl(id) {
 function timeNow() {
     const d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function widgetShortDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const sameDay = d.toDateString() === new Date().toDateString();
+    const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    return sameDay ? hm : d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
+}
+
+async function widgetLoadSessions() {
+    const list = widgetEl('ai-widget-history-list');
+    if (!list) return;
+    try {
+        const res = await fetch('/api/ai/sessions');
+        widgetSessions = res.ok ? await res.json() : [];
+    } catch (e) {
+        widgetSessions = [];
+    }
+    list.innerHTML = '';
+    if (!widgetSessions.length) {
+        const empty = document.createElement('div');
+        empty.className = 'chat-history-empty';
+        empty.textContent = WIDGET_T('Aún no hay conversaciones guardadas.', 'No saved conversations yet.');
+        list.appendChild(empty);
+        return;
+    }
+    for (const s of widgetSessions) {
+        const item = document.createElement('div');
+        item.className = 'chat-history-item'
+            + (widgetSessionId && String(s.id) === String(widgetSessionId) ? ' active' : '');
+        const t = document.createElement('div');
+        t.className = 'hist-title';
+        t.textContent = s.title || 'New Chat';
+        const d = document.createElement('div');
+        d.className = 'hist-date';
+        d.textContent = widgetShortDate(s.updated_at || s.created_at);
+        item.appendChild(t);
+        item.appendChild(d);
+        item.addEventListener('click', () => widgetOpenSession(s.id));
+        list.appendChild(item);
+    }
+}
+
+async function widgetOpenSession(sessionId) {
+    const box = widgetEl('ai-widget-messages');
+    try {
+        const res = await fetch('/api/ai/sessions/' + encodeURIComponent(sessionId) + '/messages');
+        if (!res.ok) return false;
+        const msgs = await res.json();
+        widgetSessionId = sessionId;
+        widgetMessages = msgs
+            .map((m) => ({ role: m.role, content: m.content }))
+            .filter((m) => m.role === 'user' || m.role === 'assistant');
+        const s = widgetSessions.find((x) => String(x.id) === String(sessionId));
+        if (s && s.model) {
+            const sel = widgetEl('ai-widget-model');
+            if (sel && sel.querySelector('option[value="' + s.model + '"]')) {
+                widgetModel = s.model;
+                sel.value = s.model;
+            }
+        }
+        if (box) box.innerHTML = '';
+        for (const m of widgetMessages) appendWidgetMessage(m.role, m.content);
+        if (box) box.scrollTop = box.scrollHeight;
+        widgetCloseHistory();
+        const input = widgetEl('ai-widget-input');
+        if (input) input.focus();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+async function widgetAutoResume() {
+    if (widgetSessionId) return;
+    const box = widgetEl('ai-widget-messages');
+    if (box && box.children.length) return;
+    try {
+        const res = await fetch('/api/ai/sessions');
+        if (!res.ok) return;
+        const sessions = await res.json();
+        if (!sessions.length) return;
+        widgetSessions = sessions;
+        await widgetOpenSession(sessions[0].id);
+    } catch (e) { /* sin red: se mantiene el mensaje de bienvenida */ }
+}
+
+function widgetToggleHistory() {
+    const panel = widgetEl('ai-widget-history-panel');
+    if (!panel) return;
+    if (panel.classList.toggle('open')) widgetLoadSessions();
+}
+
+function widgetCloseHistory() {
+    const panel = widgetEl('ai-widget-history-panel');
+    if (panel) panel.classList.remove('open');
+}
+
+function widgetNewChat() {
+    if (widgetStreaming) widgetCancel();
+    widgetSessionId = null;
+    widgetMessages = [];
+    const box = widgetEl('ai-widget-messages');
+    if (box) box.innerHTML = '';
+    widgetCloseHistory();
+    widgetWelcome();
+    const input = widgetEl('ai-widget-input');
+    if (input) input.focus();
 }
 
 async function loadAIModels() {
@@ -307,11 +418,13 @@ function toggleAIWidget(forceOpen) {
             loadAIModels();
         }
         widgetWelcome();
+        widgetAutoResume();
         const input = widgetEl('ai-widget-input');
         if (input) input.focus();
     } else if (widgetHbTimer) {
         clearInterval(widgetHbTimer);
         widgetHbTimer = null;
+        widgetCloseHistory();
     }
 }
 
@@ -332,6 +445,14 @@ function initAIWidget() {
     }
     if (closeBtn) {
         closeBtn.addEventListener('click', () => toggleAIWidget(false));
+    }
+    const histBtn = widgetEl('ai-widget-history');
+    if (histBtn) {
+        histBtn.addEventListener('click', widgetToggleHistory);
+    }
+    const newBtn = widgetEl('ai-widget-newchat');
+    if (newBtn) {
+        newBtn.addEventListener('click', widgetNewChat);
     }
     if (input) {
         input.addEventListener('keydown', (e) => {
