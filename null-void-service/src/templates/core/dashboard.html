@@ -1051,6 +1051,9 @@
                 font-size: 11px;
                 color: var(--nv-muted);
                 margin-top: 2px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             .status-dot {
                 width: 7px;
@@ -1232,6 +1235,65 @@
                 white-space: pre-wrap;
                 word-break: break-word;
             }
+            .msg-text h1, .msg-text h2, .msg-text h3, .msg-text h4 {
+                margin: 8px 0 4px;
+                font-size: 1.05em;
+                line-height: 1.3;
+            }
+            .msg-text h1 { font-size: 1.2em; }
+            .msg-text p { margin: 4px 0; }
+            .msg-text p:first-child { margin-top: 0; }
+            .msg-text ul, .msg-text ol {
+                margin: 4px 0 4px 18px;
+                padding: 0;
+            }
+            .msg-text li { margin: 2px 0; }
+            .msg-text a { color: #a5b4fc; text-decoration: underline; }
+            .msg-text code {
+                background: rgba(99, 102, 241, 0.15);
+                padding: 1px 5px;
+                border-radius: 5px;
+                font-size: 12px;
+                font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', monospace;
+            }
+            .msg-text pre {
+                background: rgba(0, 0, 0, 0.45);
+                padding: 10px 12px;
+                border-radius: 10px;
+                overflow-x: auto;
+                margin: 6px 0;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            .msg-text pre code {
+                background: none;
+                padding: 0;
+                font-size: 12px;
+                white-space: pre;
+            }
+            .msg-text blockquote {
+                border-left: 3px solid var(--nv-indigo);
+                margin: 6px 0;
+                padding: 2px 10px;
+                color: var(--nv-muted);
+            }
+            .msg-text table {
+                border-collapse: collapse;
+                margin: 6px 0;
+                display: block;
+                overflow-x: auto;
+                max-width: 100%;
+            }
+            .msg-text th, .msg-text td {
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+            .msg-text img { max-width: 100%; border-radius: 8px; }
+            .msg-text hr {
+                border: none;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                margin: 8px 0;
+            }
             .msg-time {
                 display: block;
                 font-size: 10px;
@@ -1374,15 +1436,9 @@
                     </div>
                     <div class="chat-header-info">
                         <div class="name">Nexus AI</div>
-                        <div class="chat-header-status"><span class="status-dot"></span><span id="ai-widget-status">En línea — modelo local</span></div>
+                        <div class="chat-header-status"><span class="status-dot"></span><span id="ai-widget-status">En línea</span></div>
                     </div>
                     <select id="ai-widget-model" aria-label="Modelo" title="Modelo"></select>
-                    <button id="ai-widget-history" class="widget-icon-btn" aria-label="Historial" title="Historial">
-                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.5 4.9L1.9 5.3V11h5.7L5.4 8.8A8 8 0 1 1 4 12H2A10 10 0 1 0 12 2zm-1 4v6l5 3 .8-1.4-4.3-2.6V6h-1.5z"/></svg>
-                    </button>
-                    <button id="ai-widget-newchat" class="widget-icon-btn" aria-label="Nueva conversación" title="Nueva conversación">
-                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                    </button>
                     <button id="ai-widget-close" class="chat-close" aria-label="Cerrar">✕</button>
                 </div>
                 <div id="ai-widget-messages" class="chat-messages" aria-live="polite"></div>
@@ -1406,6 +1462,72 @@
                 </svg>
             </button>
         </div>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/katex.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/github-dark.min.css') }}">
+        <script src="{{ url_for('static', filename='js/ai/marked.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/ai/highlight.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/ai/katex.min.js') }}"></script>
+        <script>
+            if (typeof marked !== 'undefined' && typeof katex !== 'undefined') {
+                const blockMathBrackets = {
+                    name: 'blockMathBrackets',
+                    level: 'inline',
+                    start(src) { return src.match(/\\\[/)?.index; },
+                    tokenizer(src, tokens) {
+                        const match = /^\\\[([\s\S]+?)\\\]/.exec(src);
+                        if (match) {
+                            return { type: 'blockMathBrackets', raw: match[0], text: match[1].trim() };
+                        }
+                    },
+                    renderer(token) {
+                        return katex.renderToString(token.text, { displayMode: true, throwOnError: false });
+                    }
+                };
+                const inlineMathParens = {
+                    name: 'inlineMathParens',
+                    level: 'inline',
+                    start(src) { return src.match(/\\\(/)?.index; },
+                    tokenizer(src, tokens) {
+                        const match = /^\\\(([\s\S]+?)\\\)/.exec(src);
+                        if (match) {
+                            return { type: 'inlineMathParens', raw: match[0], text: match[1].trim() };
+                        }
+                    },
+                    renderer(token) {
+                        return katex.renderToString(token.text, { displayMode: false, throwOnError: false });
+                    }
+                };
+                const blockMathDollars = {
+                    name: 'blockMathDollars',
+                    level: 'inline',
+                    start(src) { return src.match(/\$\$/)?.index; },
+                    tokenizer(src, tokens) {
+                        const match = /^\$\$([\s\S]+?)\$\$/.exec(src);
+                        if (match) {
+                            return { type: 'blockMathDollars', raw: match[0], text: match[1].trim() };
+                        }
+                    },
+                    renderer(token) {
+                        return katex.renderToString(token.text, { displayMode: true, throwOnError: false });
+                    }
+                };
+                const inlineMathDollars = {
+                    name: 'inlineMathDollars',
+                    level: 'inline',
+                    start(src) { return src.match(/\$/)?.index; },
+                    tokenizer(src, tokens) {
+                        const match = /^\$((?:\\.|[^$\\])+?)\$/.exec(src);
+                        if (match) {
+                            return { type: 'inlineMathDollars', raw: match[0], text: match[1].trim() };
+                        }
+                    },
+                    renderer(token) {
+                        return katex.renderToString(token.text, { displayMode: false, throwOnError: false });
+                    }
+                };
+                marked.use({ extensions: [blockMathBrackets, inlineMathParens, blockMathDollars, inlineMathDollars] });
+            }
+        </script>
         <script type="module" src="{{ url_for('static', filename='js/ai/widget.js') }}"></script>
 </body>
 

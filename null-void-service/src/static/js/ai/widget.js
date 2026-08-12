@@ -12,6 +12,22 @@ function wEsc(s) {
     }[c]));
 }
 
+function widgetRenderMD(text) {
+    const src = String(text ?? '');
+    if (typeof marked === 'undefined' || !marked.parse) {
+        return wEsc(src).replace(/\n/g, '<br>');
+    }
+    return marked.parse(src);
+}
+
+function widgetHighlight(bubble) {
+    if (window.hljs && bubble) {
+        bubble.querySelectorAll('pre code').forEach((b) => {
+            try { hljs.highlightElement(b); } catch (e) { /* lenguaje desconocido */ }
+        });
+    }
+}
+
 let widgetOpen = false;
 let widgetStreaming = false;
 let widgetCancelled = false;
@@ -179,7 +195,8 @@ function appendWidgetMessage(role, text) {
     el.className = role === 'user' ? 'msg user' : 'msg assistant';
     const bubble = document.createElement('div');
     bubble.className = 'msg-text';
-    bubble.textContent = text;
+    bubble.innerHTML = widgetRenderMD(text);
+    widgetHighlight(bubble);
     el.appendChild(bubble);
     const t = document.createElement('span');
     t.className = 'msg-time';
@@ -322,7 +339,8 @@ async function widgetSend() {
                             stream = makeStreamBubble();
                         }
                         full += delta;
-                        stream.bubble.textContent = full;
+                        stream.bubble.innerHTML = widgetRenderMD(full);
+                        widgetHighlight(stream.bubble);
                         const box = widgetEl('ai-widget-messages');
                         if (box) box.scrollTop = box.scrollHeight;
                     }
@@ -437,7 +455,7 @@ function initAIWidget() {
 
     const statusEl = widgetEl('ai-widget-status');
     if (statusEl) {
-        statusEl.textContent = WIDGET_T('En línea — modelo local', 'Online — local model');
+        statusEl.textContent = WIDGET_T('En línea', 'Online');
     }
 
     if (modal && toggle) {
