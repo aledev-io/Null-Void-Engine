@@ -1460,7 +1460,7 @@
                 <div style="width: 1px; height: 24px; background: var(--border); margin: 0 16px 0 0;"
                     class="hide-mobile">
                 </div>
-                <div id="cloud-breadcrumbs"
+                <div id="cloud-breadcrumbs" role="status" aria-live="polite"
                     style="display: flex; align-items: center; justify-content: flex-end; gap: 4px 8px; flex-wrap: wrap; overflow: hidden; flex: 1; min-width: 0; margin-right: 20px; color: var(--text-main); font-weight: 600; font-size: 1.1rem;">
                     <!-- Se llena con JS -->
                 </div>
@@ -1484,6 +1484,7 @@
                 </button>
                 <div id="cloud-search-wrapper" style="position: relative; flex: 1; max-width: 300px; min-width: 100px;">
 
+                    <span id="cloud-search-live" class="cloud-sr-only" aria-live="polite"></span>
                     <input type="search" id="cloud-search" placeholder="Buscar en Drive..."
                         data-i18n-placeholder="search_drive" class="cloud-search-input"
                         style="background: var(--surface-hi); border: 1px solid var(--border); border-radius: 24px; padding: 8px 40px 8px 44px; color: var(--text-main); font-size: 0.85rem; width: 100%; outline: none;"
@@ -2529,6 +2530,80 @@
                 border-bottom: 1px solid var(--cloud-row-border);
                 cursor: pointer;
                 transition: background 0.1s;
+            }
+
+            .cloud-file-row:focus-visible {
+                outline: 2px solid var(--indigo);
+                outline-offset: -2px;
+            }
+
+            /* ── Resultados de búsqueda: badge de tipo de coincidencia ── */
+            .cloud-search-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 1px 8px;
+                border-radius: 999px;
+                font-size: 0.62rem;
+                font-weight: 600;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                background: rgba(99, 102, 241, 0.16);
+                color: #a5b4fc;
+                border: 1px solid rgba(99, 102, 241, 0.35);
+                flex-shrink: 0;
+            }
+            .cloud-search-badge.name {
+                background: rgba(148, 163, 184, 0.12);
+                color: #cbd5e1;
+                border-color: rgba(148, 163, 184, 0.3);
+            }
+            [data-theme="light"] .cloud-search-badge {
+                background: #eef2ff;
+                color: #4338ca;
+                border-color: #c7d2fe;
+            }
+            [data-theme="light"] .cloud-search-badge.name {
+                background: #f1f5f9;
+                color: #475569;
+                border-color: #e2e8f0;
+            }
+
+            /* ── Resaltado del término buscado dentro del fragmento ── */
+            .cloud-search-hit {
+                background: rgba(250, 204, 21, 0.22);
+                color: #fde047;
+                font-weight: 700;
+                border-radius: 3px;
+                padding: 0 1px;
+            }
+            [data-theme="light"] .cloud-search-hit {
+                background: #fef3c7;
+                color: #92400e;
+            }
+
+            /* ── Línea de snippet con contraste WCAG (gris claro) ── */
+            .cloud-search-snippet {
+                font-size: 0.68rem;
+                color: #9CA3AF;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
+                opacity: 1;
+            }
+
+            /* ── Anuncio aria-live solo para lectores de pantalla ── */
+            .cloud-sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                white-space: nowrap;
+                border: 0;
             }
 
             .cloud-file-row:hover {

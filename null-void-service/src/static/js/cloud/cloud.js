@@ -372,6 +372,7 @@ async function filterCloudFiles() {
     }
 
     if (!query) {
+        window._cloudSearchQuery = '';
         renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
         renderCloudBreadcrumbs(currentCloudPath, currentCloudView === 'home' ? null : (currentCloudView === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (currentCloudView === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
         return;
@@ -383,8 +384,16 @@ async function filterCloudFiles() {
             if (!res.ok) return;
             const data = await _cloudJson(res);
             const displayQuery = query.length > 15 ? query.substring(0, 15) + '...' : query;
+            window._cloudSearchQuery = query;
             renderCloudBreadcrumbs(null, `Resultados para "${displayQuery}"`);
             renderCloudFiles(data.files || [], false);
+            const live = document.getElementById('cloud-search-live');
+            if (live) {
+                const n = (data.files || []).length;
+                live.textContent = window.currentLang === 'en'
+                    ? (n === 1 ? `1 result for "${query}"` : `${n} results for "${query}"`)
+                    : (n === 1 ? `1 resultado para "${query}"` : `${n} resultados para "${query}"`);
+            }
         } catch (err) {
             console.error("[Cloud] Error al buscar archivos:", err);
         }
@@ -807,8 +816,9 @@ function renderCloudFiles(files, isRecent = false) {
                             ${f.view === 'shared' ? `<span class="cloud-card-shared-badge" title="${esc(f.owner || '')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>${esc(f.owner || '')}</span>` : ''}
                         </div>
                         <div class="card-info">
-                            <span class="card-name">${esc(f.name)}</span>
+                            <span class="card-name">${highlightMatch(f.name, window._cloudSearchQuery)}</span>
                             <span class="card-meta">${window.t_cloud(f.action_type || 'act_abrio', f.action_type || 'Visto')} · ${timeAgo(f.action_time || f.mtime)}</span>
+                            ${f.match_type ? `<span style="display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; overflow: hidden;">${searchMatchBadge(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
                         </div>
                     </div>
                 `;
@@ -1042,19 +1052,47 @@ function protectSvgIcon(locked, size) {
     return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${rect}${shackle}</svg>`;
 }
 
+function _escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightMatch(text, query) {
+    if (!text) return '';
+    const safe = esc(text);
+    if (!query) return safe;
+    try {
+        return safe.replace(new RegExp(_escapeRegExp(query.trim()), 'ig'),
+            m => `<mark class="cloud-search-hit">${m}</mark>`);
+    } catch (e) {
+        return safe;
+    }
+}
+
+function searchMatchBadge(matchType, snippet, query) {
+    if (matchType === 'content') {
+        return `<span class="cloud-search-badge">${window.t_cloud('search_match_content_short', 'En el contenido')}</span> ` +
+            `<span class="cloud-search-snippet">${highlightMatch(snippet, query)}</span>`;
+    }
+    if (matchType === 'name') {
+        return `<span class="cloud-search-badge name">${window.t_cloud('search_match_name_short', 'En el nombre')}</span>`;
+    }
+    return '';
+}
+
 function renderListRow(f, isRecent, getFileTemplateData) {
     const d = getFileTemplateData(f);
     return `
-    <div class="cloud-file-row" 
+    <div class="cloud-file-row" role="button" tabindex="0" aria-label="${esc(f.name)}"
          data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="${f.is_dir}" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
          data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-shared-with="${escAttr(f.shared_with || '')}" data-is-mine="${d.isMine}"
-         onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)">
+         onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)"
+         onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); this.click(); }">
         <div class="cloud-file-name" style="position: relative; ${currentCloudView === 'home' ? 'padding-left: 0;' : ''}">
             ${d.checkboxHtml}
             <span class="cloud-file-icon" style="font-size: 1.2rem;">${d.icon}</span>
             <div style="display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0;">
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${d.cleanName}</span>
-                ${f.snippet ? `<span style="font-size: 0.68rem; color: var(--indigo); opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${window.t_cloud('search_match_content', 'Coincide en el contenido')} — «${esc(f.snippet)}»</span>` : ''}
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${highlightMatch(d.cleanName, window._cloudSearchQuery)}</span>
+                ${f.match_type ? `<span style="display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; overflow: hidden;">${searchMatchBadge(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
                 ${(!isRecent && (f.path !== undefined || (f.trash && f.origin))) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${(f.trash && f.origin) ? window.t_cloud('trash_origin_from', 'sale de') + ' ' + esc(f.origin) : window.t_cloud('in_lower', 'en') + ' ' + d.cleanDisplayPath}</span>` : ''}
             </div>
         </div>

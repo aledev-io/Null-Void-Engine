@@ -2230,7 +2230,7 @@ def search_files(query, token):
                                 "ext": os.path.splitext(item['name'])[1].lower(), "owner": current_user,
                                 "starred": {"name": item['name'], "path": item['path']} in starred_data,
                                 "protected": {"name": item['name'], "path": item['path'], "view": item['view']} in protected_data,
-                                "view": item['view'],
+                                "view": item['view'], "match_type": "name",
                             })
                         except OSError:
                             pass
