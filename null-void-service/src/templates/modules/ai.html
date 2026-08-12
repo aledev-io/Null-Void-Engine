@@ -1611,10 +1611,23 @@
         });
 
 
-        // Enviar latido de conexion cada 10 segundos para mantener el contenedor activo
-        setInterval(() => {
+        // Latido de conexión: solo mientras la pestaña esté visible, para que
+        // el contenedor de Ollama pueda apagarse cuando nadie use la IA.
+        let _hbTimer = null;
+        function _hbStart() {
+            if (_hbTimer) return;
             fetch('/api/ai/heartbeat', { method: 'POST' }).catch(() => { });
-        }, 10000);
+            _hbTimer = setInterval(() => {
+                fetch('/api/ai/heartbeat', { method: 'POST' }).catch(() => { });
+            }, 10000);
+        }
+        function _hbStop() {
+            if (_hbTimer) { clearInterval(_hbTimer); _hbTimer = null; }
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') _hbStart(); else _hbStop();
+        });
+        if (document.visibilityState === 'visible') _hbStart();
 
         let dragCounter = 0;
         const dragOverlay = document.getElementById('drag-drop-overlay');

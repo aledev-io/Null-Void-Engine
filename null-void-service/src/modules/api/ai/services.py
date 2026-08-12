@@ -17,30 +17,92 @@ container_running = False
 ACTIVE_DOWNLOADS = {}
 
 
-def _start_ollama_container():
+def _docker_api(path: str, method: str = "POST") -> tuple[bool, str]:
+    """Llama a la API de Docker vía socket UNIX. Devuelve (ok, respuesta)."""
+    if not os.path.exists("/var/run/docker.sock"):
+        return False, "docker.sock no disponible"
     try:
-        if os.path.exists("/var/run/docker.sock"):
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.connect("/var/run/docker.sock")
-            s.sendall(
-                b"POST /containers/ollama/start HTTP/1.1\r\nHost: localhost\r\n\r\n"
-            )
-            s.close()
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect("/var/run/docker.sock")
+        s.sendall(
+            f"{method} /v1.41/{path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode()
+        )
+        data = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        s.close()
+        first = data.decode(errors="replace").split("\r\n", 1)[0]
+        return first.startswith("HTTP/1.1 20") or first.startswith("HTTP/1.1 30"), first
     except Exception as e:
-        print("Error starting ollama:", e)
+        return False, str(e)
 
 
-def _stop_ollama_container():
+def _start_ollama_container() -> bool:
+    ok, resp = _docker_api("containers/ollama/start")
+    if not ok:
+        _log_ollama(f"Error starting ollama: {resp}")
+    return ok
+
+
+def _stop_ollama_container() -> bool:
+    ok, resp = _docker_api("containers/ollama/stop")
+    if not ok:
+        _log_ollama(f"Error stopping ollama: {resp}")
+    return ok
+
+
+_last_ollama_log = [0.0]
+
+
+def _log_ollama(msg: str):
+    now = time.time()
+    if now - _last_ollama_log[0] > 60:
+        _last_ollama_log[0] = now
+        print(msg)
+
+
+def _ollama_container_running() -> bool:
+    """Estado real del contenedor vía Docker inspect (200 + State.Running)."""
+    if not os.path.exists("/var/run/docker.sock"):
+        return False
     try:
-        if os.path.exists("/var/run/docker.sock"):
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.connect("/var/run/docker.sock")
-            s.sendall(
-                b"POST /containers/ollama/stop HTTP/1.1\r\nHost: localhost\r\n\r\n"
-            )
-            s.close()
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect("/var/run/docker.sock")
+        s.sendall(b"GET /v1.41/containers/ollama/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        data = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        s.close()
+        text = data.decode(errors="replace")
+        if not text.startswith("HTTP/1.1 200"):
+            return False
+        head, _, rest = text.partition("\r\n\r\n")
+        if "transfer-encoding: chunked" in head.lower():
+            body = ""
+            pos = 0
+            while True:
+                end = rest.find("\r\n", pos)
+                if end < 0:
+                    break
+                size = int(rest[pos:end], 16)
+                if size == 0:
+                    break
+                body += rest[end + 2:end + 2 + size]
+                pos = end + 2 + size + 2
+        else:
+            body = rest
+        return bool(json.loads(body).get("State", {}).get("Running"))
     except Exception as e:
-        print("Error stopping ollama:", e)
+        _log_ollama(f"Error inspect ollama: {e}")
+        return False
 
 
 def _inactivity_watcher():
@@ -68,18 +130,33 @@ threading.Thread(target=_inactivity_watcher, daemon=True).start()
 def handle_heartbeat(uid: str = "anonymous"):
     global container_running
     active_ai_users[uid] = time.time()
-    if not container_running:
-        _start_ollama_container()
+    # Verificar el estado REAL del contenedor: si está parado (aunque la
+    # app lo crea activo), arrancarlo.
+    if _ollama_container_running():
+        container_running = True
+    elif _start_ollama_container():
         container_running = True
     return {"ok": True}
 
 
 def get_available_models(uid: str | None = None) -> tuple[list[dict], str | None]:
-    try:
-        models = ollama_client.fetch_models()
-        if uid:
+    """Modelos de Ollama (cacheados globalmente) + modelos externos del usuario."""
+    models = _get_ollama_models_cached()
+    if models is None:
+        try:
+            models = ollama_client.fetch_models()
+            if models:
+                _MODELS_CACHE["ts"] = time.time()
+                _MODELS_CACHE["models"] = models
+        except Exception as e:
+            if _MODELS_CACHE["models"] is not None:
+                models = _MODELS_CACHE["models"]
+            else:
+                return [], str(e)
+    models = list(models)
+    if uid:
+        try:
             keys = repository.get_user_api_keys(uid)
-            # Add external provider pseudo-models
             for key in keys:
                 provider = key.get("provider", "API")
                 models.append({
@@ -89,9 +166,9 @@ def get_available_models(uid: str | None = None) -> tuple[list[dict], str | None
                     "is_external": True,
                     "provider": provider
                 })
-        return models, None
-    except Exception as e:
-        return [], str(e)
+        except Exception:
+            pass
+    return models, None
 
 
 def pull_ai_model(model_name: str, uid: str = "anonymous"):
@@ -127,6 +204,7 @@ def pull_ai_model(model_name: str, uid: str = "anonymous"):
             if model_name in ACTIVE_DOWNLOADS and ACTIVE_DOWNLOADS[model_name].get("status") != "error":
                 ACTIVE_DOWNLOADS[model_name] = {"status": "success", "progress": "Descarga completada."}
                 socketio.emit('model_pull_progress', {"model": model_name, "status": "success"})
+                _invalidate_models_cache()
                 # We can remove it from active downloads after some time, or let the frontend clear it
                 time.sleep(5)
                 if model_name in ACTIVE_DOWNLOADS:
@@ -142,7 +220,9 @@ def pull_ai_model(model_name: str, uid: str = "anonymous"):
 
 def delete_ai_model(model_name: str, uid: str = "anonymous") -> dict:
     handle_heartbeat(uid)
-    return ollama_client.delete_model(model_name)
+    result = ollama_client.delete_model(model_name)
+    _invalidate_models_cache()
+    return result
 
 
 URL_PATTERN = re.compile(r'https?://[^\s<>"\']+')
@@ -422,6 +502,27 @@ MAX_MESSAGE_CHARS = 8000
 RATE_MAX = 30
 RATE_WINDOW = 60.0
 _RATE_LIMITS: dict[str, collections.deque] = {}
+
+_MODELS_CACHE: dict = {"ts": 0.0, "models": None}
+MODELS_CACHE_TTL = 300.0
+
+
+def _models_cache_fresh() -> bool:
+    return (_MODELS_CACHE["models"] is not None
+            and time.time() - _MODELS_CACHE["ts"] < MODELS_CACHE_TTL)
+
+
+def models_cache_needs_refresh() -> bool:
+    """True si hay que contactar con Ollama (el contenedor puede estar parado)."""
+    return not _models_cache_fresh()
+
+
+def _get_ollama_models_cached() -> list | None:
+    return list(_MODELS_CACHE["models"]) if _models_cache_fresh() else None
+
+
+def _invalidate_models_cache():
+    _MODELS_CACHE["models"] = None
 
 
 def is_rate_limited(uid: str | None, ip: str | None) -> tuple[bool, int]:

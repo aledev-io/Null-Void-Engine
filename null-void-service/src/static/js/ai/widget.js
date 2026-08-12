@@ -18,6 +18,9 @@ let widgetMessages = [];
 let widgetSessionId = null;
 let widgetModels = [];
 let widgetModel = null;
+let widgetModelsLoaded = false;
+let widgetModelRetries = 0;
+let widgetHbTimer = null;
 
 function widgetEl(id) {
     return document.getElementById(id);
@@ -34,6 +37,7 @@ async function loadAIModels() {
         const data = await res.json().catch(() => ({}));
         const models = (data.models || []).filter((m) => m.name && !m.name.startsWith('API:'));
         widgetModels = models;
+        widgetModelRetries = 0;
         const sel = widgetEl('ai-widget-model');
         if (sel) {
             sel.innerHTML = models
@@ -47,6 +51,11 @@ async function loadAIModels() {
         }
     } catch (e) {
         console.error('[AI Widget] No se pudieron cargar los modelos:', e);
+        // El contenedor puede estar arrancando: reintenta un par de veces
+        if (widgetModelRetries < 3) {
+            widgetModelRetries++;
+            setTimeout(loadAIModels, 2500);
+        }
     }
 }
 
@@ -219,9 +228,25 @@ function toggleAIWidget(forceOpen) {
         toggle.setAttribute('aria-expanded', widgetOpen ? 'true' : 'false');
     }
     if (widgetOpen) {
+        // Latido mientras el chat esté abierto: mantiene el contenedor de
+        // Ollama activo únicamente mientras se usa la IA.
+        if (!widgetHbTimer) {
+            const ping = () => fetch('/api/ai/heartbeat', { method: 'POST' }).catch(() => {});
+            ping();
+            widgetHbTimer = setInterval(ping, 30000);
+        }
+        // Arranque perezoso: no contactar con el servicio de IA hasta
+        // que el usuario abra el chat por primera vez
+        if (!widgetModelsLoaded) {
+            widgetModelsLoaded = true;
+            loadAIModels();
+        }
         widgetWelcome();
         const input = widgetEl('ai-widget-input');
         if (input) input.focus();
+    } else if (widgetHbTimer) {
+        clearInterval(widgetHbTimer);
+        widgetHbTimer = null;
     }
 }
 
@@ -260,8 +285,6 @@ function initAIWidget() {
             widgetModel = sel.value;
         });
     }
-
-    loadAIModels();
 }
 
 if (document.readyState === 'loading') {

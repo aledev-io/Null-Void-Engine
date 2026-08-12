@@ -10,6 +10,9 @@ services:
       - ./client_agent:/app/client_agent
       - ./.secrets:/app/src/.secrets:ro
       - ${CERTS_HOST_DIR:-./certs}:/app/certs:ro
+      # Socket de Docker para que la app arranque/pare el contenedor de
+      # Ollama bajo demanda (arranque perezoso / apagado por inactividad).
+      - /var/run/docker.sock:/var/run/docker.sock
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - /sys/class/thermal:/sys/class/thermal:ro
@@ -79,8 +82,9 @@ services:
       - ollama-data:/root/.ollama
     security_opt:
       - no-new-privileges:true
-
-    restart: unless-stopped
+    # Sin auto-reinicio: la app lo arranca bajo demanda y lo apaga por
+    # inactividad (watcher de servicios de IA).
+    restart: "no"
     network_mode: "host"
 
 

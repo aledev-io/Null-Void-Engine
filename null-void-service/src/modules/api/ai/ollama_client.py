@@ -6,18 +6,21 @@ OLLAMA_URL = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 
 
 def fetch_models() -> list[dict]:
+    """Lista de modelos de Ollama. Lanza excepción si no es accesible
+    (tras 5 intentos), para no cachear listas vacías cuando está parado."""
+    import time
+    last_err: Exception | None = None
     for attempt in range(5):
         try:
             r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
             if r.status_code == 200:
                 return r.json().get("models", [])
-            return []
-        except (requests.RequestException, ValueError):
-            if attempt == 4:
-                return []
-            import time
+            last_err = RuntimeError(f"Ollama respondió HTTP {r.status_code}")
+        except requests.RequestException as e:
+            last_err = e
+        if attempt < 4:
             time.sleep(1)
-    return []
+    raise last_err or RuntimeError("Ollama no accesible")
 
 
 def pull_model(model_name: str):

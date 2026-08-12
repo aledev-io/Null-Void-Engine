@@ -41,7 +41,9 @@ def ai_page(path=''):
 @ai_bp.route("/api/ai/models")
 def get_ai_models():
     uid = _get_uid() or request.remote_addr or "anonymous"
-    services.handle_heartbeat(uid)
+    # No arrancar el contenedor si hay caché fresca (arranque perezoso)
+    if services.models_cache_needs_refresh():
+        services.handle_heartbeat(uid)
     models, error = services.get_available_models(uid)
     status = 200 if not error else 500
     resp = {"models": models}
@@ -109,6 +111,8 @@ def ai_chat_proxy():
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
+    # El usuario está usando IA: asegurar contenedor activo (arranque perezoso)
+    services.handle_heartbeat(uid)
     limited, retry_after = services.is_rate_limited(uid, request.remote_addr)
     if limited:
         return jsonify(
