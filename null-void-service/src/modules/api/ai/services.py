@@ -1,3 +1,5 @@
+import collections
+import ipaddress
 import json
 import os
 import re
@@ -5,6 +7,7 @@ import socket
 import threading
 import time
 import requests
+from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from core.socket_ext import socketio
 from . import ollama_client, repository, external_client
@@ -164,6 +167,56 @@ def extract_urls(text: str) -> list[str]:
     return cleaned
 
 
+def _url_is_safe(url: str) -> bool:
+    """SSRF guard: solo http/https hacia hosts públicos (no IPs privadas/loopback)."""
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    if not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    if host == "localhost" or host.endswith(".localhost") or host.endswith(".local"):
+        return False
+    try:
+        infos = socket.getaddrinfo(
+            host, parsed.port or (443 if parsed.scheme == "https" else 80),
+            proto=socket.IPPROTO_TCP,
+        )
+    except (socket.gaierror, OSError):
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
+def _fetch_safe(getter, url: str, headers: dict, timeout: int = 8):
+    """GET con validación SSRF en cada hop (redirecciones incluidas)."""
+    current = url
+    for _ in range(5):
+        if not _url_is_safe(current):
+            return None
+        try:
+            resp = getter(current, timeout=timeout, headers=headers, allow_redirects=False)
+        except Exception:
+            return None
+        if resp.status_code in (301, 302, 303, 307, 308) and resp.headers.get("Location"):
+            current = urljoin(current, resp.headers["Location"])
+            continue
+        return resp
+    return None
+
+
 def scrape_url_content(url: str, max_chars: int = 6000) -> str | None:
     """Scrape readable text content from a URL."""
     try:
@@ -175,9 +228,9 @@ def scrape_url_content(url: str, max_chars: int = 6000) -> str | None:
         try:
             import cloudscraper
             scraper = cloudscraper.create_scraper()
-            resp = scraper.get(url, timeout=8, headers=headers)
+            resp = _fetch_safe(scraper.get, url, headers)
         except Exception:
-            resp = requests.get(url, timeout=8, headers=headers)
+            resp = _fetch_safe(requests.get, url, headers)
         
         if not resp or resp.status_code != 200:
             return None
@@ -363,6 +416,41 @@ def perform_web_search(query: str) -> str:
 
 CANCELED_SESSIONS = set()
 ACTIVE_GENERATIONS = {}  # session_id -> {"model": str, "started_at": float}
+
+MAX_MESSAGES = 50
+MAX_MESSAGE_CHARS = 8000
+RATE_MAX = 30
+RATE_WINDOW = 60.0
+_RATE_LIMITS: dict[str, collections.deque] = {}
+
+
+def is_rate_limited(uid: str | None, ip: str | None) -> tuple[bool, int]:
+    """Ventana deslizante por usuario/IP. Devuelve (limitado, retry_after_seg)."""
+    key = f"{uid or 'anon'}:{ip or 'unknown'}"
+    now = time.monotonic()
+    dq = _RATE_LIMITS.setdefault(key, collections.deque())
+    while dq and now - dq[0] > RATE_WINDOW:
+        dq.popleft()
+    if len(dq) >= RATE_MAX:
+        return True, max(1, int(RATE_WINDOW - (now - dq[0])))
+    dq.append(now)
+    return False, 0
+
+
+def validate_chat_payload(data: dict) -> str | None:
+    """Valida el payload de /api/ai/chat. Devuelve un error o None."""
+    messages = data.get("messages") if isinstance(data, dict) else None
+    if not isinstance(messages, list) or not messages:
+        return "Faltan mensajes en la petición"
+    if len(messages) > MAX_MESSAGES:
+        return f"Demasiados mensajes (máximo {MAX_MESSAGES})"
+    for m in messages:
+        content = m.get("content") if isinstance(m, dict) else None
+        if not isinstance(content, str) or not content.strip():
+            return "Mensaje vacío en el historial"
+        if len(content) > MAX_MESSAGE_CHARS:
+            return f"Mensaje demasiado largo (máximo {MAX_MESSAGE_CHARS} caracteres)"
+    return None
 
 def cancel_generation(session_id: str):
     if session_id:

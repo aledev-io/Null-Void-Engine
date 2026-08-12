@@ -117,6 +117,18 @@ async function widgetSend() {
             }),
         });
 
+        if (!res.ok) {
+            let msg = WIDGET_T(
+                'Error del servidor (' + res.status + ')',
+                'Server error (' + res.status + ')'
+            );
+            try {
+                const err = await res.json().catch(() => null);
+                if (err && err.error) msg = '⚠️ ' + err.error;
+            } catch (e) { /* cuerpo no JSON */ }
+            throw new Error(msg);
+        }
+
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
@@ -150,10 +162,12 @@ async function widgetSend() {
         }
     } catch (e) {
         console.error('[AI Widget] Error de conexión:', e);
-        full = WIDGET_T(
-            'No se pudo conectar con el asistente. Comprueba que el servicio de IA esté activo.',
-            'Could not reach the assistant. Check that the AI service is running.'
-        );
+        full = e && e.message && /Error del servidor|⚠️/.test(e.message)
+            ? e.message
+            : WIDGET_T(
+                'No se pudo conectar con el asistente. Comprueba que el servicio de IA esté activo.',
+                'Could not reach the assistant. Check that the AI service is running.'
+            );
     } finally {
         widgetStreaming = false;
         const typing = widgetEl('ai-widget-typing');

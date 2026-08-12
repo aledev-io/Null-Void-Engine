@@ -107,7 +107,18 @@ def delete_model_route(model_name):
 @ai_bp.route("/api/ai/chat", methods=["POST"])
 def ai_chat_proxy():
     uid = _get_uid()
-    data = request.get_json(force=True)
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    limited, retry_after = services.is_rate_limited(uid, request.remote_addr)
+    if limited:
+        return jsonify(
+            error=f"Demasiadas peticiones. Espera {retry_after}s.",
+            retry_after=retry_after,
+        ), 429
+    data = request.get_json(force=True) or {}
+    error = services.validate_chat_payload(data)
+    if error:
+        return jsonify(error=error), 400
     return Response(
         stream_with_context(services.stream_chat(uid, data)),
         mimetype="application/json",
