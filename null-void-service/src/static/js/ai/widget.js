@@ -127,6 +127,7 @@ async function widgetSend() {
     widgetStreaming = true;
     let full = '';
     let stream = null;
+    let queueStatusEl = null;
 
     try {
         const res = await fetch('/api/ai/chat', {
@@ -173,6 +174,25 @@ async function widgetSend() {
                         widgetSessionId = j.session_id;
                         continue;
                     }
+                    if (j.queue) {
+                        const pos = j.queue.position || 0;
+                        const box = widgetEl('ai-widget-messages');
+                        if (!queueStatusEl && box) {
+                            queueStatusEl = document.createElement('div');
+                            queueStatusEl.className = 'msg assistant queue-status';
+                            const b = document.createElement('div');
+                            b.className = 'msg-text';
+                            queueStatusEl.appendChild(b);
+                            box.appendChild(queueStatusEl);
+                            box.scrollTop = box.scrollHeight;
+                        }
+                        if (queueStatusEl) {
+                            queueStatusEl.querySelector('.msg-text').textContent = pos > 0
+                                ? WIDGET_T('⏳ En cola… posición ' + pos, '⏳ Queued… position ' + pos)
+                                : WIDGET_T('⚡ Generando respuesta…', '⚡ Generating response…');
+                        }
+                        continue;
+                    }
                     if (j.error) {
                         full += (full ? '\n\n' : '') + '⚠️ ' + j.error;
                         continue;
@@ -181,6 +201,7 @@ async function widgetSend() {
                     if (delta) {
                         if (!stream) {
                             if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
+                            if (queueStatusEl && queueStatusEl.parentNode) queueStatusEl.parentNode.removeChild(queueStatusEl);
                             stream = makeStreamBubble();
                         }
                         full += delta;
@@ -202,6 +223,7 @@ async function widgetSend() {
     } finally {
         widgetStreaming = false;
         if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
+        if (queueStatusEl && queueStatusEl.parentNode) queueStatusEl.parentNode.removeChild(queueStatusEl);
         if (full) {
             if (stream) {
                 const t = document.createElement('span');

@@ -116,8 +116,12 @@ def _inactivity_watcher():
             if now - active_ai_users[uid] > 60:
                 del active_ai_users[uid]
 
-        # Si no hay nadie y el contenedor corre, matar todo
-        if container_running and len(active_ai_users) == 0:
+        # Si no hay nadie, no hay generaciones activas ni cola, y el
+        # contenedor corre: apagarlo. Nunca cortar una generación en curso.
+        with _GEN_LOCK:
+            idle = (len(active_ai_users) == 0
+                    and _gen_active == 0 and not _gen_waiters)
+        if container_running and idle:
             ollama_client.unload_all_models()
             time.sleep(1) # Pequeño margen para la descarga
             _stop_ollama_container()
@@ -497,6 +501,73 @@ def perform_web_search(query: str) -> str:
 CANCELED_SESSIONS = set()
 ACTIVE_GENERATIONS = {}  # session_id -> {"model": str, "started_at": float}
 
+# ── Cola de generación: hardware limitado, una sola generación a la vez ──
+MAX_CONCURRENT_GENERATIONS = int(os.environ.get("AI_MAX_CONCURRENT", "1"))
+QUEUE_MAX_WAIT = float(os.environ.get("AI_QUEUE_MAX_WAIT", "300"))
+QUEUE_POLL_INTERVAL = 0.5
+_GEN_LOCK = threading.Lock()
+_gen_active = 0
+_gen_waiters: list[str] = []
+
+
+class _GenerationQueueTimeout(Exception):
+    pass
+
+
+def _dequeue_generation(key: str):
+    with _GEN_LOCK:
+        if key in _gen_waiters:
+            _gen_waiters.remove(key)
+
+
+def _queue_position(key: str) -> int:
+    """Posición en cola: 0 = generando ya; 1..n = esperando turno."""
+    with _GEN_LOCK:
+        if key in _gen_waiters:
+            return _gen_waiters.index(key) + 1
+        return 0
+
+
+def _acquire_generation_slot(key: str, notify) -> bool:
+    """Espera (FIFO) hasta conseguir slot de generación. notify(pos) en cada
+    cambio de posición. Devuelve False si se canceló o se agotó el tiempo."""
+    global _gen_active
+    deadline = time.time() + QUEUE_MAX_WAIT
+    _dequeue_generation(key)
+    with _GEN_LOCK:
+        if _gen_active < MAX_CONCURRENT_GENERATIONS and not _gen_waiters:
+            _gen_active += 1
+            notify(0)
+            return True
+        if key not in _gen_waiters:
+            _gen_waiters.append(key)
+    last_emitted = -1
+    while True:
+        if key in CANCELED_SESSIONS:
+            _dequeue_generation(key)
+            return False
+        with _GEN_LOCK:
+            if (_gen_active < MAX_CONCURRENT_GENERATIONS
+                    and _gen_waiters and _gen_waiters[0] == key):
+                _gen_waiters.pop(0)
+                _gen_active += 1
+                notify(0)
+                return True
+            position = _gen_waiters.index(key) + 1 if key in _gen_waiters else 1
+        if position != last_emitted:
+            last_emitted = position
+            notify(position)
+        if time.time() > deadline:
+            _dequeue_generation(key)
+            return False
+        time.sleep(QUEUE_POLL_INTERVAL)
+
+
+def _release_generation_slot():
+    global _gen_active
+    with _GEN_LOCK:
+        _gen_active = max(0, _gen_active - 1)
+
 MAX_MESSAGES = 50
 MAX_MESSAGE_CHARS = 8000
 RATE_MAX = 30
@@ -603,7 +674,26 @@ def stream_chat(uid: str | None, data: dict):
 
     def background_worker():
         full_response = ""
+        slot_acquired = False
+        last_qpos = [-1]
+        gen_key = session_id or f"anon:{threading.get_ident()}"
+
+        def _queue_notify(position):
+            if position != last_qpos[0]:
+                last_qpos[0] = position
+                q.put(("chunk", json.dumps({"queue": {"position": position}}) + "\n"))
+
         try:
+            # ── Cola de generación: esperar turno (1 generación simultánea) ──
+            slot_acquired = _acquire_generation_slot(gen_key, _queue_notify)
+            if not slot_acquired:
+                if gen_key in CANCELED_SESSIONS:
+                    return  # cancelado mientras esperaba: fin silencioso
+                raise _GenerationQueueTimeout(
+                    f"La cola de generación está saturada: se agotó el tiempo de "
+                    f"espera ({int(QUEUE_MAX_WAIT)}s). Inténtalo de nuevo."
+                )
+
             last_user_msg = next((m["content"] for m in reversed(messages) if m["role"] == "user"), None) if messages else None
             
             # --- URL Detection: scrape URLs found in the user's message ---
@@ -719,9 +809,14 @@ Basa tu respuesta ÚNICAMENTE en el contenido extraído. No inventes informació
                     full_response += delta
                 except (json.JSONDecodeError, TypeError):
                     pass
+        except _GenerationQueueTimeout as e:
+            q.put(("error", str(e)))
         except Exception as e:
             q.put(("error", str(e)))
         finally:
+            if slot_acquired:
+                _release_generation_slot()
+            _dequeue_generation(gen_key)
             q.put(("done", None))
             # Clean up generation tracking
             if session_id:

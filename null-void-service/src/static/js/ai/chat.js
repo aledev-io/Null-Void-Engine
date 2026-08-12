@@ -1,4 +1,18 @@
 // chat.js
+export function updateChatGenStatus(position) {
+    const st = document.getElementById('chat-gen-status');
+    if (!st) return;
+    st.style.display = 'flex';
+    st.textContent = position > 0
+        ? `⏳ En cola de generación… posición ${position}`
+        : '⚡ Generando respuesta…';
+}
+
+export function clearChatGenStatus() {
+    const st = document.getElementById('chat-gen-status');
+    if (st) st.style.display = 'none';
+}
+
 export function showChat(pushHistory = true) {
     document.getElementById('chat-view').style.display = 'flex';
     document.getElementById('notes-view').classList.remove('active');
@@ -758,6 +772,10 @@ export async function sendMessage(fromButton = false) {
                         window.currentChatId = json.session_id;
                         continue;
                     }
+                    if (json.queue) {
+                        updateChatGenStatus(json.queue.position || 0);
+                        continue;
+                    }
                     if (json.error) {
                         fullResponse += `\n\n*Error: ${json.error}*`;
                         aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
@@ -786,6 +804,7 @@ export async function sendMessage(fromButton = false) {
     window.isGenerating = false;
     clearInterval(keepAliveInterval);
     window._streamingCompleted = true; // Tell pollGenerationStatus not to re-fetch from DB
+    clearChatGenStatus();
     sendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
     sendBtn.style.background = 'var(--primary)';
     window.chatMessages.push({ role: 'assistant', content: fullResponse, model: model, duration: durationStr });
@@ -1228,6 +1247,10 @@ export async function submitEditedMessage(index, newText) {
                         window.currentChatId = json.session_id;
                         continue;
                     }
+                    if (json.queue) {
+                        updateChatGenStatus(json.queue.position || 0);
+                        continue;
+                    }
                     if (json.error) {
                         fullResponse += `\n\n*Error: ${json.error}*`;
                         aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
@@ -1256,6 +1279,7 @@ export async function submitEditedMessage(index, newText) {
     window.isGenerating = false;
     clearInterval(keepAliveInterval);
     window._streamingCompleted = true;
+    clearChatGenStatus();
     sendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
     sendBtn.style.background = 'var(--primary)';
     window.chatMessages.push({ role: 'assistant', content: fullResponse, model: model, duration: durationStr });
