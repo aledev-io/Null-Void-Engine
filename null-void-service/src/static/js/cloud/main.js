@@ -63,9 +63,6 @@ function bootCloud() {
     }
 }
 
-// Arranque robusto: si el script se evalúa con el DOM ya listo (carga desde
-// caché, shell nativo), inicializa de inmediato en vez de esperar un evento
-// DOMContentLoaded que ya ocurrió.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bootCloud);
 } else {

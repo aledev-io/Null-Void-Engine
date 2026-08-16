@@ -33,3 +33,7 @@ env/
 *$py.class
 dist/
 build/
+tests/
+.opencode/
+client_agent/dist/
+client_agent/venv/

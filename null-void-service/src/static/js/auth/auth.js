@@ -1,4 +1,3 @@
-// auth.js - Módulo de Autenticación
 const Auth = {
     // Nueva validación de formato antes de enviar nada
     isUsernameValid(username) {
@@ -6,8 +5,7 @@ const Auth = {
         return regex.test(username);
     },
 
-    // Gestiona el login
-    async login(username, password) {
+        async login(username, password) {
         if (!this.isUsernameValid(username)) {
             throw new Error("err_user_format"); // Se manejará en el frontend traduciéndolo
         }
@@ -19,8 +17,7 @@ const Auth = {
         return await res.json();
     },
 
-    // Gestiona el registro
-    async register(username, password) {
+        async register(username, password) {
         if (!this.isUsernameValid(username)) {
             throw new Error("err_user_format");
         }
@@ -32,8 +29,7 @@ const Auth = {
         return await res.json();
     },
 
-    // Valida fortaleza básica (esto lo usaremos en el frontend)
-    isValidPassword(password) {
+        isValidPassword(password) {
         return password.length >= 6; // Ejemplo: mínimo 6 caracteres
     }
 };

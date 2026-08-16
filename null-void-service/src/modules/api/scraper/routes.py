@@ -54,7 +54,6 @@ def athome_search():
     if not query:
         return jsonify(error="La búsqueda no puede estar vacía"), 400
         
-    # We will assume the query is the location. 
     try:
         resp = scraper_request("POST", "/search_athome", json={"location": query, "min_surface": 45, "user_id": user_id}, timeout=5)
         return jsonify(resp.json())
@@ -116,7 +115,6 @@ _geocode_cache = {}
 
 @scraper_bp.route('/api/scraper/webhook/state', methods=['POST'])
 def webhook_scraper_state():
-    # Only allow localhost
     if request.remote_addr != '127.0.0.1':
         return jsonify(error="Forbidden"), 403
     # Autenticación interna: misma clave compartida con el microservicio scraper
@@ -128,7 +126,6 @@ def webhook_scraper_state():
     
     from .socket_events import scraper_state
     
-    # We update the global dict and broadcast
     scraper_state['is_scraping'] = data.get('is_scraping', False)
     if 'user' in data:
         scraper_state['user'] = data['user']
@@ -310,7 +307,7 @@ def telegram_manual_send():
         
     try:
         from core.notifications import notifier
-        all_prods = services.get_scraped_data(user_id=None) # Get all and filter
+        all_prods = services.get_scraped_data(user_id=None)
         
         sent_count = 0
         errors = []
@@ -320,7 +317,6 @@ def telegram_manual_send():
                 surface = p.get('rating_value', 0)
                 link = p.get('url', '')
                 
-                # Check title for keywords if possible to be smart about Pets/Parking
                 title_lower = p.get('title', '').lower()
                 has_pets = "Yes" if any(w in title_lower for w in ['pets', 'animaux', 'mascota', 'chien', 'chat']) else "Not specified"
                 has_parking = "Yes" if any(w in title_lower for w in ['parking', 'garage', 'emplacement']) else "Not specified"
@@ -630,11 +626,9 @@ def export_to_favourites():
         
     import os
     import re
-    # Create favourites dir
     fav_dir = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../data')), 'favourites')
     os.makedirs(fav_dir, exist_ok=True)
     
-    # Sanitize title for filename
     title = prod_data['product']['title']
     safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
     filename = f"{sku}_{safe_title}.txt"

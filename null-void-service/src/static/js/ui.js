@@ -1,4 +1,3 @@
-// ui.js - Funciones de Interfaz Visual
 const UI = {
     setLoading(btn, on) {
         if (!btn) return;

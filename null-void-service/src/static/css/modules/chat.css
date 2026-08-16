@@ -1,4 +1,4 @@
-/* ---------- CHAT VARIABLES ---------- */
+/* CHAT VARIABLES */
 :root {
     --bg: #0f0f13;
     --surface: #17171d;
@@ -31,7 +31,7 @@
     overflow: hidden;
 }
 
-/* ---------- ICON RAIL ---------- */
+/* ICON RAIL */
 .rail {
     width: 76px;
     min-width: 76px;
@@ -207,7 +207,7 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
-/* ---------- SIDEBAR ---------- */
+/* SIDEBAR */
 .sidebar {
     width: 340px;
     min-width: 280px;
@@ -428,7 +428,7 @@
     z-index: 2;
 }
 
-/* ---------- CONVERSATION PANEL ---------- */
+/* CONVERSATION PANEL */
 .conversation {
     flex: 1;
     display: flex;

@@ -104,7 +104,7 @@ def _get_user_lock(user_id) -> threading.Lock:
         return _user_json_locks[user_id]
 
 
-# ── Hardening ZIP (CWE-400): chunks de I/O y cooperación con el event loop ──
+# Hardening ZIP (CWE-400): chunks de I/O y cooperación con el event loop
 _ZIP_CHUNK_BYTES = int(os.environ.get("ZIP_CHUNK_BYTES", str(2 * 1024 * 1024)))
 # Límite de seguridad: tamaño total descomprimido máximo admitido por descompresión.
 _MAX_UNCOMPRESSED_BYTES = int(os.environ.get("ZIP_MAX_UNCOMPRESSED_BYTES", str(10 * 1024 ** 3)))
@@ -908,11 +908,9 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
                             overwrite_existing, file_size, existing_size, sha256_hash.hexdigest())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Subidas reanudables por chunks (estilo TUS): el cliente crea una sesión,
 # envía el archivo por fragmentos y la cierra al final. Si la conexión se
 # corta, puede consultar el estado y reanudar desde el último byte recibido.
-# ─────────────────────────────────────────────────────────────────────────────
 UPLOAD_CHUNK_SIZE = int(os.environ.get("UPLOAD_CHUNK_SIZE", str(8 * 1024 * 1024)))
 _UPLOAD_STALE_HOURS = 24
 _UPLOAD_DIR_NAME = '.uploads'
@@ -1117,12 +1115,10 @@ def abort_upload(upload_id, token):
     return True, None
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Control de versiones: cuando un archivo se sobrescribe (sync del agente o
 # subida con overwrite), el contenido anterior se conserva como hardlink en
 # .versions/<clave>/v<ts>_<rand>. Restaurar una versión vuelve a enlazar ese
 # contenido como archivo actual (guardando a su vez la versión anterior).
-# ─────────────────────────────────────────────────────────────────────────────
 _VERSIONS_DIR_NAME = '.versions'
 
 
@@ -2026,12 +2022,10 @@ def invalidate_user_index(user_id):
     _schedule_content_index(user_id)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Índice de contenido (FTS5): extrae texto plano de .txt/.md/.pdf/.docx y lo
 # indexa en background para buscar DENTRO de los documentos, no solo por
 # nombre. El barrido periódico + la reprogramación en cada mutación mantienen
 # el índice al día sin bloquear peticiones.
-# ─────────────────────────────────────────────────────────────────────────────
 _CONTENT_INDEX_SWEEP_SECONDS = 1200          # barrido completo cada 20 min
 _CONTENT_EXTRACT_LIMIT = 20 * 1024 * 1024    # no indexar archivos > 20 MB
 _CONTENT_TEXT_LIMIT = 256 * 1024             # máx. texto indexado por documento
@@ -3112,7 +3106,7 @@ def zip_item(view, name, subpath, token, zip_name=None):
     if os.path.exists(dest_zip_path):
         return f"Ya existe un archivo llamado '{zip_name}' en esta ubicación"
 
-    # ── Calcular tamaño total y nº de archivos a comprimir ──
+    # Calcular tamaño total y nº de archivos a comprimir
     total_size = 0
     file_count = 0
     if os.path.isdir(target_path):
@@ -3136,7 +3130,7 @@ def zip_item(view, name, subpath, token, zip_name=None):
     if not ok:
         return err
 
-    # ── Crear el zip en temporal para medir su tamaño real ──
+    # Crear el zip en temporal para medir su tamaño real
     pool_dir = os.path.join(BASE_CLOUD_ROOT, '.pool')
     os.makedirs(pool_dir, exist_ok=True)
     fd, temp_path = tempfile.mkstemp(suffix='.zip', dir=pool_dir)
@@ -3224,26 +3218,26 @@ def unzip_item(view, name, subpath, token):
             dest_dir = safe_join(user_root, subpath)
             infolist = zf.infolist()
 
-            # ── Límite de nº de elementos (Zip Bomb) ──
+            # Límite de nº de elementos (Zip Bomb)
             if len(infolist) > MAX_ZIP_FILES:
                 return f"El archivo zip contiene demasiados elementos (máximo {MAX_ZIP_FILES})."
 
-            # ── Ratio de compresión agregado (Zip Bomb) ──
+            # Ratio de compresión agregado (Zip Bomb)
             total_uncompressed = sum(info.file_size for info in infolist)
             total_compressed = sum(info.compress_size for info in infolist)
             if total_compressed > 0 and (total_uncompressed / total_compressed) > MAX_ZIP_RATIO:
                 return "El archivo zip tiene un ratio de compresión sospechoso (posible Zip Bomb)."
 
-            # ── Límite de seguridad de tamaño descomprimido (CWE-400) ──
+            # Límite de seguridad de tamaño descomprimido (CWE-400)
             if total_uncompressed > _MAX_UNCOMPRESSED_BYTES:
                 return "El archivo comprimido supera la cuota o el límite de seguridad"
 
-            # ── Comprobar cuota del usuario y disco físico con el tamaño real ──
+            # Comprobar cuota del usuario y disco físico con el tamaño real
             ok, err = _check_storage_capacity(token, total_uncompressed)
             if not ok:
                 return "El archivo comprimido supera la cuota o el límite de seguridad"
 
-            # ── Validar y filtrar todos los miembros antes de extraer ──
+            # Validar y filtrar todos los miembros antes de extraer
             members = []
             for info in infolist:
                 name_norm = info.filename.replace('\\', '/')
@@ -3290,7 +3284,7 @@ def unzip_item(view, name, subpath, token):
                 member_path = os.path.abspath(os.path.join(dest_dir, *parts))
                 members.append((info, member_path))
 
-            # ── Extracción manual (sin extractall: no crea symlinks ni hardlinks) ──
+            # Extracción manual (sin extractall: no crea symlinks ni hardlinks)
             for info, member_path in members:
                 if info.is_dir():
                     os.makedirs(member_path, exist_ok=True)

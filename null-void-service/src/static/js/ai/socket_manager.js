@@ -86,10 +86,40 @@ export function initSockets() {
             window.showToast(`📨 Chat compartido por ${data.shared_by}`);
         });
 
+        window.socket.on('ai_response_ready', function (data) {
+            // La respuesta se completó en segundo plano: si el usuario no está
+            // viendo esa conversación, avisar con una notificación del navegador.
+            const sid = data && data.session_id;
+            if (!sid) return;
+            const seen = document.hasFocus()
+                && window.currentChatId
+                && String(window.currentChatId) === String(sid);
+            if (seen) return;
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            try {
+                const n = new Notification('Nexus IA — respuesta lista', {
+                    body: (data.preview || 'Tu respuesta ya está lista.'),
+                    tag: 'ai-response-' + sid,
+                });
+                n.onclick = () => { window.focus(); };
+            } catch (e) { /* permisos denegados */ }
+        });
+
         window.socket.on('force_logout', () => {
             console.warn('[Session] Nueva sesión detectada, cerrando la actual...');
             window.location.href = '/';
         });
+
+        // Pedir permiso de notificaciones con el primer gesto del usuario
+        if ('Notification' in window && Notification.permission === 'default') {
+            const reqOnce = () => {
+                try { Notification.requestPermission().catch(() => {}); } catch (e) { /* sin soporte */ }
+                document.removeEventListener('click', reqOnce);
+                document.removeEventListener('keydown', reqOnce);
+            };
+            document.addEventListener('click', reqOnce);
+            document.addEventListener('keydown', reqOnce);
+        }
 
         window.init();
         window.handleRouting();

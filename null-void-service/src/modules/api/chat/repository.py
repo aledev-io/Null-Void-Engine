@@ -222,8 +222,6 @@ def clear_conversation(user_id: str, contact_id: str):
         conn.commit()
 
 
-# --- GROUPS LOGIC ---
-
 def create_group(group_name: str, creator_id: str) -> str:
     group_id = f"group_{str(uuid.uuid4())}"
     now = time.time()

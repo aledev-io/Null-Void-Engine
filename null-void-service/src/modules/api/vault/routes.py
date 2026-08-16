@@ -11,7 +11,6 @@ vault_bp = Blueprint('vault', __name__)
 def get_vault_path(username: str, filename: str = None) -> str:
     vaults_dir = os.path.join(CONFIG.DATA_DIR, 'vaults')
     
-    # Directorio específico del usuario
     user_vault_dir = os.path.join(vaults_dir, username)
     os.makedirs(user_vault_dir, exist_ok=True)
     

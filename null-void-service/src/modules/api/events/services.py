@@ -86,5 +86,28 @@ def update_user_event(uid, event_id, data):
 
 def delete_user_event(uid, event_id):
     with get_db() as conn:
-        conn.execute("DELETE FROM events WHERE id = ? AND user_id = ?", (event_id, uid))
+        cur = conn.execute("DELETE FROM events WHERE id = ? AND user_id = ?", (event_id, uid))
         conn.commit()
+        return cur.rowcount
+
+def link_series(uid, event_id, series):
+    if series:
+        series_id = series["series_id"]
+    else:
+        series_id = event_id
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE events SET series_id = ? WHERE id = ? AND user_id = ?",
+            (series_id, event_id, uid),
+        )
+        conn.commit()
+
+def series_count(uid, series_id):
+    if not series_id:
+        return 1
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM events WHERE user_id = ? AND series_id = ?",
+            (uid, series_id),
+        ).fetchone()
+        return int(row["n"]) if row else 1

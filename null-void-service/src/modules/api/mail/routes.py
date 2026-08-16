@@ -111,7 +111,6 @@ def send_email():
     try:
         services.send_email(user_id, username, to_email, subject, body, files, mode, is_scheduled, scheduled_at, google_email=google_email)
         
-        # Real-time update for internal mail
         if mode == 'internal':
             socketio.emit('mail_updated', {}, room=f"user_{user_id}")
             recipient_id = services.get_recipient_id(to_email)

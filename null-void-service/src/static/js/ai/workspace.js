@@ -201,14 +201,11 @@ export async function createNewWorkspace() {
             });
 
             if (res.ok) {
-                // 1. Limpiamos el formulario primero
                 document.getElementById('ws-input-name').value = '';
                 document.getElementById('ws-input-desc').value = '';
 
-                // 2. Cerramos el modal
                 closeWorkspaceModal();
 
-                // 3. Recargamos la lista
                 await loadWorkspaces();
             }
         } catch (e) {
@@ -511,12 +508,15 @@ export function startWorkspaceChat() {
     }
 }
 
+import { isModelPickerOpen } from './slash_commands.js';
+
 export function startWorkspaceChatFromInput() {
     if (window.isGenerating) {
         window.showToast('La IA está generando una respuesta. Espera o pulsa el botón rojo para cancelar.', 'info');
         return;
     }
     const input = document.getElementById('workspace-chat-input');
+    if (isModelPickerOpen(input)) return;
     const text = input.value.trim();
     if (!text && (!window.attachedFiles || window.attachedFiles.length === 0)) return;
     
@@ -735,7 +735,8 @@ window.toggleWorkspaceModelMenu = function(e) {
 
 window.selectWorkspaceModel = function(val, label) {
     document.getElementById('workspace-model-select').value = val;
-    document.getElementById('workspace-model-label').textContent = label;
+    const wsl = document.getElementById('workspace-model-label');
+    if (wsl) { wsl.textContent = (label || '').startsWith('API: openrouter:') ? label.replace(/^API:\s*openrouter\s*:\s*/, '') : label; wsl.title = label; }
     
     const menu = document.getElementById('workspace-model-menu');
     menu.querySelectorAll('.ws-model-item').forEach(el => {

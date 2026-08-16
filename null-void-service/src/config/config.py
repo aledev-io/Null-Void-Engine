@@ -11,6 +11,8 @@ _FACTORY_SECRET_KEY = "una-clave-secreta-por-defecto"
 def _load_env_into_environ(path: str) -> None:
     """Carga el .env directamente en el entorno del sistema operativo (os.environ)."""
     if not os.path.exists(path):
+        print(f"[!] AVISO CONFIGURACIÓN: No se encontró el archivo de entorno '{path}'.")
+        print("[!] Se utilizarán las variables del entorno del sistema si están definidas.")
         return
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -30,6 +32,8 @@ def _secret_persist_path() -> str:
     """
     try:
         raw = os.environ.get("DATA_DIR") or os.path.join(PROJECT_ROOT, "data", "app")
+        if os.path.exists("/app/data") and raw.startswith("/home/"):
+            raw = "/app/data/app"
         data_dir = raw if os.path.isabs(raw) else os.path.join(PROJECT_ROOT, raw)
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "secret_key")
@@ -64,7 +68,7 @@ def _ensure_secure_secret_key() -> str:
     print("[NullVoid] SECRET_KEY ausente o con valor de fábrica: se generó una clave aleatoria nueva.")
     try:
         with open(persist_path, "w", encoding="utf-8") as f:
-            f.write(new_secret)
+            f.write(new_secret + "\n")
         try:
             os.chmod(persist_path, 0o600)
         except OSError:
@@ -86,14 +90,19 @@ class CONFIG:
     
     SECRET_KEY = _ensure_secure_secret_key()
     
-    USE_HTTPS = os.environ.get("USE_HTTPS", "false").lower() == "true"
     CERTS_DIR = os.path.join(PROJECT_ROOT, "certs")
     CERT_FILE = os.environ.get("CERT_FILE", os.path.join(CERTS_DIR, "cert.pem"))
     KEY_FILE  = os.environ.get("KEY_FILE", os.path.join(CERTS_DIR, "key.pem"))
+    
+    _use_https_env = os.environ.get("USE_HTTPS", "false").lower() == "true"
+    USE_HTTPS = _use_https_env and os.path.exists(CERT_FILE) and os.path.exists(KEY_FILE)
 
     _raw_creds = os.environ.get("CREDENTIALS")
     if not _raw_creds:
-        raise ValueError("No se han definido CREDENTIALS")
+        raise ValueError(
+            "[ERROR CRÍTICO CONFIGURACIÓN] No se han definido CREDENTIALS en el .env ni en el entorno. "
+            "Crea el archivo .env basándote en el ejemplo o define CREDENTIALS=usuario:contraseña."
+        )
 
     CREDENTIALS = {}
     for _pair in _raw_creds.split(','):
@@ -106,8 +115,19 @@ class CONFIG:
         print("[!] Cambia CREDENTIALS en el .env (usuario:clave) antes de exponer el servidor a Internet.")
 
     _raw_data_dir = os.environ.get("DATA_DIR", os.path.join(PROJECT_ROOT, "data", "app"))
+    if os.path.exists("/app/data") and _raw_data_dir.startswith("/home/"):
+        _raw_data_dir = "/app/data/app"
     DATA_DIR = _raw_data_dir if os.path.isabs(_raw_data_dir) else os.path.join(PROJECT_ROOT, _raw_data_dir)
     DB_PATH  = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "manager.db"))
     
+    if os.path.exists(DB_PATH):
+        print(f"[NullVoid] Base de datos detectada y cargada desde {DB_PATH}.")
+    else:
+        print(f"[!] AVISO IMPORTANTE DE DATOS: No se encontró base de datos previa en '{DB_PATH}'.")
+        print(f"[!] Se está inicializando un directorio de datos NUEVO en '{DATA_DIR}'. Verifique si la ruta del .env o volumen es correcta.")
+    
     FCM_SECRET_KEY = os.environ.get("FCM_SECRET_KEY")
-    FCM_CREDENTIALS_PATH = os.environ.get("FCM_CREDENTIALS_PATH", os.path.join(PROJECT_ROOT, "src", "firebase_key.json"))
+    _raw_fcm_path = os.environ.get("FCM_CREDENTIALS_PATH", os.path.join(PROJECT_ROOT, ".secrets", "firebase_key.json"))
+    if os.path.exists("/app/.secrets") and _raw_fcm_path.startswith("/home/"):
+        _raw_fcm_path = "/app/.secrets/firebase_key.json"
+    FCM_CREDENTIALS_PATH = _raw_fcm_path if os.path.isabs(_raw_fcm_path) else os.path.join(PROJECT_ROOT, _raw_fcm_path)

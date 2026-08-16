@@ -111,9 +111,6 @@ function bootDashboard() {
     }
 }
 
-// Arranque robusto: si el script se evalúa después de que el DOM ya esté
-// listo (carga desde caché, shell nativo, etc.), se ejecuta la inicialización
-// de inmediato en lugar de esperar un evento DOMContentLoaded que ya ocurrió.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bootDashboard);
 } else {

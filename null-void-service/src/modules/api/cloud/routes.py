@@ -469,7 +469,6 @@ def admin_quota_requests():
         
     if request.method == 'GET':
         reqs = repository.get_pending_quota_requests()
-        # Convert list of dict/rows to list of dicts safely
         formatted_reqs = []
         for r in reqs:
             formatted_reqs.append({

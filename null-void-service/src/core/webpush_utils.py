@@ -12,7 +12,6 @@ def get_or_create_vapid_keys():
         with open(VAPID_KEYS_FILE, 'r') as f:
             return json.load(f)
             
-    # Generate new keys
     private_key = ec.generate_private_key(ec.SECP256R1())
     public_key = private_key.public_key()
     

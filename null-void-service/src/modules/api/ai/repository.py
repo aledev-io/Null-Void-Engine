@@ -50,6 +50,12 @@ def ensure_schema():
                 PRIMARY KEY (user_id, provider)
             )
         """)
+        # Migración: modelo por defecto del proveedor (ej: OpenRouter necesita
+        # un id de modelo concreto, no basta con 'openrouter').
+        cursor = conn.execute("PRAGMA table_info(ai_api_keys)")
+        key_cols = {row[1] for row in cursor.fetchall()}
+        if "model" not in key_cols:
+            conn.execute("ALTER TABLE ai_api_keys ADD COLUMN model TEXT")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS ai_notes (
                 id TEXT PRIMARY KEY,
@@ -73,7 +79,6 @@ def ensure_schema():
             )
         """)
         
-        # Workspaces Schema
         conn.execute("""
             CREATE TABLE IF NOT EXISTS ai_workspaces (
                 id TEXT PRIMARY KEY,
@@ -140,7 +145,9 @@ def create_session(uid: str, model: str = None, title: str = "New Chat", session
     now = datetime.now().isoformat()
     with get_db() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO ai_sessions (id, user_id, title, model, workspace_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO ai_sessions (id, user_id, title, model, workspace_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET model = excluded.model, updated_at = excluded.updated_at, "
+            "title = CASE WHEN (excluded.title IS NOT NULL AND excluded.title != '' AND excluded.title != 'New Chat') THEN excluded.title ELSE ai_sessions.title END",
             (session_id, uid, title, model, workspace_id, now, now),
         )
         conn.commit()
@@ -191,7 +198,19 @@ def get_user_sessions(uid: str) -> list[dict]:
             "SELECT * FROM ai_sessions WHERE user_id = ? ORDER BY COALESCE(updated_at, created_at) DESC",
             (uid,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        sessions = [dict(r) for r in rows]
+        for s in sessions:
+            if not s.get("title") or s.get("title") == "New Chat":
+                first_msg = conn.execute(
+                    "SELECT content FROM ai_messages WHERE session_id = ? AND role = 'user' ORDER BY id ASC LIMIT 1",
+                    (s["id"],)
+                ).fetchone()
+                if first_msg and first_msg[0]:
+                    clean_title = first_msg[0].strip().replace("\n", " ")[:30] + "..."
+                    s["title"] = clean_title
+                    conn.execute("UPDATE ai_sessions SET title = ? WHERE id = ?", (clean_title, s["id"]))
+        conn.commit()
+        return sessions
 
 
 def delete_session(uid: str, session_id: str) -> list[dict]:
@@ -230,11 +249,9 @@ def delete_all_user_sessions(uid: str) -> list[dict]:
     ensure_schema()
     affected_users = []
     with get_db() as conn:
-        # Find all sessions owned by user
         sessions = conn.execute("SELECT id FROM ai_sessions WHERE user_id = ?", (uid,)).fetchall()
         for session in sessions:
             s_id = session['id']
-            # Find and delete all shared sessions derived from these
             shared = conn.execute("SELECT shared_session_id FROM ai_shared_sessions WHERE original_session_id = ?", (s_id,)).fetchall()
             for row in shared:
                 sh_id = row['shared_session_id']
@@ -246,7 +263,6 @@ def delete_all_user_sessions(uid: str) -> list[dict]:
                 conn.execute("DELETE FROM ai_messages WHERE session_id = ?", (sh_id,))
                 conn.execute("DELETE FROM ai_sessions WHERE id = ?", (sh_id,))
             
-            # Clear shared references
             conn.execute("DELETE FROM ai_shared_sessions WHERE original_session_id = ?", (s_id,))
             conn.execute("DELETE FROM ai_shared_sessions WHERE shared_session_id = ?", (s_id,))
 
@@ -258,7 +274,6 @@ def delete_all_user_sessions(uid: str) -> list[dict]:
 def clone_session_for_user(owner_uid: str, session_id: str, new_user_id: str, sender_name: str) -> str:
     ensure_schema()
     with get_db() as conn:
-        # Get the original session
         session = conn.execute(
             "SELECT * FROM ai_sessions WHERE id = ? AND user_id = ?",
             (session_id, owner_uid)
@@ -267,7 +282,6 @@ def clone_session_for_user(owner_uid: str, session_id: str, new_user_id: str, se
         if not session:
             return None
             
-        # Check if already shared with this user
         existing = conn.execute('''
             SELECT s.id 
             FROM ai_sessions s
@@ -305,7 +319,6 @@ def clone_session_for_user(owner_uid: str, session_id: str, new_user_id: str, se
         return new_session_id
 
 def create_shared_session(recipient_user_id: str, sender_name: str, title: str, messages: list) -> str:
-    """Create a new session in DB from a payload of messages (fallback when original isn't in DB)."""
     ensure_schema()
     with get_db() as conn:
         new_session_id = str(uuid.uuid4())
@@ -325,12 +338,12 @@ def create_shared_session(recipient_user_id: str, sender_name: str, title: str, 
         conn.commit()
         return new_session_id
 
-def save_api_key(user_id: str, provider: str, api_key: str, api_url: str = None):
+def save_api_key(user_id: str, provider: str, api_key: str, api_url: str = None, model: str = None):
     ensure_schema()
     with get_db() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO ai_api_keys (user_id, provider, api_key, api_url) VALUES (?, ?, ?, ?)",
-            (user_id, provider, api_key, api_url)
+            "INSERT OR REPLACE INTO ai_api_keys (user_id, provider, api_key, api_url, model) VALUES (?, ?, ?, ?, ?)",
+            (user_id, provider, api_key, api_url, model)
         )
         conn.commit()
 
@@ -338,26 +351,35 @@ def get_api_key(user_id: str, provider: str) -> dict:
     ensure_schema()
     with get_db() as conn:
         row = conn.execute(
-            "SELECT api_key, api_url FROM ai_api_keys WHERE user_id = ? AND provider = ?",
+            "SELECT api_key, api_url, model FROM ai_api_keys WHERE user_id = ? AND provider = ?",
             (user_id, provider)
         ).fetchone()
         if row:
-            return {"api_key": row[0], "api_url": row[1]}
+            return {"api_key": row[0], "api_url": row[1], "model": row[2]}
         return None
 
 def get_user_api_keys(user_id: str) -> list:
     ensure_schema()
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT provider, api_url, api_key FROM ai_api_keys WHERE user_id = ?",
+            "SELECT provider, api_url, api_key, model FROM ai_api_keys WHERE user_id = ?",
             (user_id,)
         ).fetchall()
-        return [{"provider": r[0], "api_url": r[1], "api_key": r[2]} for r in rows]
+        return [{"provider": r[0], "api_url": r[1], "api_key": r[2], "model": r[3]} for r in rows]
+
+
+def delete_api_key(user_id: str, provider: str):
+    ensure_schema()
+    with get_db() as conn:
+        conn.execute(
+            "DELETE FROM ai_api_keys WHERE user_id = ? AND provider = ?",
+            (user_id, provider)
+        )
+        conn.commit()
 
 def get_user_notes(user_id: str) -> list:
     ensure_schema()
     with get_db() as conn:
-        # Fetch notes owned by the user or shared with the user.
         # GROUP_CONCAT trae los colaboradores en la misma consulta (sin N+1).
         rows = conn.execute("""
             SELECT n.id, n.user_id, n.title, n.content, n.created_at, n.updated_at,

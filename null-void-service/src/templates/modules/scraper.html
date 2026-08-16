@@ -49,6 +49,7 @@
       height: 100vh;
       margin: 0;
       overflow: hidden;
+      opacity: 1 !important;
     }
 
     .shell {
@@ -1626,7 +1627,7 @@
   </style>
 </head>
 
-<body>
+<body class="lang-loaded">
   <div class="shell">
     <!-- ═══ SIDEBAR ═══ -->
     <aside class="sidebar mobile-hidden">
@@ -1804,8 +1805,14 @@
               </svg>
             </button>
             <div>
-              <div class="page-title">Base de Datos</div>
-              <div class="page-sub">Scraper PcComponentes</div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="page-title">Base de Datos</div>
+                <div class="status-indicator-badge">
+                  <span class="status-dot-pulse"></span>
+                  <span>Servicio Scraper Activo</span>
+                </div>
+              </div>
+              <div class="page-sub">Scraper PcComponentes & Core Engine</div>
             </div>
           </div>
           <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -2441,7 +2448,6 @@
           </div>
         </div>
       </div>
-  </div>
 
   </main>
   </div>

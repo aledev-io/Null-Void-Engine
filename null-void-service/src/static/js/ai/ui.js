@@ -1,4 +1,3 @@
-// ui.js
 export let isDownloadingModel = false;
 export let downloadingModelName = '';
 export let downloadAbortController = null;
@@ -228,9 +227,11 @@ export async function deleteSelectedModel() {
                 `¿Estás seguro de que quieres desinstalar el modelo "${modelName}"? Esto lo borrará físicamente del disco de forma permanente.`,
                 "Eliminar",
                 async () => {
-                    const originalText = document.getElementById('main-model-label').textContent;
-                    document.getElementById('main-model-label').textContent = "Eliminando...";
-                    document.getElementById('main-model-btn').disabled = true;
+                    const labelEl = document.getElementById('main-model-label');
+                    const btnEl = document.getElementById('main-model-btn');
+                    const originalText = labelEl ? labelEl.textContent : '';
+                    if (labelEl) labelEl.textContent = "Eliminando...";
+                    if (btnEl) btnEl.disabled = true;
 
                     try {
                         const response = await fetch(`/api/ai/models/${encodeURIComponent(modelName)}`, { method: 'DELETE' });
@@ -240,11 +241,11 @@ export async function deleteSelectedModel() {
                             if (window.init) window.init();
                         } else {
                             alert("Error al eliminar el modelo: " + (data.error || "Desconocido"));
-                            document.getElementById('main-model-label').textContent = originalText;
+                            if (labelEl) labelEl.textContent = originalText;
                         }
                     } catch (err) {
                         alert("Error de red: " + err.message);
-                        document.getElementById('main-model-btn').disabled = false;
+                        if (btnEl) btnEl.disabled = false;
                     }
                 }
             );
@@ -647,23 +648,108 @@ export function closeMoreOpts() {
             document.getElementById('more-opts-dropdown').classList.add('hidden');
         }
 
-export async function openApiKeysDialog() {
-    const keys = await window.fetchAPIKeys();
-    // Default to deepseek if none, or populate with the first one found
+const KNOWN_PROVIDERS = {
+    openrouter: { url: 'https://openrouter.ai/api/v1', model: 'openrouter/auto' },
+    deepseek:   { url: 'https://api.deepseek.com',     model: 'deepseek-chat' },
+    openai:     { url: 'https://api.openai.com/v1',    model: 'gpt-3.5-turbo' },
+    groq:       { url: 'https://api.groq.com/openai/v1', model: '' },
+    anthropic:  { url: 'https://api.anthropic.com/v1', model: '' },
+    mistral:    { url: 'https://api.mistral.ai/v1',    model: '' },
+    together:   { url: 'https://api.together.xyz/v1',  model: '' },
+    xai:        { url: 'https://api.x.ai/v1',          model: '' },
+    perplexity: { url: 'https://api.perplexity.ai',    model: '' },
+    nvidia:     { url: 'https://integrate.api.nvidia.com/v1', model: '' },
+};
+
+function _fillProviderDefaults(provider) {
+    const known = KNOWN_PROVIDERS[provider.toLowerCase()];
+    if (!known) return;
+    const urlInput = document.getElementById('api-keys-url');
+    const modelInput = document.getElementById('api-keys-model');
+    if (urlInput && !urlInput.value.trim()) urlInput.value = known.url;
+    if (modelInput && known.model && !modelInput.value.trim()) modelInput.value = known.model;
+}
+
+function _fillApiKeysForm(provider, url, model) {
     const providerInput = document.getElementById('api-keys-provider');
     const urlInput = document.getElementById('api-keys-url');
     const keyInput = document.getElementById('api-keys-key');
-    
-    if (keys.length > 0) {
-        providerInput.value = keys[0].provider;
-        urlInput.value = keys[0].api_url;
-        keyInput.value = keys[0].api_key || ''; // Show the key so they can copy it
+    const modelInput = document.getElementById('api-keys-model');
+    providerInput.value = provider || 'openrouter';
+    urlInput.value = url || (KNOWN_PROVIDERS[(provider || 'openrouter').toLowerCase()]?.url || '');
+    modelInput.value = model || (KNOWN_PROVIDERS[(provider || 'openrouter').toLowerCase()]?.model || '');
+    keyInput.value = '';
+    keyInput.placeholder = 'sk-...';
+}
+
+export function resetApiKeysForm() {
+    _fillApiKeysForm('openrouter', 'https://openrouter.ai/api/v1', 'openrouter/auto');
+    document.getElementById('api-keys-key').focus();
+}
+
+export async function deleteApiKeyUI(provider) {
+    if (!window.confirm(`¿Eliminar la API key de "${provider}"?`)) return;
+    const ok = await window.deleteAPIKey(provider);
+    if (ok) {
+        showToast(`Proveedor "${provider}" eliminado`);
+        _renderApiKeysList(await window.fetchAPIKeys());
+        const providerInput = document.getElementById('api-keys-provider');
+        if (providerInput.value.trim().toLowerCase() === provider.toLowerCase()) {
+            resetApiKeysForm();
+        }
     } else {
-        providerInput.value = 'deepseek';
-        urlInput.value = 'https://api.deepseek.com/v1';
-        keyInput.value = '';
+        showToast('Error al eliminar el proveedor');
     }
-    
+}
+
+async function _renderApiKeysList(keys) {
+    const list = document.getElementById('api-keys-saved-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!keys || keys.length === 0) {
+        const empty = document.createElement('div');
+        empty.textContent = 'Sin proveedores guardados todavía.';
+        empty.style.cssText = 'font-size:0.75rem;color:var(--text-dim);padding:6px 2px;';
+        list.appendChild(empty);
+        return;
+    }
+    keys.forEach((k) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:7px 10px;cursor:pointer;';
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        const name = document.createElement('div');
+        name.style.cssText = 'font-size:0.8rem;font-weight:600;color:var(--text-main);';
+        name.textContent = k.provider;
+        const detail = document.createElement('div');
+        detail.style.cssText = 'font-size:0.7rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        detail.textContent = [k.model, k.api_url].filter(Boolean).join(' · ');
+        info.appendChild(name);
+        info.appendChild(detail);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.textContent = '✕';
+        del.title = 'Eliminar';
+        del.style.cssText = 'background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.8rem;padding:2px 6px;flex-shrink:0;';
+        del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteApiKeyUI(k.provider);
+        });
+        row.appendChild(info);
+        row.appendChild(del);
+        row.addEventListener('click', () => _fillApiKeysForm(k.provider, k.api_url, k.model));
+        list.appendChild(row);
+    });
+}
+
+export async function openApiKeysDialog() {
+    // Empieza con el formulario limpio (por defecto OpenRouter) y lista los
+    // proveedores ya guardados: se pueden añadir varios.
+    const keys = await window.fetchAPIKeys();
+    resetApiKeysForm();
+    _renderApiKeysList(keys);
+    const providerInput = document.getElementById('api-keys-provider');
+    providerInput.addEventListener('input', () => _fillProviderDefaults(providerInput.value.trim()));
     document.getElementById('api-keys-dialog-overlay').classList.add('show');
 }
 
@@ -676,16 +762,22 @@ export async function saveApiKeysConfig() {
     const provider = document.getElementById('api-keys-provider').value.trim();
     const url = document.getElementById('api-keys-url').value.trim();
     const key = document.getElementById('api-keys-key').value.trim();
+    const model = document.getElementById('api-keys-model').value.trim();
     
     if (!provider || !key) {
         showToast("Error: Proveedor y API Key son requeridos.");
         return;
     }
     
-    const success = await window.saveAPIKey(provider, key, url);
+    const success = await window.saveAPIKey(provider, key, url, model);
     if (success) {
         showToast("Configuración guardada correctamente");
-        closeApiKeysDialog(null);
+        _renderApiKeysList(await window.fetchAPIKeys());
+        // Deja el formulario listo para añadir otro proveedor
+        const keyInput = document.getElementById('api-keys-key');
+        keyInput.value = '';
+        keyInput.placeholder = 'sk-...';
+        document.getElementById('api-keys-provider').focus();
         // Refresh models list
         const { init } = await import('./chat.js');
         init();
@@ -728,8 +820,8 @@ export function saveModelSettings() {
 export function toggleApiKeyVisibility() {
     const input = document.getElementById('api-keys-key');
     const icon  = document.getElementById('eye-icon');
-    const isHidden = input.type === 'password';
-    input.type = isHidden ? 'text' : 'password';
+    const isHidden = input.style.webkitTextSecurity !== 'none';
+    input.style.webkitTextSecurity = isHidden ? 'none' : 'disc';
     icon.innerHTML = isHidden
         ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
         : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;

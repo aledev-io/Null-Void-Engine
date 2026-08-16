@@ -3,7 +3,6 @@ import uuid
 from core.database import get_db
 
 class SpreadsheetRepository:
-    """Gestiona de forma aislada la persistencia de las hojas de cálculo en SQLite."""
 
     @staticmethod
     def get_by_user(uid: int) -> dict:

@@ -262,13 +262,11 @@ def wait_for_file_stability(abs_path, wait_time=0.5, retries=10):
     return False
 
 
-# --- Lógica de Sincronización ---
 class SyncClient:
     def __init__(self, config):
         # Maneja tanto la versión vieja del config (server_url) como la nueva (server_urls)
         self.server_urls = config.get("server_urls", [config.get("server_url")])
         self.server_urls = [u for u in self.server_urls if u] + BOOTSTRAP_SERVERS
-        # Filtramos duplicados manteniendo el orden
         self.server_urls = list(dict.fromkeys(self.server_urls))
         self.active_url = self.server_urls[0] if self.server_urls else None
         
@@ -298,7 +296,6 @@ class SyncClient:
         self.failed_uploads = {}
         self.uploading = set()
 
-        # --- Estado en vivo para la interfaz ---
         self.connected = False
         self.paused = True
         self.last_sync_time = None
@@ -772,7 +769,10 @@ def delete_config():
 
 def launch_gui(client):
     try:
-        from qt_gui import launch_native_qt_gui
+        try:
+            from .ui.qt_gui import launch_native_qt_gui
+        except ImportError:
+            from src.ui.qt_gui import launch_native_qt_gui
         folder_opener = lambda: open_local_folder(client.local_dir)
         if launch_native_qt_gui(client, client.local_dir, folder_opener, ui_log_queue, logout_cb=delete_config):
             client.stop_event.set()
@@ -800,7 +800,10 @@ if __name__ == "__main__":
         config = load_config()
         if not config:
             try:
-                from qt_gui import register_agent_qt_gui
+                try:
+                    from .ui.qt_gui import register_agent_qt_gui
+                except ImportError:
+                    from src.ui.qt_gui import register_agent_qt_gui
                 config = register_agent_qt_gui(BOOTSTRAP_SERVERS, get_device_name(), perform_registration)
             except Exception as e:
                 log(f"Error al iniciar GUI nativa de registro: {e}")

@@ -1,4 +1,3 @@
-// files.js
 export function openAttachSelectorModal(type) {
     currentAttachType = type;
     selectModalCloudPath = '';

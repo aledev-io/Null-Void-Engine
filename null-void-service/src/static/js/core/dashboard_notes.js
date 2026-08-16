@@ -1,4 +1,3 @@
-// dashboard_notes.js - Notes Module for Dashboard
 
 export let notes = [];
 export let currentNoteId = null;

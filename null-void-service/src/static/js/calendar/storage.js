@@ -30,6 +30,14 @@ function _getStorageKey() {
   return `calendar_events_v1_${_getUser()}`;
 }
 
+function _getPendingKey() {
+  return `calendar_events_pending_v1_${_getUser()}`;
+}
+
+function _getDeletedKey() {
+  return `calendar_events_deleted_pending_v1_${_getUser()}`;
+}
+
 function _apiHeaders(extra = {}) {
   const token = _getToken();
   const headers = { 'Content-Type': 'application/json', ...extra };
@@ -51,35 +59,100 @@ function _diffEvents(previous, current) {
   return { added, updated, deleted };
 }
 
-async function _syncToAPI(previous, current) {
-  const { added, updated, deleted } = _diffEvents(previous, current);
-  const token = _getToken();
-
-  const requests = [
-    ...added.map(ev =>
-      fetch(`${API_BASE}`, {
-        method: 'POST',
-        headers: _apiHeaders(),
-        body: JSON.stringify(ev),
-      })
-    ),
-    ...updated.map(ev =>
-      fetch(`${API_BASE}/${ev.id}`, {
-        method: 'PUT',
-        headers: _apiHeaders(),
-        body: JSON.stringify(ev),
-      })
-    ),
-    ...deleted.map(ev =>
-      fetch(`${API_BASE}/${ev.id}`, { method: 'DELETE', headers: _apiHeaders() })
-    ),
-  ];
-
+function _getSet(key) {
   try {
-    await Promise.all(requests);
-  } catch (err) {
-    console.warn('[Storage] Sync to API failed (offline?):', err.message);
+    const arr = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(arr) ? new Set(arr) : new Set();
+  } catch { return new Set(); }
+}
+
+function _setSet(key, set) {
+  localStorage.setItem(key, JSON.stringify([...set]));
+}
+
+let _errorNotifiedAt = 0;
+
+function _notifyError() {
+  const now = Date.now();
+  if (now - _errorNotifiedAt < 15000) return;
+  _errorNotifiedAt = now;
+  window.dispatchEvent(new CustomEvent('calendar:sync-error', { detail: { key: 'sync_error' } }));
+}
+
+function _isRecent(ev) {
+  const t = Date.parse(ev.createdAt || ev.created_at);
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < 30 * 24 * 3600 * 1000;
+}
+
+async function _syncPending() {
+  const pending = _getSet(_getPendingKey());
+  const toDelete = _getSet(_getDeletedKey());
+  if (!pending.size && !toDelete.size) return true;
+
+  let dbIds = new Set();
+  try {
+    const res = await fetch(`${API_BASE}`, { headers: _apiHeaders() });
+    if (!res.ok) { _notifyError(); return false; }
+    dbIds = new Set((await res.json()).map(e => e.id));
+  } catch {
+    _notifyError();
+    return false;
   }
+
+  const local = Storage.getAll();
+  const ok = new Set();
+  const failed = new Set();
+  const okDel = new Set();
+  const failedDel = new Set();
+
+  await Promise.all([...pending].map(async (id) => {
+    const ev = local.find(e => e.id === id);
+    if (!ev) { ok.add(id); return; }
+    try {
+      const res = await fetch(`${API_BASE}${dbIds.has(id) ? `/${id}` : ''}`, {
+        method: dbIds.has(id) ? 'PUT' : 'POST',
+        headers: _apiHeaders(),
+        body: JSON.stringify(ev),
+      });
+      if (res.ok) ok.add(id);
+      else failed.add(id);
+    } catch { failed.add(id); }
+  }));
+
+  await Promise.all([...toDelete].map(async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE', headers: _apiHeaders() });
+      if (res.ok) okDel.add(id);
+      else failedDel.add(id);
+    } catch { failedDel.add(id); }
+  }));
+
+  if (ok.size) {
+    const p = _getSet(_getPendingKey());
+    ok.forEach(id => p.delete(id));
+    _setSet(_getPendingKey(), p);
+  }
+  if (okDel.size) {
+    const d = _getSet(_getDeletedKey());
+    okDel.forEach(id => d.delete(id));
+    _setSet(_getDeletedKey(), d);
+  }
+
+  if (failed.size || failedDel.size) {
+    const p = _getSet(_getPendingKey());
+    failed.forEach(id => p.add(id));
+    _setSet(_getPendingKey(), p);
+    const d = _getSet(_getDeletedKey());
+    failedDel.forEach(id => d.add(id));
+    _setSet(_getDeletedKey(), d);
+    _notifyError();
+    return false;
+  }
+
+  window.dispatchEvent(new CustomEvent('calendar:synced'));
+  if (eventsChannel) eventsChannel.postMessage({ type: 'EVENT_CHANGED' });
+  return true;
 }
 
 export const Storage = {
@@ -90,12 +163,23 @@ export const Storage = {
 
   save(events) {
     const previous = this.getAll();
+    const { added, updated, deleted } = _diffEvents(previous, events);
     localStorage.setItem(_getStorageKey(), JSON.stringify(events));
     window.dispatchEvent(new CustomEvent('calendar:changed'));
     if (eventsChannel) eventsChannel.postMessage({ type: 'EVENT_CHANGED' });
-    _syncToAPI(previous, events).then(() => {
-        window.dispatchEvent(new CustomEvent('calendar:synced'));
-    });
+
+    if (added.length || updated.length) {
+      const p = _getSet(_getPendingKey());
+      added.concat(updated).forEach(e => p.add(e.id));
+      _setSet(_getPendingKey(), p);
+    }
+    if (deleted.length) {
+      const d = _getSet(_getDeletedKey());
+      deleted.forEach(e => d.add(e.id));
+      _setSet(_getDeletedKey(), d);
+    }
+
+    _syncPending();
   },
 
   getTheme() {
@@ -133,13 +217,26 @@ export const Storage = {
   async syncFromAPI() {
     try {
       const token = _getToken();
-          const res = await fetch(`${API_BASE}`, { headers: _apiHeaders() });
+      const res = await fetch(`${API_BASE}`, { headers: _apiHeaders() });
       if (!res.ok) return;
-      const events = await res.json();
+      let events = await res.json();
+      const pending = _getSet(_getPendingKey());
+      const dbIds = new Set(events.map(e => e.id));
+      const local = this.getAll();
+      const keep = local.filter(e => !dbIds.has(e.id) && (pending.has(e.id) || _isRecent(e)));
+      if (keep.length) {
+        keep.forEach(e => pending.add(e.id));
+        _setSet(_getPendingKey(), pending);
+        events = events.concat(keep).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+      }
       const incoming = JSON.stringify(events);
-      if (incoming === localStorage.getItem(_getStorageKey())) return;
+      if (incoming === localStorage.getItem(_getStorageKey())) {
+        _syncPending();
+        return;
+      }
       localStorage.setItem(_getStorageKey(), incoming);
       window.dispatchEvent(new CustomEvent('calendar:synced'));
+      _syncPending();
     } catch (err) {
       console.info('[Storage] Modo offline: usando localStorage.', err.message);
     }
@@ -151,3 +248,4 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => Storage.syncFromAPI(), 1500);
 });
 
+window.addEventListener('online', () => Storage.syncFromAPI());

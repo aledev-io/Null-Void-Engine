@@ -314,6 +314,8 @@ export function initCalendarWidget() {
         fetchEventsImmediately();
     };
 
+    window.dashRefreshEvents = fetchEventsImmediately;
+
     renderCalendar();
     renderPendingTasks();
     fetchEventsImmediately();

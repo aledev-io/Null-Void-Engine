@@ -1,4 +1,3 @@
-// Vault Client Logic
 
 const SALT_SIZE = 16;
 const IV_SIZE = 16;
@@ -99,7 +98,6 @@ let vaultData = { passwords: [], notes: [] };
 let editingIndex = -1;
 let editingNoteIndex = -1;
 
-// --- Custom UI Overrides ---
 function NV_Alert(msg) {
     document.getElementById('nv-alert-msg').innerText = msg;
     document.getElementById('nv-alert-modal').style.display = 'flex';
@@ -129,7 +127,6 @@ window.closeNVPrompt = function(val) {
 window.submitNVPrompt = function() {
     closeNVPrompt(document.getElementById('nv-prompt-input').value);
 }
-// ---------------------------
 
 window.addEventListener('DOMContentLoaded', () => {
     loadVaults();

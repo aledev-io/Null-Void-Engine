@@ -1,4 +1,3 @@
-// i18n.js - Módulo de Internacionalización
 const I18n = {
     currentLang: localStorage.getItem('lang') || (navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en'),
 
@@ -29,6 +28,10 @@ const I18n = {
             err_pass_short: "La contraseña es demasiado corta (mín. 6).", err_user_format: "El usuario sólo puede contener letras, números y guiones.",
             err_in_use: "El nombre de usuario ya está en uso.", err_server: "Error interno del servidor.", try_with: "Prueba con:",
             lang_title: "Cambiar idioma", theme_title: "Cambiar tema", notif_title: "Historial de notificaciones",
+            wg_new_chat: "Nueva conversación", wg_history: "Historial",
+            wg_close: "Cerrar", wg_model: "Modelo", wg_send: "Enviar", wg_stop: "Detener generación",
+            wg_copy_msg: "Copiar mensaje", wg_edit_resend: "Editar y reenviar",
+            wg_cancel: "Cancelar", wg_update: "Actualizar", wg_no_models: "Sin modelos", wg_download_model_first: "Descarga un modelo primero",
             notif_title_modal: "Notificaciones", clear_all: "Limpiar todo", ctx_add_mod: "Añadir Módulo",
             notif_loading: "Cargando notificaciones...",
             notif_empty: "No hay notificaciones recientes.",
@@ -468,6 +471,7 @@ const I18n = {
             end_time_after_start: "❌ La hora de fin debe ser posterior a la de inicio",
             calendar_exported: "Calendario exportado", invalid_file: "❌ Archivo no válido",
             events_imported: "evento(s) importados", no_events_found: "No se encontraron eventos",
+            sync_error: "⚠️ No se pudieron sincronizar los cambios con el servidor. Se reintentará automáticamente.",
             confirm_delete_event: "¿Eliminar este evento?", confirm_cannot_undo: "Esta acción no se puede deshacer.",
             new_task: "Nueva Tarea",
 
@@ -643,6 +647,10 @@ const I18n = {
             err_pass_short: "Password is too short (min. 6).", err_user_format: "Username can only contain letters, numbers and dashes.",
             err_in_use: "Username is already in use.", err_server: "Internal server error.", try_with: "Try with:",
             lang_title: "Change language", theme_title: "Toggle theme", notif_title: "Notification history",
+            wg_new_chat: "New conversation", wg_history: "History",
+            wg_close: "Close", wg_model: "Model", wg_send: "Send", wg_stop: "Stop generation",
+            wg_copy_msg: "Copy message", wg_edit_resend: "Edit and resend",
+            wg_cancel: "Cancel", wg_update: "Update", wg_no_models: "No models", wg_download_model_first: "Download a model first",
             notif_title_modal: "Notifications",
             notif_loading: "Loading notifications...",
             notif_empty: "No recent notifications.",
@@ -1097,6 +1105,7 @@ const I18n = {
             end_time_after_start: "❌ End time must be after start time",
             calendar_exported: "Calendar exported", invalid_file: "❌ Invalid file",
             events_imported: "event(s) imported", no_events_found: "No events found",
+            sync_error: "⚠️ Changes could not be synced with the server. Will retry automatically.",
             confirm_delete_event: "Delete this event?", confirm_cannot_undo: "This action cannot be undone.",
             new_task: "New Task",
 

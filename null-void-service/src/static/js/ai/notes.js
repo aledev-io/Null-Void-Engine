@@ -1,4 +1,3 @@
-// notes.js - Notes Module for AI Interface
 
 export let notes = [];
 export let currentNoteId = null;

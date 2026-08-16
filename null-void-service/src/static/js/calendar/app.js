@@ -24,6 +24,10 @@ export const App = {
       }
     });
 
+    window.addEventListener('calendar:sync-error', (e) => {
+      UI.toast(window.t((e.detail && e.detail.key) || 'sync_error'), 5000);
+    });
+
     const urlParams = new URLSearchParams(window.location.search);
     const dateParam = urlParams.get('date');
     const eventParam = urlParams.get('event');
@@ -349,7 +353,6 @@ export const App = {
       }
     });
 
-    /* ─── Quick popup wiring ─── */
     const qpClose = document.getElementById('qp-close');
     const qpBackdrop = document.getElementById('qp-backdrop');
     const qpSave = document.getElementById('qp-save');

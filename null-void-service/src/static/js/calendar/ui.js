@@ -140,7 +140,6 @@ export const UI = {
     popup.dataset.date = dateStr;
     popup.hidden = false;
 
-    // Reset position to default centered position
     const card = popup.querySelector('.qp-card');
     if (card) {
       if (window.innerWidth <= 768) {

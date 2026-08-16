@@ -1,7 +1,6 @@
 from flask_socketio import emit
 from core.socket_ext import socketio
 
-# Global lock state for scraping
 scraper_state = {
     'is_scraping': False,
     'user': None,
@@ -19,5 +18,4 @@ def handle_set_scraper_state(data):
     scraper_state['user'] = data.get('user', None)
     scraper_state['type'] = data.get('type', None)
     
-    # Broadcast to all connected clients
     emit('scraper_state_update', scraper_state, broadcast=True)

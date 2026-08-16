@@ -9,7 +9,6 @@ import { initSockets } from './socket_manager.js';
 
 // Initialize when the DOM is ready and the global variables are set
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initialize modules
     if (window.currentUserId) {
         Notes.initNotes(window.currentUserId);
     } else {
@@ -21,7 +20,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 500);
     }
     
-    // 2. Expose Notes module functions to window to support inline onclicks
     // (This is a temporary measure during Phase 1 modularization)
     Object.defineProperty(window, 'notes', {
         get: () => Notes.notes
@@ -132,9 +130,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.toggleUserMenu = Chat.toggleUserMenu;
     window.fetchAPIKeys = API.fetchAPIKeys;
     window.saveAPIKey = API.saveAPIKey;
+    window.deleteAPIKey = API.deleteAPIKey;
     window.openApiKeysDialog = UI.openApiKeysDialog;
     window.closeApiKeysDialog = UI.closeApiKeysDialog;
     window.saveApiKeysConfig = UI.saveApiKeysConfig;
+    window.resetApiKeysForm = UI.resetApiKeysForm;
+    window.deleteApiKeyUI = UI.deleteApiKeyUI;
     window.openChatContextMenu = Chat.openChatContextMenu;
     window.closeContextMenu = Chat.closeContextMenu;
     window.openMessageContextMenu = Chat.openMessageContextMenu;

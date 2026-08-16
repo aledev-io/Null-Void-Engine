@@ -106,7 +106,6 @@ import os
 
 def delete_message(user_id, msg_id, delete_type='for_me', delete_files=False):
     if delete_type == 'for_everyone':
-        # Buscamos el mensaje antes de borrarlo por si hay que borrar archivos
         msg = repository.get_message_by_id(msg_id)
         ok = repository.delete_message_for_everyone(msg_id, user_id)
         if ok and delete_files and msg and msg.get('file_path'):

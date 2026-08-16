@@ -229,7 +229,7 @@ class SessionManager:
             "user_id": user_id,
             "created_at": datetime.now().isoformat(),
             "last_activity": datetime.now().isoformat(),
-            "active_tab": None # Se asignará en la primera validación
+            "active_tab": None
         }
         self._user_index[username] = token
         self._save()

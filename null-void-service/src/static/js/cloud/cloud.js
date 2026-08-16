@@ -91,10 +91,8 @@ let uploadDestinationOverrideView = null;
 let currentCloudInfoItem = null;
 let CLOUD_FILES = [];
 
-// ---------------------------------------------------------------------------
 // Helpers de seguridad: escape HTML para contenido y atributos, y saneado de
 // nombres de archivos/carpetas introducidos por el usuario.
-// ---------------------------------------------------------------------------
 
 // Escape HTML básico (texto visible dentro de innerHTML).
 function esc(v) {
@@ -154,7 +152,6 @@ window.cloudAvatarFallback = function (img, username) {
     img.parentNode.replaceChild(div, img);
 };
 
-// ---------------------------------------------------------------------------
 
 // Reintenta peticiones GET fallidas (reinicio del servidor) con backoff.
 // Devuelve null si agota los intentos. NO usar con peticiones que mutan datos.
@@ -594,11 +591,9 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
     });
 }
 
-// ---------------------------------------------------------------------------
 // Menú desplegable del breadcrumb colapsado (nodo "…"): muestra las carpetas
 // intermedias ocultas y permite saltar a cualquier nivel previo. Se posiciona
 // con position:fixed para no quedar recortado por el overflow del contenedor.
-// ---------------------------------------------------------------------------
 
 function toggleBreadcrumbMenu(btn) {
     const wrapper = btn.closest('.breadcrumb-more');
@@ -2288,11 +2283,9 @@ function _renderCloudPreviewBody(ext, url, name, fileKey) {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Posición de reproducción de vídeo: se guarda en localStorage por ruta de
 // archivo y se restaura al volver a abrir el mismo vídeo (o al cambiar de
 // calidad se conserva el instante actual).
-// ---------------------------------------------------------------------------
 const _VIDEO_PROGRESS_KEY = 'nv_video_progress_v1';
 let _previewVideoKey = '';
 

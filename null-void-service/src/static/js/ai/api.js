@@ -1,4 +1,3 @@
-// api.js
 export async function fetchModels() {
     try {
         const r = await fetch('/api/ai/models');
@@ -110,12 +109,24 @@ export async function fetchAPIKeys() {
     } catch (e) { return []; }
 }
 
-export async function saveAPIKey(provider, apiKey, apiUrl) {
+export async function saveAPIKey(provider, apiKey, apiUrl, model) {
     try {
         const r = await fetch('/api/ai/keys', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ provider, api_key: apiKey, api_url: apiUrl })
+            body: JSON.stringify({ provider, api_key: apiKey, api_url: apiUrl, model: model || null })
+        });
+        const data = await r.json();
+        return data.ok === true || data.ok;
+    } catch (e) { return false; }
+}
+
+export async function deleteAPIKey(provider) {
+    try {
+        const r = await fetch('/api/ai/keys', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider })
         });
         const data = await r.json();
         return data.ok === true || data.ok;

@@ -1,6 +1,5 @@
 /**
  * Agente Asistente Basado en Reglas y Estado
- * Gestiona el flujo conversacional con input de texto
  */
 
 (function () {
@@ -151,9 +150,7 @@
         }
     }
 
-    // ==========================================
     // MÁQUINA DE ESTADOS DEL ASISTENTE
-    // ==========================================
 
     function handleUserInput(text, actionId = null) {
         addUserMessage(text);

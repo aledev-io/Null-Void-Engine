@@ -335,7 +335,7 @@ function _setupExcelGlobalKeys() {
 
         // Manejar Suprimir/Retroceso cuando no hay un input enfocado (selección global con Ctrl)
         if ((e.key === 'Delete' || e.key === 'Backspace') && selectionStart && selectionEnd) {
-            if (document.activeElement && document.activeElement.tagName === 'INPUT') return; // Se encarga handleExcelKey
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
             e.preventDefault();
             let changed = false;

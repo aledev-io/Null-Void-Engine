@@ -5,10 +5,10 @@ services:
     network_mode: "host"
     volumes:
       - ${DATA_HOST_DIR:-./data}:/app/data
-      - ${SCRAPER_HOST_DIR:-./data}:/app/data/scraper
+      - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/data/scraper
       - ./null-void-service/src:/app/src
       - ./client_agent:/app/client_agent
-      - ./.secrets:/app/src/.secrets:ro
+      - ${SECRETS_HOST_DIR:-./.secrets}:/app/.secrets:ro
       - ${CERTS_HOST_DIR:-./certs}:/app/certs:ro
       # Socket de Docker para que la app arranque/pare el contenedor de
       # Ollama bajo demanda (arranque perezoso / apagado por inactividad).
@@ -27,6 +27,8 @@ services:
       - HOST=0.0.0.0
       - OLLAMA_HOST=http://127.0.0.1:11434
       - GUNICORN_VERSION=true
+      - DATA_DIR=/app/data/app
+      - SCRAPER_DIR=/app/data/scraper
       # Caché de vídeo transcodificado (LRU): límite máximo y calidad que se
       # genera automáticamente al abrir un vídeo (el resto, bajo demanda).
       - VIDEO_CACHE_MAX_MB=5120
@@ -63,7 +65,7 @@ services:
     container_name: nullvoid-scraper
     volumes:
       - ${DATA_HOST_DIR:-./data}:/app/data
-      - ${SCRAPER_HOST_DIR:-./data}:/app/data/scraper
+      - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/data/scraper
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:

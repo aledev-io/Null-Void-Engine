@@ -295,6 +295,7 @@ window.addEventListener('storage', function(e) {
 
     if (typeof io !== 'undefined') {
         const dashSocket = io({ auth: { token: window.TOKEN }, reconnection: true });
+        window.dashSocket = dashSocket;
         dashSocket.on('new_message', () => {
             updateNotificationBadge();
             const modal = document.getElementById('notif-modal');
@@ -311,6 +312,9 @@ window.addEventListener('storage', function(e) {
         dashSocket.on('force_logout', () => { window.location.href = '/'; });
         dashSocket.on('quota_updated', () => {
             if (typeof window.updateCloudQuotaInfo === 'function') window.updateCloudQuotaInfo();
+        });
+        dashSocket.on('events_changed', () => {
+            if (typeof window.dashRefreshEvents === 'function') window.dashRefreshEvents();
         });
         dashSocket.on('admin_quota_refresh', () => {
             if (typeof window.fetchDashboardAdminQuotaRequests === 'function') window.fetchDashboardAdminQuotaRequests();

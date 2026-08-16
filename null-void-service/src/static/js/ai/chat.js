@@ -1,16 +1,38 @@
-// chat.js
+import { initSlashCommands, isModelPickerOpen } from './slash_commands.js';
+
 export function updateChatGenStatus(position) {
-    const st = document.getElementById('chat-gen-status');
-    if (!st) return;
-    st.style.display = 'flex';
-    st.textContent = position > 0
-        ? `⏳ En cola de generación… posición ${position}`
-        : '⚡ Generando respuesta…';
+    // El indicador superior de estado se eliminó por petición del usuario.
 }
 
 export function clearChatGenStatus() {
-    const st = document.getElementById('chat-gen-status');
-    if (st) st.style.display = 'none';
+    // El indicador superior de estado se eliminó por petición del usuario.
+}
+
+export function modelDisplayName(m) {
+    const name = (m && m.name) || '';
+    return name.startsWith('API: openrouter:')
+        ? name.replace(/^API:\s*openrouter\s*:\s*/, '')
+        : name;
+}
+
+export function isFreeModel(m) {
+    return !!(m && m.pricing && parseFloat(m.pricing.prompt) === 0);
+}
+
+export function modelBadgeHtml(m) {
+    return isFreeModel(m) ? '<span style="font-size:0.62rem;font-weight:700;color:#34d399;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:1px;">gratis</span>' : '';
+}
+
+function createTypingDots(wrapper) {
+    const el = document.createElement('div');
+    el.className = 'msg-typing';
+    for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'msg-typing-dot';
+        el.appendChild(dot);
+    }
+    if (wrapper && wrapper.appendChild) wrapper.appendChild(el);
+    return el;
 }
 
 export function showChat(pushHistory = true) {
@@ -58,6 +80,7 @@ export function autoResize(el) {
 
 export async function init() {
     const models = await window.fetchModels();
+    window.aiModelList = models;
     
     // Fetch user preference for default model
     let defaultModel = null;
@@ -87,7 +110,7 @@ export async function init() {
 
             models.forEach(m => {
                 const opt = document.createElement('option');
-                opt.value = m.name; opt.textContent = m.name;
+                opt.value = m.name; opt.textContent = modelDisplayName(m) + (isFreeModel(m) ? ' (gratis)' : '');
                 if (m.is_external) {
                     apiGroup.appendChild(opt);
                 } else {
@@ -100,148 +123,199 @@ export async function init() {
             
             if (defaultModel) select.value = defaultModel;
         } else {
-            select.innerHTML = '<option>llama3</option>';
+            const noModelsText = (window.t && window.t('wg_no_models')) || 'Sin modelos';
+            select.innerHTML = `<option value="" selected>${noModelsText}</option>`;
         }
     });
     
+    const noModelsText = (window.t && window.t('wg_no_models')) || 'Sin modelos';
+
     // Populate workspace overlay model
     const wsBtnLabel = document.getElementById('ws-model-label');
     const wsInput = document.getElementById('ws-model-select');
-    if (wsBtnLabel && wsInput && models.length > 0) {
-        const wsMenu = document.getElementById('ws-model-menu');
-        if (wsMenu) {
-            Array.from(wsMenu.querySelectorAll('.ws-model-item')).forEach(el => el.remove());
-            models.forEach((m, index) => {
-                const isActive = m.name === defaultModel;
-                const item = document.createElement('div');
-                item.className = 'menu-item ws-model-item' + (isActive ? ' active' : '');
-                item.dataset.val = m.name;
-                item.style.padding = '10px 16px';
-                item.style.cursor = 'pointer';
-                item.onclick = () => window.selectWorkspaceModel(m.name, m.name);
-                
-                const checkDisplay = isActive ? 'block' : 'none';
-                const checkColor = isActive ? 'var(--text-main)' : '';
-                
-                item.innerHTML = `
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-                        <div style="font-size:0.9rem;font-weight:500;color:var(--text-main);">${m.name}</div>
-                        <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:${checkDisplay};color:${checkColor};"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                `;
-                wsMenu.appendChild(item);
-            });
+    if (wsBtnLabel && wsInput) {
+        if (models.length > 0) {
+            const wsMenu = document.getElementById('ws-model-menu');
+            if (wsMenu) {
+                Array.from(wsMenu.querySelectorAll('.ws-model-item')).forEach(el => el.remove());
+                models.forEach((m, index) => {
+                    const isActive = m.name === defaultModel;
+                    const item = document.createElement('div');
+                    item.className = 'menu-item ws-model-item' + (isActive ? ' active' : '');
+                    item.dataset.val = m.name;
+                    item.style.padding = '10px 16px';
+                    item.style.cursor = 'pointer';
+                    item.onclick = () => window.selectWorkspaceModel(m.name, m.name);
+                    item.title = m.name;
+                    
+                    const checkDisplay = isActive ? 'block' : 'none';
+                    const checkColor = isActive ? 'var(--text-main)' : '';
+                    const dispName = modelDisplayName(m);
+                    
+                    item.innerHTML = `
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+                            <div style="font-size:0.9rem;font-weight:500;color:var(--text-main);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dispName}${modelBadgeHtml(m)}</div>
+                            <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:${checkDisplay};color:${checkColor};flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                    `;
+                    wsMenu.appendChild(item);
+                });
+            }
+            
+            wsBtnLabel.textContent = modelDisplayName({ name: defaultModel });
+            wsBtnLabel.title = defaultModel;
+            wsInput.value = defaultModel;
+        } else {
+            wsBtnLabel.textContent = noModelsText;
+            wsInput.value = '';
+            const wsMenu = document.getElementById('ws-model-menu');
+            if (wsMenu) {
+                Array.from(wsMenu.querySelectorAll('.ws-model-item')).forEach(el => el.remove());
+                const emptyItem = document.createElement('div');
+                emptyItem.className = 'menu-item ws-model-item';
+                emptyItem.style.padding = '10px 16px';
+                emptyItem.style.color = 'var(--text-dim)';
+                emptyItem.style.cursor = 'default';
+                emptyItem.textContent = noModelsText;
+                wsMenu.appendChild(emptyItem);
+            }
         }
-        
-        wsBtnLabel.textContent = defaultModel;
-        wsInput.value = defaultModel;
     }
     
     // Populate workspace DETAIL model menu
     const detailBtnLabel = document.getElementById('workspace-model-label');
     const detailInput = document.getElementById('workspace-model-select');
-    if (detailBtnLabel && detailInput && models.length > 0) {
-        const detailMenu = document.getElementById('workspace-model-menu');
-        if (detailMenu) {
-            Array.from(detailMenu.querySelectorAll('.ws-model-item')).forEach(el => el.remove());
-            models.forEach((m, index) => {
-                const isActive = m.name === defaultModel;
-                const item = document.createElement('div');
-                item.className = 'menu-item ws-model-item' + (isActive ? ' active' : '');
-                item.dataset.val = m.name;
-                item.style.padding = '10px 16px';
-                item.style.cursor = 'pointer';
-                item.onclick = () => window.selectWorkspaceModel(m.name, m.name);
-                
-                const checkDisplay = isActive ? 'block' : 'none';
-                const checkColor = isActive ? 'var(--text-main)' : '';
-                
-                item.innerHTML = `
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-                        <div style="font-size:0.9rem;font-weight:500;color:var(--text-main);">${m.name}</div>
-                        <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:${checkDisplay};color:${checkColor};"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                `;
-                detailMenu.appendChild(item);
-            });
+    if (detailBtnLabel && detailInput) {
+        if (models.length > 0) {
+            const detailMenu = document.getElementById('workspace-model-menu');
+            if (detailMenu) {
+                Array.from(detailMenu.querySelectorAll('.ws-model-item')).forEach(el => el.remove());
+                models.forEach((m, index) => {
+                    const isActive = m.name === defaultModel;
+                    const item = document.createElement('div');
+                    item.className = 'menu-item ws-model-item' + (isActive ? ' active' : '');
+                    item.dataset.val = m.name;
+                    item.style.padding = '10px 16px';
+                    item.style.cursor = 'pointer';
+                    item.onclick = () => window.selectWorkspaceModel(m.name, m.name);
+                    item.title = m.name;
+                    
+                    const checkDisplay = isActive ? 'block' : 'none';
+                    const checkColor = isActive ? 'var(--text-main)' : '';
+                    const dispName = modelDisplayName(m);
+                    
+                    item.innerHTML = `
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+                            <div style="font-size:0.9rem;font-weight:500;color:var(--text-main);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dispName}${modelBadgeHtml(m)}</div>
+                            <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:${checkDisplay};color:${checkColor};flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                    `;
+                    detailMenu.appendChild(item);
+                });
+            }
+            
+            detailBtnLabel.textContent = modelDisplayName({ name: defaultModel });
+            detailBtnLabel.title = defaultModel;
+            detailInput.value = defaultModel;
+        } else {
+            detailBtnLabel.textContent = noModelsText;
+            detailInput.value = '';
+            const detailMenu = document.getElementById('workspace-model-menu');
+            if (detailMenu) {
+                Array.from(detailMenu.querySelectorAll('.ws-model-item')).forEach(el => el.remove());
+                const emptyItem = document.createElement('div');
+                emptyItem.className = 'menu-item ws-model-item';
+                emptyItem.style.padding = '10px 16px';
+                emptyItem.style.color = 'var(--text-dim)';
+                emptyItem.style.cursor = 'default';
+                emptyItem.textContent = noModelsText;
+                detailMenu.appendChild(emptyItem);
+            }
         }
-        
-        detailBtnLabel.textContent = defaultModel;
-        detailInput.value = defaultModel;
     }
     
-    // Populate custom main model menu
-    const mainMenu = document.getElementById('main-model-menu');
+    // Etiqueta del modelo actual en la cabecera: el selector es el comando
+    // /models escrito en el input de chat.
     const mainBtnLabel = document.getElementById('main-model-label');
     const mainInput = document.getElementById('model-select');
-    if (mainMenu && models.length > 0) {
-        Array.from(mainMenu.querySelectorAll('.main-model-item')).forEach(el => el.remove());
-        
-        models.forEach((m, index) => {
-            const isActive = m.name === defaultModel;
-            const item = document.createElement('div');
-            item.className = 'menu-item main-model-item' + (isActive ? ' active' : '');
-            item.dataset.val = m.name;
-            item.style.padding = '10px 16px';
-            item.style.cursor = 'pointer';
-            item.onclick = () => window.selectMainModel(m.name, m.name);
-            
-            const checkDisplay = isActive ? 'block' : 'none';
-            const checkColor = isActive ? 'var(--text-main)' : '';
-            
-            item.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-                    <div style="font-size:0.9rem;font-weight:500;color:var(--text-main);">${m.name}</div>
-                    <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:${checkDisplay};color:${checkColor};"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>
-            `;
-            mainMenu.appendChild(item);
-        });
-        
-        if (mainBtnLabel && mainInput) {
-            mainBtnLabel.textContent = defaultModel;
+    if (mainBtnLabel && mainInput) {
+        if (models.length > 0) {
+            mainBtnLabel.textContent = modelDisplayName({ name: defaultModel });
+            mainBtnLabel.title = defaultModel;
             mainInput.value = defaultModel;
+        } else {
+            mainBtnLabel.textContent = noModelsText;
+            mainInput.value = '';
         }
     }
-    
+
+    const slashCommands = [
+        { name: '/models', description: 'Cambiar de modelo — /models gratis - tools - nombre', run: () => {} },
+        { name: '/nuevo', description: 'Nueva conversación', run: () => { if (window.newChat) window.newChat(); } },
+        { name: '/agenda', description: 'Activar / desactivar modo agenda', run: () => { window.toggleAIMode(); } },
+        { name: '/normal', description: 'Activar modo normal', run: () => { window.toggleAIMode('normal'); } },
+        { name: '/web', description: 'Activar / desactivar búsqueda web', run: () => { window.toggleWebSearch(); } },
+    ];
+
+    initSlashCommands({
+        input: document.getElementById('chat-input'),
+        models: () => window.aiModelList || [],
+        current: () => {
+            const sel = document.getElementById('model-select');
+            return (sel && sel.value) || '';
+        },
+        onSelectModel: (name) => {
+            window.selectMainModel(name, name);
+            if (name.startsWith('API:')) {
+                window.showToast('Modelo externo (API): tus mensajes y datos se envían a un proveedor de terceros. Evita datos sensibles.', 'warning');
+            } else if (window.showToast) {
+                window.showToast('Modelo: ' + name, 'info');
+            }
+        },
+        commands: slashCommands,
+    });
+
+    // Ocultar el botón de enviar mientras se escribe/busca un comando
+    const chatInputEl = document.getElementById('chat-input');
+    if (chatInputEl) {
+        chatInputEl.addEventListener('input', () => {
+            const sendBtn = document.getElementById('send-btn');
+            if (!sendBtn) return;
+            const isCmd = chatInputEl.value.trim().startsWith('/') && !window.isGenerating;
+            sendBtn.style.display = isCmd ? 'none' : '';
+        });
+    }
+
+    // Chat del detalle de workspace: mismo comando /models
+    initSlashCommands({
+        input: document.getElementById('workspace-chat-input'),
+        models: () => window.aiModelList || [],
+        current: () => {
+            const sel = document.getElementById('workspace-model-select');
+            return (sel && sel.value) || '';
+        },
+        onSelectModel: (name) => {
+            window.selectWorkspaceModel(name, name);
+            if (name.startsWith('API:')) {
+                window.showToast('Modelo externo (API): tus mensajes y datos se envían a un proveedor de terceros. Evita datos sensibles.', 'warning');
+            } else if (window.showToast) {
+                window.showToast('Modelo: ' + name, 'info');
+            }
+        },
+        commands: slashCommands,
+    });
+
     loadHistory();
     syncHistoryFromDB();
     checkActiveGenerations();
+    _restoreLastChat();
 }
-
-window.toggleMainModelMenu = function(e) {
-    e.stopPropagation();
-    const menu = document.getElementById('main-model-menu');
-    document.querySelectorAll('.chat-context-menu').forEach(m => {
-        if (m.id !== 'main-model-menu') m.style.display = 'none';
-    });
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-};
 
 window.selectMainModel = function(val, label) {
     const input = document.getElementById('model-select');
     const btnLabel = document.getElementById('main-model-label');
     if(input) input.value = val;
-    if(btnLabel) btnLabel.textContent = label;
-    
-    const menu = document.getElementById('main-model-menu');
-    menu.querySelectorAll('.main-model-item').forEach(el => {
-        el.classList.remove('active');
-        const icon = el.querySelector('.check-icon');
-        if(icon) {
-            icon.style.display = 'none';
-            icon.style.color = '';
-        }
-        if(el.dataset.val === val) {
-            el.classList.add('active');
-            if(icon) {
-                icon.style.display = 'block';
-                icon.style.color = 'var(--text-main)';
-            }
-        }
-    });
-    
-    menu.style.display = 'none';
+    if(btnLabel) { btnLabel.textContent = modelDisplayName({ name: label }); btnLabel.title = label; }
 
     // Save preference to backend
     fetch('/api/ai/preferences', {
@@ -280,7 +354,7 @@ function enterGeneratingState() {
     }
     const input = document.getElementById('chat-input');
     if (input) {
-        input.placeholder = 'Generando respuesta...';
+        input.placeholder = 'Enviar un Mensaje';
     }
     const searchBtn = document.getElementById('search-mode-btn');
     if (searchBtn) searchBtn.disabled = true;
@@ -290,8 +364,8 @@ function exitGeneratingState() {
     window.isGenerating = false;
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) {
-        sendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
-        sendBtn.style.background = 'var(--primary)';
+        sendBtn.innerHTML = '<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.04 15.93l-.11 4.53c.57 0 .82-.25 1.13-.56l2.7-2.59 5.61 4.13c1.03.57 1.77.27 2.05-.96l3.71-17.48c.38-1.7-.64-2.63-1.78-2.19L1.02 10.08c-1.69.66-1.67 1.62-.31 2.04l5.04 1.58 11.95-7.54c.56-.37 1.08-.17.66.21L9.04 15.93z"/></svg>';
+        sendBtn.style.background = 'transparent';
     }
     const input = document.getElementById('chat-input');
     if (input) {
@@ -338,9 +412,12 @@ export async function refreshCurrentChatFromDB() {
         const msgRes = await fetch(`/api/ai/sessions/${window.currentChatId}/messages`);
         if (msgRes.ok) {
             const messages = await msgRes.json();
+            // Si la BD no tiene mensajes (sesión antigua solo local o borrada),
+            // no pisar el chat restaurado: eso dejaba el contenedor vacío.
+            if (!Array.isArray(messages) || messages.length === 0) return;
             window.chatMessages = messages.map(m => ({
                 role: m.role,
-                content: m.content
+                content: m.content || ''
             }));
             renderChat();
             
@@ -373,6 +450,8 @@ export async function syncHistoryFromDB() {
                 const msgRes = await fetch(`/api/ai/sessions/${session.id}/messages`);
                 if (msgRes.ok) {
                     const messages = await msgRes.json();
+                    // Saltar sesiones sin mensajes: no ensucian el historial
+                    if (!Array.isArray(messages) || messages.length === 0) continue;
                     history.push({
                         id: session.id,
                         title: session.title,
@@ -396,12 +475,16 @@ export async function syncHistoryFromDB() {
                 const idB = String(b.id).length > 15 ? 0 : Number(b.id);
                 return idB - idA;
             });
-            localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history));
+            try {
+                localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history));
+            } catch (e) {
+                console.error("Quota exceeded, truncating history...");
+                localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history.slice(0, 5)));
+            }
             loadHistory();
         }
         
-        // Always refresh the currently viewed chat to ensure we have its latest completed state
-        if (window.currentChatId) {
+            if (window.currentChatId) {
             refreshCurrentChatFromDB();
         }
     } catch (e) {
@@ -427,9 +510,11 @@ export function addCodeCopyButtons(container) {
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
                 `;
-        btn.style.position = 'absolute';
+        btn.style.position = 'sticky';
         btn.style.top = '8px';
-        btn.style.right = '8px';
+        btn.style.float = 'right';
+        btn.style.marginLeft = '8px';
+        btn.style.zIndex = '2';
         btn.style.background = 'rgba(255, 255, 255, 0.1)';
         btn.style.border = 'none';
         btn.style.borderRadius = '4px';
@@ -474,6 +559,13 @@ export function addCodeCopyButtons(container) {
     });
 }
 
+function _lastUserMessageIndex() {
+    for (let i = window.chatMessages.length - 1; i >= 0; i--) {
+        if (window.chatMessages[i] && window.chatMessages[i].role === 'user') return i;
+    }
+    return -1;
+}
+
 export function createActionBar(role, content, index) {
     const bar = document.createElement('div');
     bar.className = 'message-action-bar';
@@ -513,7 +605,9 @@ export function createActionBar(role, content, index) {
 
     bar.appendChild(copyBtn);
 
-    if (role === 'user') {
+    // Editar solo el último mensaje de usuario: editar uno antiguo trunca el
+    // historial y se pierde el resto de la conversación.
+    if (role === 'user' && index === _lastUserMessageIndex()) {
         const editBtn = document.createElement('button');
         editBtn.className = 'msg-action-btn';
         editBtn.title = 'Editar y reenviar';
@@ -581,7 +675,7 @@ export function createActionBar(role, content, index) {
     return bar;
 }
 
-export function addMessage(role, content, isStreaming = false, attachments = [], modelName = '') {
+export function addMessage(role, content, isStreaming = false, attachments = []) {
     const log = document.getElementById('chat-log');
     const welcome = document.getElementById('welcome-screen');
     if (welcome) welcome.style.display = 'none';
@@ -611,10 +705,14 @@ export function addMessage(role, content, isStreaming = false, attachments = [],
                 `;
     }
 
+    const col = document.createElement('div');
+    col.className = 'message-col';
     const textWrapper = document.createElement('div');
     textWrapper.className = 'message-content';
     if (isStreaming) textWrapper.id = 'streaming-message';
-    textWrapper.innerHTML = marked.parse(content);
+    textWrapper.innerHTML = DOMPurify.sanitize(marked.parse(String(content ?? '')));
+
+    col.appendChild(textWrapper);
 
     if (attachments && attachments.length > 0) {
         const attachContainer = document.createElement('div');
@@ -659,11 +757,11 @@ export function addMessage(role, content, isStreaming = false, attachments = [],
         textWrapper.appendChild(attachContainer);
     }
 
-    row.appendChild(avatar); row.appendChild(textWrapper);
+    row.appendChild(avatar); row.appendChild(col);
     log.appendChild(row); log.scrollTop = log.scrollHeight;
 
     if (!isStreaming) {
-        const currentModel = modelName || (role === 'assistant' ? document.getElementById('model-select').value : '');
+        const currentModel = role === 'assistant' ? document.getElementById('model-select').value : '';
         window.chatMessages.push({ role, content, attachments, model: currentModel });
         hljs.highlightAll();
         addCodeCopyButtons(textWrapper);
@@ -672,11 +770,25 @@ export function addMessage(role, content, isStreaming = false, attachments = [],
     return textWrapper;
 }
 
+
+function appendChatAlert(wrapper, text) {
+    const col = wrapper && wrapper.parentNode;
+    if (!col) return;
+    const el = document.createElement('div');
+    el.className = 'msg-alert';
+    el.textContent = '⚠️ ' + text;
+    col.appendChild(el);
+    const log = document.getElementById('chat-log');
+    if (log) log.scrollTop = log.scrollHeight;
+}
+
 export async function sendMessage(fromButton = false) {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     const model = document.getElementById('model-select').value;
 
+    if (isModelPickerOpen(input)) return;  // el Enter lo gestiona la paleta
+    if (text.startsWith('/') && !window.isGenerating) return;  // los / son comandos
     if (window.isGenerating) {
         if (fromButton && window.abortController) {
             window.abortController.abort();
@@ -685,12 +797,23 @@ export async function sendMessage(fromButton = false) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ session_id: window.currentChatId })
             }).catch(() => {});
+            if (window.showToast) window.showToast('Mensaje cancelado', 'info');
             return;
         }
         window.showToast('La IA está generando una respuesta. Pulsa el botón rojo para cancelar.', 'info');
         return;
     }
     if (!text && window.attachedFiles.length === 0) return;
+
+    if (!model || model === 'loading') {
+        const msg = (window.t && window.t('wg_download_model_first')) || 'Descarga un modelo primero';
+        if (window.showToast) {
+            window.showToast(msg, 'warning');
+        } else {
+            alert(msg);
+        }
+        return;
+    }
 
     window.isGenerating = true;
     window._streamingCompleted = false;
@@ -708,7 +831,8 @@ export async function sendMessage(fromButton = false) {
     if (window.attachedFiles.length > 0) {
         const fileContext = window.attachedFiles.map(f => {
             if (!f.isImage && f.isText && f.data) {
-                return `[Contenido del archivo: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
+                const safeData = f.data.replace(/```/g, '\\`\\`\\`');
+                return `[Contenido del archivo: ${f.name}]\n\`\`\`\n${safeData}\n\`\`\``;
             } else if (f.isAudio || f.type?.startsWith('audio/')) {
                 return `[Archivo de Audio Adjunto: ${f.name}]`;
             } else {
@@ -726,10 +850,21 @@ export async function sendMessage(fromButton = false) {
     sendBtn.style.background = '#ef4444';
 
     addMessage('user', text || '', false, currentAttachments);
-    const aiWrapper = addMessage('assistant', `**${model}**\n\n`, true, [], model);
+    const aiWrapper = addMessage('assistant', '', true);
+    const typingDots = createTypingDots(aiWrapper);
     let fullResponse = '';
+    let fullReasoning = '';
 
     const startTime = performance.now();
+
+    let hadError = false;
+    const _showError = (errText) => {
+        hadError = true;
+        fullResponse += `\n\n*Error: ${errText}*`;
+        aiWrapper.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+        appendChatAlert(aiWrapper, errText);
+        if (window.showToast) window.showToast('Error: ' + errText, 'error');
+    };
 
     try {
         const _numCtx = parseInt(localStorage.getItem('model_num_ctx')) || 8192;
@@ -741,11 +876,13 @@ export async function sendMessage(fromButton = false) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 session_id: window.currentChatId,
-                title: window.chatMessages.length === 0 ? finalPrompt.substring(0, 30) + '...' : undefined,
+                title: ((window.chatMessages && window.chatMessages[0] && window.chatMessages[0].content) || text || finalPrompt).substring(0, 30) + '...',
                 model,
                 search_mode: window.webSearchMode === true,
                 workspace_id: window.currentWorkspaceId || null,
-                messages: [...window.chatMessages, { role: 'user', content: finalPrompt }].map(m => ({ role: m.role, content: m.content })),
+                mode: window.aiChatMode || 'agenda',
+                reasoning_mode: window.reasoningMode === true,
+                messages: [...window.chatMessages.slice(0, -1), { role: 'user', content: finalPrompt }].map(m => ({ role: m.role, content: m.content })),
                 stream: true,
                 options: {
                     num_ctx: _numCtx,
@@ -756,6 +893,21 @@ export async function sendMessage(fromButton = false) {
             }),
             signal: window.abortController.signal
         });
+
+        if (!response.ok) {
+            let detail = '';
+            try {
+                const body = await response.text();
+                const m = body.match(/\{.*\}/s);
+                if (m) {
+                    try { detail = String((JSON.parse(m[0]).error) || ''); } catch (e) { detail = ''; }
+                }
+                if (!detail) {
+                    detail = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 160);
+                }
+            } catch (e) { /* sin detalle */ }
+            throw new Error(detail || `El servidor respondió HTTP ${response.status} al intentar generar la respuesta.`);
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -769,7 +921,10 @@ export async function sendMessage(fromButton = false) {
                 try {
                     const json = JSON.parse(line);
                     if (json.session_id && !json.message) {
+                        const isNewChat = !window.currentChatId;
                         window.currentChatId = json.session_id;
+                        if (isNewChat) addChatToSidebar(window.currentChatId);
+                        _saveLastChatId(json.session_id);
                         continue;
                     }
                     if (json.queue) {
@@ -777,13 +932,24 @@ export async function sendMessage(fromButton = false) {
                         continue;
                     }
                     if (json.error) {
-                        fullResponse += `\n\n*Error: ${json.error}*`;
-                        aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
+                        _showError(json.error);
                         break;
                     }
                     if (json.message?.content) {
                         fullResponse += json.message.content;
-                        aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
+                        aiWrapper.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+                        document.getElementById('chat-log').scrollTop = document.getElementById('chat-log').scrollHeight;
+                    }
+                    if (json.reasoning) {
+                        fullReasoning += json.reasoning;
+                        let rz = aiWrapper.querySelector('.msg-reasoning');
+                        if (!rz) {
+                            rz = document.createElement('details');
+                            rz.className = 'msg-reasoning';
+                            rz.innerHTML = '<summary>Razonamiento</summary><div class="msg-reasoning-body"></div>';
+                            aiWrapper.insertBefore(rz, aiWrapper.firstChild);
+                        }
+                        rz.querySelector('.msg-reasoning-body').textContent = fullReasoning;
                         document.getElementById('chat-log').scrollTop = document.getElementById('chat-log').scrollHeight;
                     }
                 } catch (e) { }
@@ -792,11 +958,21 @@ export async function sendMessage(fromButton = false) {
     } catch (e) {
         if (e.name === 'AbortError') {
             fullResponse += '\n\n*Generación detenida.*';
-            aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
+            aiWrapper.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+            appendChatAlert(aiWrapper, 'Generación detenida');
         } else {
-            aiWrapper.innerHTML = 'Error de conexión.';
+            const errText = (e && e.message && !/^Failed to fetch/.test(e.message))
+                ? e.message
+                : 'No se pudo conectar con el servidor de IA. Comprueba que el servicio esté activo.';
+            _showError(errText);
         }
     }
+
+    if (!hadError && !fullResponse.trim()) {
+        _showError('No se recibió respuesta del modelo. Verifica que el modelo esté instalado y que el motor de IA esté activo.');
+    }
+
+    if (typingDots && typingDots.parentNode) typingDots.remove();
 
     const endTime = performance.now();
     const durationStr = ((endTime - startTime) / 1000).toFixed(1);
@@ -807,7 +983,7 @@ export async function sendMessage(fromButton = false) {
     clearChatGenStatus();
     sendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
     sendBtn.style.background = 'var(--primary)';
-    window.chatMessages.push({ role: 'assistant', content: fullResponse, model: model, duration: durationStr });
+    window.chatMessages.push({ role: 'assistant', content: fullResponse, model: model, duration: durationStr, reasoning: fullReasoning || undefined });
     hljs.highlightAll(); saveHistory();
 
     aiWrapper.removeAttribute('id');
@@ -820,6 +996,35 @@ export async function sendMessage(fromButton = false) {
     aiWrapper.appendChild(durationEl);
 }
 
+function _welcomeHtml() {
+    const userNameEl = document.getElementById('user-name-display');
+    const username = userNameEl ? userNameEl.textContent.trim() : 'Usuario';
+    return `
+        <div id="welcome-screen" class="welcome-screen">
+            <div class="welcome-title">Hola, ${username}</div>
+            <div class="welcome-subtitle">¿Cómo puedo ayudarte hoy?</div>
+            <div style="margin:-25px 0 35px 0;display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-dim);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:5px 12px;border-radius:20px;">
+                <span>Escribe</span>
+                <code style="color:#818cf8;background:rgba(129,140,248,0.15);padding:2px 6px;border-radius:4px;font-weight:700;">/</code>
+                <span>para abrir la barra de comandos y elegir modelos</span>
+            </div>
+            <div class="suggestion-grid">
+                <div class="suggestion-card" onclick="setInput('Dame ideas para un proyecto de Python')">
+                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Dame ideas</div>
+                    <div style="font-size:0.75rem;color:var(--text-dim);">para un proyecto de Python</div>
+                </div>
+                <div class="suggestion-card" onclick="setInput('Ayúdame a estudiar para un examen')">
+                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Ayúdame a estudiar</div>
+                    <div style="font-size:0.75rem;color:var(--text-dim);">vocabulario para un examen</div>
+                </div>
+                <div class="suggestion-card" onclick="setInput('Cuéntame un dato curioso sobre Roma')">
+                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Cuéntame un dato curioso</div>
+                    <div style="font-size:0.75rem;color:var(--text-dim);">sobre el Imperio Romano</div>
+                </div>
+            </div>
+        </div>`;
+}
+
 export function newChat(workspaceId = null) {
     if (window.isGenerating) {
         window.showToast('Espera a que termine la respuesta antes de iniciar un nuevo chat.', 'info');
@@ -827,31 +1032,28 @@ export function newChat(workspaceId = null) {
     }
     window.chatMessages = [];
     window.currentChatId = null;
+    try { localStorage.removeItem('nv_ai_last_chat'); } catch (e) { /* sin almacenamiento */ }
     window.currentWorkspaceId = workspaceId;
     
-    // Get username from the sidebar display, or fallback to 'Usuario'
-    const userNameEl = document.getElementById('user-name-display');
-    const username = userNameEl ? userNameEl.textContent.trim() : 'Usuario';
-    
-    document.getElementById('chat-log').innerHTML = `
-                <div id="welcome-screen" style="max-width:800px;margin:15vh auto 0 auto;padding:0 20px;">
-                    <div style="font-size:2.5rem;font-weight:700;margin-bottom:20px;">Hola, ${username}</div>
-                    <div style="font-size:1.2rem;color:var(--text-dim);margin-bottom:40px;">¿Cómo puedo ayudarte hoy?</div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;">
-                        <div class="suggestion-card" onclick="setInput('Dame ideas para un proyecto de Python')">
-                            <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Dame ideas</div>
-                            <div style="font-size:0.75rem;color:var(--text-dim);">para un proyecto de Python</div>
-                        </div>
-                        <div class="suggestion-card" onclick="setInput('Ayúdame a estudiar para un examen')">
-                            <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Ayúdame a estudiar</div>
-                            <div style="font-size:0.75rem;color:var(--text-dim);">vocabulario para un examen</div>
-                        </div>
-                        <div class="suggestion-card" onclick="setInput('Cuéntame un dato curioso sobre Roma')">
-                            <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Cuéntame un dato curioso</div>
-                            <div style="font-size:0.75rem;color:var(--text-dim);">sobre el Imperio Romano</div>
-                        </div>
-                    </div>
-                </div>`;
+    document.getElementById('chat-log').innerHTML = _welcomeHtml();
+    loadHistory();
+}
+
+function addChatToSidebar(id) {
+    // Inserta el chat en el historial lateral en cuanto el servidor asigna
+    // el session_id, para que el chat nuevo aparezca ya al enviar el primer
+    // mensaje (sin esperar a que termine la generación).
+    const history = JSON.parse(localStorage.getItem(`nv_ai_history_${currentUserId}`) || '[]');
+    if (history.some(c => String(c.id) === String(id))) return;
+    const firstUser = window.chatMessages.find(m => m.role === 'user');
+    history.unshift({
+        id,
+        title: firstUser ? firstUser.content.substring(0, 30) + '...' : 'New Chat',
+        messages: [...window.chatMessages],
+        workspace_id: window.currentWorkspaceId || null
+    });
+    localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history.slice(0, 20)));
+    loadHistory();
 }
 
 export function saveHistory() {
@@ -877,8 +1079,45 @@ export function saveHistory() {
         history.unshift({ id: window.currentChatId, title: chatTitle, messages: window.chatMessages, workspace_id: window.currentWorkspaceId || null });
     }
 
-    localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history.slice(0, 20)));
+    try {
+        localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history.slice(0, 20)));
+    } catch (e) {
+        console.error("Quota exceeded, truncating history to save last chat...");
+        localStorage.setItem(`nv_ai_history_${currentUserId}`, JSON.stringify(history.slice(0, 2)));
+    }
     loadHistory();
+}
+
+function _saveLastChatId(id) {
+    try { localStorage.setItem('nv_ai_last_chat', String(id)); } catch (e) { /* sin almacenamiento */ }
+}
+
+function _restoreLastChat() {
+    try {
+        let lastId = null;
+        try { lastId = localStorage.getItem('nv_ai_last_chat'); } catch (e) { /* sin almacenamiento */ }
+        if (!lastId) return;
+        const history = JSON.parse(localStorage.getItem(`nv_ai_history_${currentUserId}`) || '[]');
+        const chat = history.find(c => String(c.id) === String(lastId));
+        if (!chat || !chat.messages || !chat.messages.length) {
+            try { localStorage.removeItem('nv_ai_last_chat'); } catch (e) { /* sin almacenamiento */ }
+            return;
+        }
+        showChat();
+        window.chatMessages = chat.messages;
+        window.currentChatId = chat.id;
+        window.currentChatSharedBy = chat.shared_by || null;
+        window.currentWorkspaceId = chat.workspace_id || null;
+        renderChat();
+        checkActiveGenerations();
+        loadHistory();
+        refreshCurrentChatFromDB();
+    } catch (e) {
+        console.error('Error restaurando el último chat:', e);
+        // Nunca dejar el contenedor en negro: se muestra la pantalla de bienvenida.
+        const log = document.getElementById('chat-log');
+        if (log) log.innerHTML = _welcomeHtml();
+    }
 }
 
 export function loadHistory() {
@@ -887,13 +1126,14 @@ export function loadHistory() {
     container.innerHTML = '';
     history.forEach(chat => {
         const div = document.createElement('div');
-        div.className = 'history-item';
+        const isActive = window.currentChatId && String(chat.id) === String(window.currentChatId);
+        div.className = 'history-item' + (isActive ? ' active' : '');
         div.dataset.id = chat.id;
 
         const label = document.createElement('span');
         label.className = 'history-item-text';
         if (chat.shared_by) {
-            label.innerHTML = `<span style="color:var(--primary); margin-right:4px;">★</span>`;
+            label.innerHTML = `<span style="color:var(--primary); margin-right:4px;display:inline-flex;vertical-align:-1px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.3 6.8L12 17.3l-6 3.3 1.3-6.8L2.2 9.1l6.9-.8z"/></svg></span>`;
             label.appendChild(document.createTextNode(chat.title));
         } else {
             label.textContent = chat.title;
@@ -912,10 +1152,12 @@ export function loadHistory() {
             showChat(); 
             window.chatMessages = chat.messages; 
             window.currentChatId = chat.id; 
+            _saveLastChatId(chat.id);
             window.currentChatSharedBy = chat.shared_by || null; 
             window.currentWorkspaceId = chat.workspace_id || null;
             renderChat(); 
             checkActiveGenerations();
+            loadHistory();
             
             // Close sidebar on mobile
             if (window.innerWidth <= 800) {
@@ -936,7 +1178,12 @@ export function loadHistory() {
 export function renderChat() {
     const log = document.getElementById('chat-log');
     log.innerHTML = '';
+    if (!Array.isArray(window.chatMessages) || window.chatMessages.length === 0) {
+        log.innerHTML = _welcomeHtml();
+        return;
+    }
     window.chatMessages.forEach((msg, index) => {
+        try {
         const row = document.createElement('div'); row.className = 'message-row';
         row.oncontextmenu = (e) => {
             e.preventDefault();
@@ -1046,7 +1293,7 @@ export function renderChat() {
                     fName.textContent = f.name.length > 25 ? f.name.substring(0, 25) + '...' : f.name;
 
                     const fDel = document.createElement('button');
-                    fDel.textContent = '✕';
+                    fDel.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
                     fDel.style.background = 'transparent';
                     fDel.style.border = 'none';
                     fDel.style.color = '#ef4444';
@@ -1066,7 +1313,7 @@ export function renderChat() {
 
             const attachBtn = document.createElement('button');
             attachBtn.className = 'btn-modal-cancel';
-            attachBtn.textContent = '📎 Archivo';
+            attachBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Archivo';
             attachBtn.style.padding = '6px 16px';
             attachBtn.style.fontSize = '0.8rem';
             attachBtn.style.borderRadius = '6px';
@@ -1095,7 +1342,8 @@ export function renderChat() {
                 textarea.setSelectionRange(textarea.value.length, textarea.value.length);
             }, 50);
         } else {
-            text.innerHTML = marked.parse(msg.content);
+            const contentStr = String(msg.content ?? '');
+            text.innerHTML = DOMPurify.sanitize(marked.parse(contentStr));
 
             if (msg.attachments && msg.attachments.length > 0) {
                 const attachContainer = document.createElement('div');
@@ -1158,6 +1406,9 @@ export function renderChat() {
         }
 
         row.appendChild(avatar); row.appendChild(text); log.appendChild(row);
+        } catch (e) {
+            console.error('Error renderizando el mensaje', index, e);
+        }
     });
     hljs.highlightAll(); 
     log.scrollTop = log.scrollHeight;
@@ -1168,6 +1419,15 @@ export function renderChat() {
 export async function submitEditedMessage(index, newText) {
     if (window.isGenerating) {
         window.showToast('La IA está generando una respuesta. Espera o pulsa el botón rojo para cancelar.', 'info');
+        return;
+    }
+
+    // Red de seguridad: solo se permite editar el último mensaje de usuario.
+    // Editar uno anterior truncaría el historial y se perdería el resto.
+    if (index !== _lastUserMessageIndex()) {
+        window.editingMessageIndex = null;
+        renderChat();
+        window.showToast('Solo puedes editar el último mensaje.', 'warning');
         return;
     }
 
@@ -1193,7 +1453,8 @@ export async function submitEditedMessage(index, newText) {
     if (attachments.length > 0) {
         const fileContext = attachments.map(f => {
             if (!f.isImage && f.isText && f.data) {
-                return `[Contenido del archivo: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
+                const safeData = f.data.replace(/```/g, '\\`\\`\\`');
+                return `[Contenido del archivo: ${f.name}]\n\`\`\`\n${safeData}\n\`\`\``;
             } else if (f.isAudio || f.type?.startsWith('audio/')) {
                 return `[Archivo de Audio Adjunto: ${f.name}]`;
             } else {
@@ -1208,10 +1469,21 @@ export async function submitEditedMessage(index, newText) {
     sendBtn.style.background = '#ef4444';
 
     addMessage('user', newText, false, attachments);
-    const aiWrapper = addMessage('assistant', `**${model}**\n\n`, true, [], model);
+    const aiWrapper = addMessage('assistant', '', true);
+    const typingDots = createTypingDots(aiWrapper);
     let fullResponse = '';
+    let fullReasoning = '';
 
     const startTime = performance.now();
+
+    let hadError = false;
+    const _showError = (errText) => {
+        hadError = true;
+        fullResponse += `\n\n*Error: ${errText}*`;
+        aiWrapper.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+        appendChatAlert(aiWrapper, errText);
+        if (window.showToast) window.showToast('Error: ' + errText, 'error');
+    };
 
     try {
         const response = await fetch('/api/ai/chat', {
@@ -1220,9 +1492,11 @@ export async function submitEditedMessage(index, newText) {
             body: JSON.stringify({
                 session_id: window.currentChatId,
                 model,
-                messages: [...window.chatMessages, { role: 'user', content: finalPrompt }].map(m => ({ role: m.role, content: m.content })),
+                messages: [...window.chatMessages.slice(0, -1), { role: 'user', content: finalPrompt }].map(m => ({ role: m.role, content: m.content })),
                 search_mode: window.webSearchMode === true,
                 workspace_id: window.currentWorkspaceId || null,
+                mode: window.aiChatMode || 'agenda',
+                reasoning_mode: window.reasoningMode === true,
                 stream: true,
                 options: {
                     num_predict: 512,
@@ -1231,6 +1505,21 @@ export async function submitEditedMessage(index, newText) {
             }),
             signal: window.abortController.signal
         });
+
+        if (!response.ok) {
+            let detail = '';
+            try {
+                const body = await response.text();
+                const m = body.match(/\{.*\}/s);
+                if (m) {
+                    try { detail = String((JSON.parse(m[0]).error) || ''); } catch (e) { detail = ''; }
+                }
+                if (!detail) {
+                    detail = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 160);
+                }
+            } catch (e) { /* sin detalle */ }
+            throw new Error(detail || `El servidor respondió HTTP ${response.status} al intentar generar la respuesta.`);
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -1244,7 +1533,10 @@ export async function submitEditedMessage(index, newText) {
                 try {
                     const json = JSON.parse(line);
                     if (json.session_id && !json.message) {
+                        const isNewChat = !window.currentChatId;
                         window.currentChatId = json.session_id;
+                        if (isNewChat) addChatToSidebar(window.currentChatId);
+                        _saveLastChatId(json.session_id);
                         continue;
                     }
                     if (json.queue) {
@@ -1252,13 +1544,24 @@ export async function submitEditedMessage(index, newText) {
                         continue;
                     }
                     if (json.error) {
-                        fullResponse += `\n\n*Error: ${json.error}*`;
-                        aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
+                        _showError(json.error);
                         break;
                     }
                     if (json.message?.content) {
                         fullResponse += json.message.content;
-                        aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
+                        aiWrapper.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+                        document.getElementById('chat-log').scrollTop = document.getElementById('chat-log').scrollHeight;
+                    }
+                    if (json.reasoning) {
+                        fullReasoning += json.reasoning;
+                        let rz = aiWrapper.querySelector('.msg-reasoning');
+                        if (!rz) {
+                            rz = document.createElement('details');
+                            rz.className = 'msg-reasoning';
+                            rz.innerHTML = '<summary>Razonamiento</summary><div class="msg-reasoning-body"></div>';
+                            aiWrapper.insertBefore(rz, aiWrapper.firstChild);
+                        }
+                        rz.querySelector('.msg-reasoning-body').textContent = fullReasoning;
                         document.getElementById('chat-log').scrollTop = document.getElementById('chat-log').scrollHeight;
                     }
                 } catch (e) { }
@@ -1267,11 +1570,21 @@ export async function submitEditedMessage(index, newText) {
     } catch (e) {
         if (e.name === 'AbortError') {
             fullResponse += '\n\n*Generación detenida.*';
-            aiWrapper.innerHTML = marked.parse(`**${model}**\n\n` + fullResponse);
+            aiWrapper.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+            appendChatAlert(aiWrapper, 'Generación detenida');
         } else {
-            aiWrapper.innerHTML = 'Error de conexión.';
+            const errText = (e && e.message && !/^Failed to fetch/.test(e.message))
+                ? e.message
+                : 'No se pudo conectar con el servidor de IA. Comprueba que el servicio esté activo.';
+            _showError(errText);
         }
     }
+
+    if (!hadError && !fullResponse.trim()) {
+        _showError('No se recibió respuesta del modelo. Verifica que el modelo esté instalado y que el motor de IA esté activo.');
+    }
+
+    if (typingDots && typingDots.parentNode) typingDots.remove();
 
     const endTime = performance.now();
     const durationStr = ((endTime - startTime) / 1000).toFixed(1);
@@ -1282,7 +1595,7 @@ export async function submitEditedMessage(index, newText) {
     clearChatGenStatus();
     sendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
     sendBtn.style.background = 'var(--primary)';
-    window.chatMessages.push({ role: 'assistant', content: fullResponse, model: model, duration: durationStr });
+    window.chatMessages.push({ role: 'assistant', content: fullResponse, model: model, duration: durationStr, reasoning: fullReasoning || undefined });
     hljs.highlightAll(); saveHistory();
 
     aiWrapper.removeAttribute('id');
@@ -1349,7 +1662,7 @@ export function openMessageContextMenu(e, role, content, index) {
                 </div>
             `;
 
-    if (role === 'user') {
+    if (role === 'user' && index === _lastUserMessageIndex()) {
         menuHTML += `
                     <div class="ctx-divider"></div>
                     <div class="ctx-item" id="ctx-edit-resend">
@@ -1560,6 +1873,13 @@ export function toggleWebSearch() {
         window.showToast('No puedes cambiar el modo de búsqueda mientras se genera una respuesta');
         return;
     }
+    const enabling = !window.webSearchMode;
+    // Modos exclusivos: activar la búsqueda web desactiva el modo agenda
+    if (enabling && window.aiChatMode === 'agenda') {
+        window.aiChatMode = 'normal';
+        localStorage.setItem('ai_chat_mode', 'normal');
+        updateAIModeBtn();
+    }
     window.webSearchMode = !window.webSearchMode;
     const btn = document.getElementById('web-search-btn');
     const wsBtn = document.getElementById('workspace-web-search-btn');
@@ -1567,12 +1887,79 @@ export function toggleWebSearch() {
     if (window.webSearchMode) {
         if(btn) btn.classList.add('active');
         if(wsBtn) wsBtn.classList.add('active');
-        window.showToast('Modo de búsqueda web activado');
+        window.showToast('Búsqueda web activada');
     } else {
         if(btn) btn.classList.remove('active');
         if(wsBtn) wsBtn.classList.remove('active');
-        window.showToast('Modo de búsqueda web desactivado');
+        window.showToast('Búsqueda web desactivada');
     }
 }
 window.toggleWebSearch = toggleWebSearch;
 
+const AI_MODE_AGENDA_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"></rect><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="13" y2="14"></line></svg>';
+const AI_MODE_CHAT_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"></path></svg>';
+
+window.aiChatMode = (localStorage.getItem('ai_chat_mode') || 'agenda');
+export function updateAIModeBtn() {
+    const btn = document.getElementById('ai-mode-btn');
+    if (!btn) return;
+    const isAgenda = window.aiChatMode === 'agenda';
+    btn.classList.toggle('active', isAgenda);
+    btn.title = isAgenda
+        ? 'Modo Agenda: responde con tus datos reales del calendario. Pulsa para modo Normal (sin agenda ni búsqueda web).'
+        : 'Modo Normal: sin agenda ni búsqueda web. Pulsa para modo Agenda.';
+    btn.innerHTML = isAgenda ? AI_MODE_AGENDA_ICON : AI_MODE_CHAT_ICON;
+}
+export function toggleAIMode(target) {
+    if (window.isGenerating) {
+        window.showToast('No puedes cambiar el modo mientras se genera una respuesta');
+        return;
+    }
+    if (target) {
+        if (window.aiChatMode === target) {
+            window.showToast(window.aiChatMode === 'agenda'
+                ? 'Modo Agenda ya activo'
+                : 'Modo Normal ya activo');
+            return;
+        }
+        window.aiChatMode = target;
+    } else {
+        window.aiChatMode = window.aiChatMode === 'agenda' ? 'normal' : 'agenda';
+    }
+    // En modo Agenda la búsqueda web no está disponible: se desactiva sola
+    if (window.aiChatMode === 'agenda' && window.webSearchMode) {
+        window.webSearchMode = false;
+        const btn = document.getElementById('web-search-btn');
+        if (btn) btn.classList.remove('active');
+        const wsBtn = document.getElementById('workspace-web-search-btn');
+        if (wsBtn) wsBtn.classList.remove('active');
+    }
+    localStorage.setItem('ai_chat_mode', window.aiChatMode);
+    updateAIModeBtn();
+    window.showToast(window.aiChatMode === 'agenda'
+        ? 'Modo Agenda activado'
+        : 'Modo Agenda desactivado');
+}
+window.toggleAIMode = toggleAIMode;
+document.addEventListener('DOMContentLoaded', updateAIModeBtn);
+
+export function toggleReasoningMode() {
+    if (window.isGenerating) {
+        window.showToast('No puedes cambiar el modo mientras se genera una respuesta');
+        return;
+    }
+    window.reasoningMode = !window.reasoningMode;
+    localStorage.setItem('ai_reasoning_mode', window.reasoningMode);
+    updateReasoningModeBtn();
+    window.showToast(window.reasoningMode ? 'Modo Razonamiento activado' : 'Modo Razonamiento desactivado');
+}
+
+function updateReasoningModeBtn() {
+    const btn = document.getElementById('reasoning-mode-btn');
+    if (!btn) return;
+    btn.classList.toggle('active', window.reasoningMode);
+}
+
+window.toggleReasoningMode = toggleReasoningMode;
+window.reasoningMode = localStorage.getItem('ai_reasoning_mode') === 'true';
+document.addEventListener('DOMContentLoaded', updateReasoningModeBtn);

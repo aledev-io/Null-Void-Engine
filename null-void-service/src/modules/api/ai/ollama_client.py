@@ -83,7 +83,7 @@ def stream_chat(payload: dict):
         role = str(msg.get("role", ""))
         content = str(msg.get("content", ""))
 
-        if role not in ("user", "assistant", "system"):
+        if role not in ("user", "assistant", "system", "tool"):
             continue
 
         total_chars += len(content)
@@ -91,10 +91,13 @@ def stream_chat(payload: dict):
             yield (json.dumps({"error": "Límite de caracteres excedido (máx 300,000)"}) + "\n").encode("utf-8")
             return
 
-        clean_messages.append({
+        clean_msg = {
             "role": role,
             "content": content
-        })
+        }
+        if role == "assistant" and msg.get("tool_calls"):
+            clean_msg["tool_calls"] = msg["tool_calls"]
+        clean_messages.append(clean_msg)
 
     if not clean_messages:
         yield (json.dumps({"error": "No hay mensajes válidos"}) + "\n").encode("utf-8")
@@ -105,6 +108,9 @@ def stream_chat(payload: dict):
         "messages": clean_messages,
         "keep_alive": "30m"
     }
+
+    if "tools" in payload and isinstance(payload["tools"], list) and payload["tools"]:
+        strict_payload["tools"] = payload["tools"]
 
     if "options" in payload and isinstance(payload["options"], dict):
         strict_options = {}
@@ -123,8 +129,9 @@ def stream_chat(payload: dict):
         ) as r:
 
             if r.status_code != 200:
+                detail = r.text[:300]
                 yield (json.dumps({
-                    "error": f"Ollama HTTP {r.status_code}"
+                    "error": f"Ollama HTTP {r.status_code}: {detail}"
                 }) + "\n").encode("utf-8")
                 return
 

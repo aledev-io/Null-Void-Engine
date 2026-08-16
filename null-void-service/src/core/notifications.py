@@ -15,7 +15,6 @@ except ImportError:
 
 from core.webpush_utils import get_or_create_vapid_keys, get_vapid_claims
 
-# Ruta al historial de notificaciones
 HISTORY_PATH = os.path.join(os.path.dirname(DB_PATH), 'notifications_history.json')
 
 class SystemNotifier:
@@ -30,7 +29,6 @@ class SystemNotifier:
 
     def start(self):
         with self._lock:
-            # Si ya está corriendo, no hacer nada
             if hasattr(self, 'thread') and self.thread.is_alive() and not self._stop_event.is_set():
                 return
             
@@ -69,7 +67,6 @@ class SystemNotifier:
 
         try:
             with get_db() as conn:
-                # Buscamos TODOS los eventos no completados con hora de inicio
                 rows = conn.execute(
                     "SELECT id, title, date, start_time, description, category, reminders, user_id "
                     "FROM events "
@@ -79,28 +76,23 @@ class SystemNotifier:
                 for row in rows:
                     ev_id = row['id']
                     try:
-                        # Calculamos la diferencia total en minutos hasta el inicio del evento
                         ev_dt = datetime.strptime(f"{row['date']} {row['start_time']}", "%Y-%m-%d %H:%M")
                         diff_minutes = int((ev_dt - now).total_seconds() / 60)
 
-                        # Si el evento ya pasó hace más de 1 minuto, lo ignoramos
                         if diff_minutes < -1:
                             continue
 
-                        # Procesar cada recordatorio definido
                         reminders_json = row['reminders']
                         reminders = json.loads(reminders_json) if reminders_json else [0]
                         if not reminders: reminders = [0]
 
                         for reminder_minutes in reminders:
-                            # ¿Estamos en la ventana de este recordatorio?
                             if 0 <= diff_minutes <= reminder_minutes:
                                 # Lógica de repetición:
                                 # Si faltan <= 10 min o es el momento del evento (reminder 0), 
                                 # repetimos cada 2 minutos para que sea "persistente".
                                 if diff_minutes <= 10 or reminder_minutes == 0:
                                     import math
-                                    # Cambiamos la clave cada 2 minutos
                                     interval_bucket = math.floor(time.time() / 120) 
                                     notify_key = f"{ev_id}:{reminder_minutes}:rep_{interval_bucket}"
                                 else:
@@ -125,7 +117,6 @@ class SystemNotifier:
                                 )
                                 self.notified_ids.add(notify_key)
                                 
-                                # Extraer ID de usuario
                                 user_id = row['user_id'] or 'admin'
                                 self._add_to_history(row['title'], row['date'], row['start_time'], row['description'], row['category'], user_id)
                                 
@@ -151,7 +142,6 @@ class SystemNotifier:
     def _add_to_history(self, title, date, time_val, body, category, user_id, **kwargs):
         """Guarda la notificación en un archivo JSON local por usuario"""
         try:
-            # Ruta personalizada por ID de usuario
             user_history_path = os.path.join(os.path.dirname(DB_PATH), f'notifications_{user_id}.json')
             
             history = []
@@ -230,7 +220,6 @@ class SystemNotifier:
                     return
 
             history.insert(0, new_entry)
-            # Mantener solo las últimas 100 notificaciones
             history = history[:100]
             
             with open(user_history_path, 'w', encoding='utf-8') as f:
@@ -240,13 +229,10 @@ class SystemNotifier:
             print(f"[Notifier] Error guardando historial para {user_id}: {e}")
 
     def _send_system_notification(self, title, start_time, diff, description, category, user_id=None, **kwargs):
-        # Local system notifications
         self._send_local_notification(title, start_time, diff, description, category)
         
-        # Web Push notifications
         self._send_web_push(title, description, category, user_id, **kwargs)
         
-        # FCM Push Notifications (E2EE for Android App)
         self._send_fcm_push(title, description, category, user_id)
         
     def _send_fcm_push(self, title, body, category, user_id=None):
@@ -427,10 +413,8 @@ class SystemNotifier:
         if len(body) > 60:
             body = body[:60] + "..."
             
-        # 1. Guardar en el historial del destinatario (agrupando si es del mismo chat)
         self._add_to_history(title, date_str, time_str, body, category, receiver_id, sender_id=sender_id, image=image_url)
         
-        # 2. Lanzar la notificación nativa / push
         self._send_system_notification(title, time_str, 0, body, category, user_id=receiver_id, sender_id=sender_id, image=image_url)
 
 notifier = SystemNotifier()

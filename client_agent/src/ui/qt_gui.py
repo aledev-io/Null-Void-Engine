@@ -15,7 +15,10 @@ import sys
 import time
 import threading
 
-from cloud_api import CloudAgentAPI, clean_error_msg
+try:
+    from ..api.cloud_api import CloudAgentAPI, clean_error_msg
+except ImportError:
+    from src.api.cloud_api import CloudAgentAPI, clean_error_msg
 
 
 def _agent_api():
@@ -23,13 +26,15 @@ def _agent_api():
     de modo que la GUI también rechace servidores suplantados."""
     cert_hash = None
     try:
-        from agent import _AGENT_ENV
+        try:
+            from ..main import _AGENT_ENV
+        except ImportError:
+            from src.main import _AGENT_ENV
         cert_hash = (_AGENT_ENV or {}).get("cert_hash")
     except Exception:
         pass
     return CloudAgentAPI(cert_hash=cert_hash)
 
-# ────────── Design Tokens (identicos a la web Cloud) ──────────
 P = {
     "bg":             "#111827",
     "surface":        "#161d2f",
@@ -372,9 +377,7 @@ SHARED_STYLE += f"""
 """
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # PANTALLA SPLASH + WIZARD DE VINCULACION
-# ─────────────────────────────────────────────────────────────────────────────
 
 def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn):
     try:
@@ -402,7 +405,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     win.setWindowFlags(flags)
     win.setStyleSheet(SHARED_STYLE)
 
-    # Centrado automatico en pantalla
     screen = app.primaryScreen()
     if screen:
         geo = screen.availableGeometry()
@@ -415,9 +417,7 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     root_layout.addWidget(stack)
     result_config = {"config": None}
 
-    # ══════════════════════════════════════════════════════════════════════════
     # PAGINA 0 — SPLASH / BIENVENIDA (Diseño responsivo y ultra limpio)
-    # ══════════════════════════════════════════════════════════════════════════
     splash = QtWidgets.QWidget()
     splash_l = QtWidgets.QHBoxLayout(splash)
     splash_l.setContentsMargins(0, 0, 0, 0)
@@ -514,9 +514,7 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     splash_l.addWidget(right_panel, 1)
     stack.addWidget(splash)
 
-    # ══════════════════════════════════════════════════════════════════════════
     # PAGINA 1 — WIZARD DE VINCULACION (3 pasos)
-    # ══════════════════════════════════════════════════════════════════════════
     wizard = QtWidgets.QWidget()
     wiz_main = QtWidgets.QHBoxLayout(wizard)
     wiz_main.setContentsMargins(0, 0, 0, 0)
@@ -562,7 +560,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     wiz_side_l.addStretch(1)
     wiz_main.addWidget(wiz_side)
 
-    # Contenido del wizard
     wiz_content = QtWidgets.QWidget()
     wiz_content_outer = QtWidgets.QVBoxLayout(wiz_content)
     wiz_content_outer.setContentsMargins(0, 0, 0, 0)
@@ -609,7 +606,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
         lbl.setStyleSheet("font-size: 11px; font-weight: 700; color: #8b95b0; text-transform: uppercase; letter-spacing: 0.05em;")
         return lbl
 
-    # Paso 1: URL
     s1, s1l = make_step_page("Dirección del Servidor", "Introduce la URL completa de tu servidor Null-Void Cloud.")
     url_input = QtWidgets.QLineEdit()
     url_input.setPlaceholderText("https://192.168.1.50:5000")
@@ -622,7 +618,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     s1l.addStretch(1)
     wiz_stack.addWidget(s1)
 
-    # Paso 2: Autenticacion mediante Token
     s2, s2l = make_step_page("Token de Enlace", "Introduce el token de enlace único generado desde tu panel web de Null-Void Cloud.")
 
     tok_input = QtWidgets.QLineEdit()
@@ -660,7 +655,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     s2l.addStretch(1)
     wiz_stack.addWidget(s2)
 
-    # Paso 3: Dispositivo
     s3, s3l = make_step_page("Nombre del Dispositivo", "Elige cómo aparecerá este equipo en tu panel de Null-Void Cloud.")
     dev_input = QtWidgets.QLineEdit()
     dev_input.setText(default_device_name)
@@ -671,7 +665,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     s3l.addStretch(1)
     wiz_stack.addWidget(s3)
 
-    # Paso 4: Carpeta Compartida
     default_base_dir = os.path.expanduser("~/Escritorio")
     if not os.path.exists(default_base_dir):
         default_base_dir = os.path.expanduser("~/Desktop")
@@ -745,7 +738,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     wiz_main.addWidget(wiz_content, 1)
     stack.addWidget(wizard)
 
-    # Navegacion
     def go_to_wizard():
         stack.setCurrentIndex(1)
         update_step_highlight(0)
@@ -893,9 +885,7 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     return None
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _elapsed_str(client):
     if client.last_sync_time:
@@ -908,9 +898,7 @@ def _elapsed_str(client):
     return "—"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # DIÁLOGO — AÑADIR / VINCULAR OTRO PC
-# ─────────────────────────────────────────────────────────────────────────────
 
 def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_success=None, preselect_dev=None):
     """
@@ -1002,12 +990,10 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
     stack = QtWidgets.QStackedWidget()
     root_l.addWidget(stack)
 
-    # ── ESTADO COMPARTIDO ──
+    # ESTADO COMPARTIDO
     state = {"token": "", "devices": [], "username": "", "workers": []}
 
-    # ──────────────────────────────────────────
     # PASO 1: Introducir Token
-    # ──────────────────────────────────────────
     page1 = QtWidgets.QWidget()
     p1l = QtWidgets.QVBoxLayout(page1)
     p1l.setSpacing(14)
@@ -1070,9 +1056,7 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
 
     stack.addWidget(page1)
 
-    # ──────────────────────────────────────────
     # PASO 2: Seleccionar / crear PC
-    # ──────────────────────────────────────────
     page2 = QtWidgets.QWidget()
     p2l = QtWidgets.QVBoxLayout(page2)
     p2l.setSpacing(12)
@@ -1113,14 +1097,12 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
 
     stack.addWidget(page2)
 
-    # ── LÓGICA ──
 
     def populate_pc_list_items(devs, target_device=None):
         pc_list.clear()
         selected_row = 0
         target_match = preselect_dev or target_device or getattr(client, 'device_name', '')
         
-        # Eliminar cualquier duplicado manteniendo el orden
         seen = set()
         unique_devs = []
         for d in devs:
@@ -1156,7 +1138,6 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
 
         tok = override_token or getattr(client, 'token', '') or state.get('token', '')
 
-        # Precargar computadoras conocidas sin duplicados
         curr = getattr(client, 'device_name', '')
         known_devs = getattr(client, 'known_devices', []) or ([curr] if curr else [])
         populate_pc_list_items(known_devs)
@@ -1429,9 +1410,7 @@ def _make_main_window_cls(QtWidgets, QtCore):
     return NullVoidMainWindow
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # DASHBOARD PRINCIPAL — ESTILO CLOUD
-# ─────────────────────────────────────────────────────────────────────────────
 
 def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb=None):
     try:
@@ -1464,7 +1443,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     )
     win.setWindowFlags(flags)
 
-    # Centrado automatico en pantalla
     screen = app.primaryScreen()
     if screen:
         geo = screen.availableGeometry()
@@ -1478,7 +1456,7 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     win.setStyleSheet(SHARED_STYLE)
 
-    # ═══ SIDEBAR ════════════════════════════════════════════════════════════════
+    # SIDEBAR
     sidebar = QtWidgets.QFrame()
     sidebar.setObjectName("sidebar")
     sidebar.setFixedWidth(240)
@@ -1486,7 +1464,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     side_l.setContentsMargins(0, 0, 0, 0)
     side_l.setSpacing(0)
 
-    # Logo header
     logo_header = QtWidgets.QWidget()
     logo_header.setStyleSheet("background: #0f1422; border-bottom: 1px solid rgba(255,255,255,0.07);")
     logo_header.setFixedHeight(58)
@@ -1502,7 +1479,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     logo_h_l.addStretch(1)
     side_l.addWidget(logo_header)
 
-    # Nav
     nav_scroll = QtWidgets.QScrollArea()
     nav_scroll.setWidgetResizable(True)
     nav_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
@@ -1551,7 +1527,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     nav_l.addLayout(pc_list_container)
 
     def populate_sidebar_pcs(device_names=None):
-        # Limpiar lista anterior
         while pc_list_container.count():
             child = pc_list_container.takeAt(0)
             if child.widget():
@@ -1617,7 +1592,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     nav_scroll.setWidget(nav_inner)
     side_l.addWidget(nav_scroll, 1)
 
-    # Perfil al fondo
     profile_widget = QtWidgets.QWidget()
     profile_widget.setStyleSheet("background: #0f1422; border-top: 1px solid rgba(255,255,255,0.07);")
     profile_l = QtWidgets.QHBoxLayout(profile_widget)
@@ -1678,13 +1652,12 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     root.addWidget(sidebar)
 
-    # ═══ AREA PRINCIPAL ══════════════════════════════════════════════════════════
+    # AREA PRINCIPAL
     main_area = QtWidgets.QWidget()
     main_l = QtWidgets.QVBoxLayout(main_area)
     main_l.setContentsMargins(0, 0, 0, 0)
     main_l.setSpacing(0)
 
-    # Topbar
     topbar = QtWidgets.QFrame()
     topbar.setObjectName("topbar")
     topbar.setFixedHeight(58)
@@ -1700,7 +1673,7 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     page_stack = QtWidgets.QStackedWidget()
     main_l.addWidget(page_stack, 1)
 
-    # ─── PAGINA 0: DASHBOARD ─────────────────────────────────────────────────
+    # PAGINA 0: DASHBOARD
     pg_dash = QtWidgets.QWidget()
     pg_dash_l = QtWidgets.QVBoxLayout(pg_dash)
     pg_dash_l.setContentsMargins(24, 20, 24, 20)
@@ -1775,7 +1748,7 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     page_stack.addWidget(pg_dash)
 
-    # ─── PAGINA 1: CONSOLA FULL ───────────────────────────────────────────────
+    # PAGINA 1: CONSOLA FULL
     pg_logs = QtWidgets.QWidget()
     pg_logs_l = QtWidgets.QVBoxLayout(pg_logs)
     pg_logs_l.setContentsMargins(24, 20, 24, 20)
@@ -1787,7 +1760,7 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     root.addWidget(main_area, 1)
 
-    # ─── Logica navegacion ────────────────────────────────────────────────────
+    # Logica navegacion
     def set_page(idx):
         if idx < 0:
             return
@@ -1892,7 +1865,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
             v_device.setText(str(new_name))
             win.setWindowTitle(f"Null-Void Cloud — {new_name}")
             log_queue.put(f"[{time.strftime('%H:%M:%S')}] Conectado a PC: {new_name}")
-            # Actualizar sidebar con los PCs conocidos
             current_pcs = set([client.device_name, new_name])
             populate_sidebar_pcs(list(current_pcs))
 
@@ -1941,7 +1913,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     win._close_handler = close_to_tray
 
-    # Refresco
     _asked_unlinked = [False]
 
     def refresh():

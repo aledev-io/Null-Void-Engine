@@ -83,8 +83,6 @@ export async function _applyAutoToForm(a) {
     _updateBkpDeleteBtn();
 }
 
-// Formulario en blanco para crear una automatización nueva.
-// Cambia entre la vista de lista (por defecto) y el formulario de edición.
 function _showBkpListView() {
     const lv = document.getElementById('bkp-auto-list-view');
     const fv = document.getElementById('bkp-auto-form-view');
@@ -958,9 +956,7 @@ export function removeFromBkpExclusion(path) {
     _refreshBkpModalTree();
 }
 
-// ---------------------------------------------------------------------------
 // Pulsación larga (móvil): menú contextual flotante para excluir/incluir.
-// ---------------------------------------------------------------------------
 function _ensureBkpModalCtxMenu() {
     let menu = document.getElementById('bkp-modal-ctx-menu');
     if (menu) return menu;

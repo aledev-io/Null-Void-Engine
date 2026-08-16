@@ -106,7 +106,6 @@ def _send_message_impl():
                 file.save(save_path)
                 file_size = os.path.getsize(save_path)
                 
-                # Integración con Cloud: Mensajeria
                 try:
                     if not receiver_id.startswith('group_'):
                         sender_data = sess.get_user(request.user_token)
@@ -224,8 +223,6 @@ def hide_recent_conversation():
         repository.delete_conversation(request.user_id, contact_id)
     return jsonify(ok=True)
 
-
-# --- GROUPS ENDPOINTS ---
 
 @chat_bp.route('/group/create', methods=['POST'])
 @login_required

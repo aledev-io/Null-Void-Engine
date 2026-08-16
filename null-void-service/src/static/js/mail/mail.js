@@ -1,4 +1,4 @@
-// ─── State ────────────────────────────────────────────────────────────────────
+// State
 
 let FOLDERS = [
     { id: 'inbox', name: 'Recibidos', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>', section: 'principal' },
@@ -29,7 +29,7 @@ const knownContacts = new Set();
 let currentPage = 1;
 let currentHasMore = false;
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// Utilities
 
 export function formatMailDate(dateStr) {
     if (!dateStr) return '';
@@ -93,7 +93,7 @@ export function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
+// Theme
 
 export function toggleTheme() {
     const html = document.documentElement;
@@ -112,7 +112,7 @@ function updateThemeIcon() {
         : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
 }
 
-// ─── Mode toggle ──────────────────────────────────────────────────────────────
+// Mode toggle
 
 export async function setMailMode(targetMode, targetEmail = null) {
     if (targetMode === 'google') {
@@ -155,7 +155,7 @@ export async function setMailMode(targetMode, targetEmail = null) {
     loadCurrentFolder();
 }
 
-// ─── Google config ────────────────────────────────────────────────────────────
+// Google config
 
 export async function checkGoogleConfig() {
     try {
@@ -262,7 +262,7 @@ export async function saveGoogleConfig() {
     }
 }
 
-// ─── Folders ──────────────────────────────────────────────────────────────────
+// Folders
 
 export async function loadFolders(forceRefresh = false) {
     try {
@@ -349,7 +349,7 @@ export function switchFolder(folderId) {
     loadCurrentFolder();
 }
 
-// ─── Loading helpers ──────────────────────────────────────────────────────────
+// Loading helpers
 
 function setFolderLoading(state) {
     document.getElementById('btn-refresh').classList.toggle('spinning', state);
@@ -365,7 +365,7 @@ function setAppLock(locked) {
     document.body.style.cursor = locked ? 'wait' : 'default';
 }
 
-// ─── Email list ───────────────────────────────────────────────────────────────
+// Email list
 
 export async function loadCurrentFolder(silent = false, forceRefresh = false, loadMore = false) {
     if (loadMore) currentPage++;
@@ -504,7 +504,7 @@ export function loadMoreEmails(btn) {
     loadCurrentFolder(false, false, true);
 }
 
-// ─── Selection / Bulk ─────────────────────────────────────────────────────────
+// Selection / Bulk
 
 export function markAllAsRead() {
     const unreadItems = Array.from(document.querySelectorAll('.email-item.unread'));
@@ -659,7 +659,7 @@ export async function singleAction(action) {
     }
 }
 
-// ─── Star ─────────────────────────────────────────────────────────────────────
+// Star
 
 export async function toggleStar(folder, id, element) {
     const newStarred = !element.classList.contains('starred');
@@ -685,7 +685,7 @@ export async function toggleStar(folder, id, element) {
     }
 }
 
-// ─── Reader ───────────────────────────────────────────────────────────────────
+// Reader
 
 export function backToList() {
     document.getElementById('reader-panel').style.display = 'none';
@@ -924,7 +924,7 @@ function renderEmailBody(data) {
     }
 }
 
-// ─── Reply / Forward ──────────────────────────────────────────────────────────
+// Reply / Forward
 
 export function replyEmail() {
     if (!currentEmailData) return;
@@ -957,7 +957,7 @@ export function forwardEmail() {
     document.getElementById('compose-to').focus();
 }
 
-// ─── Compose ──────────────────────────────────────────────────────────────────
+// Compose
 
 let composeSelectedFiles = [];
 
@@ -1072,7 +1072,7 @@ export async function sendEmail(isScheduled = false, scheduledAt = null) {
     }
 }
 
-// ─── Contacts ─────────────────────────────────────────────────────────────────
+// Contacts
 
 function updateContactsFromEmails(emails) {
     if (!emails) return;
@@ -1103,7 +1103,7 @@ export function toggleMailSidebar() {
     }
 }
 
-// ─── Init (called from main.js) ───────────────────────────────────────────────
+// Init (called from main.js)
 
 export function init() {
     updateThemeIcon();

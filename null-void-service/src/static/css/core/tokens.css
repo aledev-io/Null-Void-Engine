@@ -1,4 +1,4 @@
-/* ─── TOKENS & DESIGN SYSTEM ─────────────────────────────────────────────── */
+/* TOKENS & DESIGN SYSTEM */
 :root {
     /* Global Backgrounds */
     --bg-primary: #151f35;
@@ -140,7 +140,7 @@
     color-scheme: light;
 }
 
-/* ─── SHARED NAVIGATION & PILL COMPONENTS (CLOUD DESIGN) ─────────────── */
+/* SHARED NAVIGATION & PILL COMPONENTS (CLOUD DESIGN) */
 .nav-link,
 .cloud-nav-item {
     display: flex;

@@ -442,7 +442,7 @@
   border-left: 1px solid var(--border);
 }
 
-/* ─── Event Detail View ─── */
+/* Event Detail View */
 
 .event-detail-view {
   overflow: hidden;

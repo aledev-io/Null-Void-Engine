@@ -559,7 +559,6 @@ def save_credentials(user_id, email_addr, app_password):
     from core.crypto_utils import encrypt_field
     encrypted = encrypt_field(app_password)
     with get_db() as db:
-        # Check if exists
         row = db.execute("SELECT id FROM user_google_accounts WHERE user_id = ? AND email = ?", (user_id, email_addr)).fetchone()
         if row:
             db.execute("UPDATE user_google_accounts SET app_password = ? WHERE id = ?", (encrypted, row['id']))

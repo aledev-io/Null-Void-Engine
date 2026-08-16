@@ -20,7 +20,6 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Tabla principal de productos (Unificada)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             sku TEXT PRIMARY KEY,
@@ -39,7 +38,6 @@ def init_db():
         )
     ''')
     
-    # Historial de precios con incremento automático nativo de SQLite
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS price_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,7 +48,6 @@ def init_db():
         )
     ''')
     
-    # Índices optimizados para las búsquedas del frontend
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_price ON products(price)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_category ON products(category)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_brand ON products(brand)')
@@ -68,7 +65,6 @@ def init_db():
         )
     ''')
     
-    # Productos favoritos/guardados por cada usuario
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_products (
             user_id TEXT NOT NULL,
@@ -78,7 +74,6 @@ def init_db():
         )
     ''')
     
-    # Configuración de usuario
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_configs (
             user_id TEXT PRIMARY KEY,
@@ -87,7 +82,6 @@ def init_db():
         )
     ''')
     
-    # Distancias de usuario
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_distances (
             user_id TEXT NOT NULL,
@@ -97,7 +91,6 @@ def init_db():
             FOREIGN KEY(sku) REFERENCES products(sku) ON DELETE CASCADE
         )
     ''')
-    # Bot Rules for atHome
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS athome_bot_rules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,7 +134,6 @@ def save_products(products, query_origin="general", user_id=None, scraper_type="
             new_price = p['price']
             timestamp = p.get('timestamp', current_time)
             
-            # Comprobar precio anterior
             cursor.execute("SELECT price FROM products WHERE sku = ?", (sku,))
             row = cursor.fetchone()
             
@@ -345,5 +337,4 @@ def toggle_bot_rule(rule_id, user_id, is_active):
     conn.commit()
     conn.close()
 
-# Inicialización automática controlada para entorno local
 init_db()

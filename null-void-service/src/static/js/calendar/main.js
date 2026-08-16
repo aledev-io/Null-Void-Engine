@@ -1,4 +1,5 @@
 import { App } from './app.js';
+import { Storage } from './storage.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
@@ -15,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (App && App.state) App.state.selectedDate = null;
     App.refresh();
   });
+
+  if (typeof io !== 'undefined') {
+    const socket = io({ auth: { token: window.TOKEN }, reconnection: true });
+    socket.on('events_changed', () => Storage.syncFromAPI());
+  }
 
   // Fix Android Chrome bfcache GPU texture corruption
   window.addEventListener('pageshow', (e) => {

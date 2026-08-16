@@ -17,9 +17,7 @@ os.makedirs(TEMP_BACKUP_DIR, exist_ok=True)
 
 ALLOWED_BACKUP_TYPES = ("full", "differential", "incremental")
 
-# ---------------------------------------------------------------------------
 # Límites y tuning anti-DoS (CWE-400). Configurables por variables de entorno.
-# ---------------------------------------------------------------------------
 CHUNK_BYTES = int(os.environ.get("BACKUP_CHUNK_BYTES", str(2 * 1024 * 1024)))
 PROGRESS_EVERY_BYTES = max(
     CHUNK_BYTES,
@@ -162,10 +160,8 @@ def _build_manifest(backup_type, since_ms, saved):
     return json.dumps(manifest, ensure_ascii=False, indent=2)
 
 
-# ---------------------------------------------------------------------------
 # Núcleo de compresión: I/O por chunks, escritura a .tmp + rename atómico,
 # cancelación cooperativa y protección contra zip-bombs / límites (CWE-400).
-# ---------------------------------------------------------------------------
 def _zip_entries(zip_path, entries, manifest_json, q=None, cancel_event=None, total=0):
     """
     Comprime una lista de (arc_name, abs_path) en zip_path.
@@ -251,9 +247,7 @@ def _zip_entries(zip_path, entries, manifest_json, q=None, cancel_event=None, to
         raise
 
 
-# ---------------------------------------------------------------------------
 # Resolución y recorrido de fuentes en Cloud (CWE-22).
-# ---------------------------------------------------------------------------
 def _cloud_root(user_id):
     return os.path.join(CONFIG.DATA_DIR, "Cloud", user_id)
 
@@ -385,10 +379,8 @@ def _walk_cloud_source(root_abs, rel_prefix, arc_prefix, depth=0, exclude_exts=N
     return entries, skipped
 
 
-# ---------------------------------------------------------------------------
 # Consumidor de cola para streams SSE: mantiene el event loop vivo con
 # heartbeats periódicos y responde a desconexiones del cliente (cancelación).
-# ---------------------------------------------------------------------------
 def _consume_job(q, future, cancel_event, zip_path):
     last_progress = None
     last_yield = time.monotonic()
@@ -444,9 +436,7 @@ def _consume_job(q, future, cancel_event, zip_path):
             _safe_remove(zip_path)
 
 
-# ---------------------------------------------------------------------------
 # Worker de compresión que ejecuta la tarea pesada en un hilo secundario.
-# ---------------------------------------------------------------------------
 def _stream_worker(zip_path, entries, manifest_json, user_id, dest_mode, cloud_path,
                    backup_type, since_ms, zip_name, total, q, cancel_event):
     try:
@@ -609,9 +599,7 @@ def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_ty
             pass
 
 
-# ---------------------------------------------------------------------------
 # API pública (firmas y estructuras JSON inalteradas).
-# ---------------------------------------------------------------------------
 def create_backup(files, dest_mode, cloud_path, token, backup_type="full"):
     """
     Procesa la lista de archivos enviados desde el frontend, genera un ZIP

@@ -1,20 +1,6 @@
-/**
- * Null-Void Cloud — Monitor global de conectividad.
- * Detecta cuándo el servidor deja de responder (caída de red, reinicio del
- * servidor, pérdida de conexión) y muestra un banner "Intentando reconectarse…"
- * desde cualquier página de la app, ocultándolo al restablecerse la conexión.
- *
- * Se inyecta automáticamente en todas las páginas HTML vía @app.after_request
- * (ver app.py) y no depende de módulos ES: es un script clásico autocontenido.
- *
- * Criterios para mostrar el banner (evita falsos positivos):
- *  - Varios fallos consecutivos (no 2 sueltos): un servidor lento o saturado
- *    (p. ej. long-polling de socket.io ocupando conexiones) no debe
- *    considerarse caído a la primera.
- *  - Antes de mostrarlo, una comprobación final con margen de tiempo extra.
- *  - En pestañas en segundo plano no se comprueba ni se muestra: solo se
- *    reanuda cuando la pestaña vuelve a ser visible.
- */
+// Monitor global de conectividad: banner "Intentando reconectarse…" ante
+// fallos consecutivos (evita falsos positivos); en pestañas en segundo plano
+// no comprueba ni muestra nada.
 (function () {
     if (window.__nvConnectionMonitorLoaded) return;
     window.__nvConnectionMonitorLoaded = true;

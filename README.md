@@ -30,7 +30,8 @@ KEY_FILE="/app/certs/key.pem"    # ruta de la clave privada (dentro del contened
 # Por defecto todo se guarda en la carpeta data/ del proyecto.
 # Para usar otros discos o carpetas, descomenta y pon tu ruta:
 #DATA_HOST_DIR=./data            # datos de la app (bases de datos, Cloud, etc.)
-#SCRAPER_HOST_DIR=./data         # datos del scraper (base de datos, imágenes, logs)
+#SCRAPER_HOST_DIR=./data/scraper # datos del scraper (base de datos, imágenes, logs)
+#SECRETS_HOST_DIR=./.secrets     # secretos/credenciales (por defecto ./.secrets)
 DATA_DIR=data/app                # subcarpeta de datos de la app
 SCRAPER_DIR=data/scraper         # subcarpeta de datos del scraper
 #DB_PATH=                        # ruta de la base de datos (por defecto data/app/manager.db)
@@ -228,9 +229,14 @@ Null-Void Engine integra las siguientes herramientas en un único entorno:
 * **Cifrado en el Cliente:** Las credenciales se cifran en el navegador; el servidor solo almacena blobs binarios (`.enc`).
 * **Copias de Seguridad:** Sistema automático de respaldos (`.bak`) con rotación para evitar corrupción.
 
-### Notificaciones Push y Recordatorios
-* **Service Workers Background:** Recepción de notificaciones nativas en el sistema operativo incluso si la pestaña está cerrada, usando WebPush.
-* **Gestor de Recordatorios:** Programación de alertas personalizadas integradas con las notificaciones del sistema.
+### Notificaciones Push y Aplicación Móvil (Android)
+* **Integración con Aplicación Móvil:** El ecosistema incluye la aplicación móvil Android (`null-void-app`), desarrollada con Capacitor, que permite gestionar la plataforma y recibir notificaciones push en tiempo real.
+* **Cifrado E2EE vía Firebase Cloud Messaging (FCM):** Notificaciones cifradas en servidor con AES-GCM (usando `FCM_SECRET_KEY`) y entregadas a través del servicio FCM de Firebase.
+* **Degradación Suave (Opcional):** Si el servidor no dispone del archivo de credenciales de Firebase (`firebase_key.json` en `.secrets/`), el servicio push hacia dispositivos móviles se desactiva automáticamente sin interrumpir el funcionamiento del backend ni de las notificaciones WebSockets/in-app.
+* **Configuración del Servicio FCM:**
+  1. Copiar la clave privada de servicio de Firebase (`firebase_key.json`) al directorio configurado en `SECRETS_HOST_DIR` (por defecto `.secrets/`).
+  2. Definir una clave AES-256 codificada en Base64 en la variable `FCM_SECRET_KEY` del `.env`.
+* **Service Workers Web:** Notificaciones en navegador de escritorio mediante WebPush incluso con la pestaña cerrada.
 
 ### Telemetría y Monitorización
 * **Dashboard en Tiempo Real:** Gráficas del uso de CPU, RAM, disco y red del servidor, actualizadas por WebSockets (`Chart.js`).

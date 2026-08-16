@@ -280,7 +280,7 @@ textarea {
   animation: scaleIn var(--t-normal) both;
 }
 
-/* --- Global Responsive Scaling (Option 3) --- */
+/* Global Responsive Scaling (Option 3) */
 @media screen and (min-width: 1536px) {
     .app-container { zoom: 0.9; width: 111.11vw; height: 111.11dvh; }
 }

@@ -112,7 +112,10 @@ def ai_chat_proxy():
     if not uid:
         return jsonify(error="No autorizado"), 401
     # El usuario está usando IA: asegurar contenedor activo (arranque perezoso)
-    services.handle_heartbeat(uid)
+    try:
+        services.handle_heartbeat(uid)
+    except Exception as e:
+        return jsonify(error=f"El motor de IA no está disponible: {e}"), 503
     limited, retry_after = services.is_rate_limited(uid, request.remote_addr)
     if limited:
         return jsonify(
@@ -148,7 +151,6 @@ def cancel_chat():
 
 @ai_bp.route("/api/ai/generating", methods=["GET"])
 def get_generating_status():
-    """Check which sessions are currently generating."""
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
@@ -267,7 +269,6 @@ def unshare_note():
     if not friend_id or not note_id:
         return jsonify(error="Faltan parámetros"), 400
     
-    # Remove from database
     repository.unshare_note(note_id, friend_id)
     
     socketio.emit('note_unshared', {"note_id": note_id}, room=f"user_{friend_id}")
@@ -288,7 +289,6 @@ def handle_note_update(data):
 
     print(f"[SocketIO] note_update received for note {note_id} from {uid}")
     
-    # Find the owner and collaborators from DB to broadcast correctly
     with repository.get_db() as conn:
         note_row = conn.execute("SELECT user_id FROM ai_notes WHERE id = ?", (note_id,)).fetchone()
         if not note_row:
@@ -300,7 +300,6 @@ def handle_note_update(data):
         collab_rows = conn.execute("SELECT user_id FROM ai_note_collaborators WHERE note_id = ?", (note_id,)).fetchall()
         collaborators = [r[0] for r in collab_rows]
     
-    # All users who should receive this update (excluding the sender)
     recipients = set(collaborators)
     recipients.add(owner_id)
     if uid in recipients:
@@ -323,7 +322,6 @@ def handle_cursor_update(data):
     if not note_id:
         return
 
-    # Find the owner and collaborators from DB to broadcast correctly
     with repository.get_db() as conn:
         note_row = conn.execute("SELECT user_id FROM ai_notes WHERE id = ?", (note_id,)).fetchone()
         if not note_row:
@@ -334,7 +332,6 @@ def handle_cursor_update(data):
         collab_rows = conn.execute("SELECT user_id FROM ai_note_collaborators WHERE note_id = ?", (note_id,)).fetchall()
         collaborators = [r[0] for r in collab_rows]
     
-    # All users who should receive this update (excluding the sender)
     recipients = set(collaborators)
     recipients.add(owner_id)
     if uid in recipients:
@@ -358,18 +355,15 @@ def share_chat():
     session_id = str(chat.get("id", ""))
     messages = chat.get("messages", [])
 
-    # Try to clone from DB first (works when session exists in DB)
     new_session_id = None
     if session_id:
         new_session_id = repository.clone_session_for_user(uid, session_id, friend_id, user_name)
 
-    # Fallback: create session in DB from the payload messages (for localStorage-only chats)
     if not new_session_id and messages:
         new_session_id = repository.create_shared_session(
             friend_id, user_name, chat.get("title", "Chat compartido"), messages
         )
 
-    # Build payload for the recipient — include messages so client can load into localStorage
     shared_title = f"{chat.get('title', 'Chat')} (de {user_name})"
     shared_payload = {
         "id": new_session_id or session_id,
@@ -396,14 +390,27 @@ def save_api_key():
     provider = data.get("provider")
     api_key = data.get("api_key")
     api_url = data.get("api_url")
+    model = data.get("model")
     if not provider or not api_key:
         return jsonify(error="Faltan parámetros"), 400
     
-    repository.save_api_key(uid, provider, api_key, api_url)
+    repository.save_api_key(uid, provider, api_key, api_url, model)
     return jsonify(ok=True)
 
 
-# ---- Active Collaborators Tracking ----
+@ai_bp.route("/api/ai/keys", methods=["DELETE"])
+def delete_api_key():
+    uid = _get_uid()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    data = request.get_json() or {}
+    provider = data.get("provider")
+    if not provider:
+        return jsonify(error="Faltan parámetros"), 400
+    repository.delete_api_key(uid, provider)
+    return jsonify(ok=True)
+
+
 ACTIVE_NOTE_USERS = {} # note_id -> {user_id: user_name}
 SID_TO_USER = {}       # sid -> {"note_id": str, "user_id": str, "user_name": str}
 
@@ -417,18 +424,14 @@ def handle_join_note(data):
     note_id = data.get("note_id")
     if not note_id: return
     
-    # Track the user locally
     SID_TO_USER[request.sid] = {"note_id": note_id, "user_id": uid, "user_name": username}
     
-    # Join socketio room
     join_room(f"note_{note_id}")
     
-    # Update state
     if note_id not in ACTIVE_NOTE_USERS:
         ACTIVE_NOTE_USERS[note_id] = {}
     ACTIVE_NOTE_USERS[note_id][uid] = username
     
-    # Broadcast to the note room
     socketio.emit('active_collaborators', {"users": ACTIVE_NOTE_USERS[note_id]}, room=f"note_{note_id}")
 
 @socketio.on("leave_note")
@@ -451,8 +454,6 @@ def handle_disconnect():
         if note_id in ACTIVE_NOTE_USERS and uid in ACTIVE_NOTE_USERS[note_id]:
             del ACTIVE_NOTE_USERS[note_id][uid]
             socketio.emit('active_collaborators', {"users": ACTIVE_NOTE_USERS[note_id]}, room=f"note_{note_id}")
-
-# --- WORKSPACES ROUTES ---
 
 @ai_bp.route("/api/ai/workspaces", methods=["GET"])
 def list_workspaces():
@@ -521,7 +522,6 @@ def list_workspace_files(workspace_id):
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    # Note: ideally we check if workspace belongs to uid, but we assume it does for now
     files = repository.get_workspace_files(workspace_id)
     return jsonify(files), 200
 

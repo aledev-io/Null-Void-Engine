@@ -44,7 +44,6 @@ def scraper_worker():
             break
         func, args, kwargs = task
         
-        # Notify start
         try:
             import requests
             requests.post(f"{ENGINE_BASE_URL}/api/scraper/webhook/state", json={"is_scraping": True}, headers=_internal_headers(), timeout=3, verify=False)
@@ -56,7 +55,6 @@ def scraper_worker():
         except Exception as e:
             print(f"[Worker] Error ejecutando tarea: {e}")
             
-        # Notify finish if empty
         if task_queue.empty():
             try:
                 import requests
@@ -76,7 +74,6 @@ def daily_scheduler():
         today_str = now.strftime('%Y-%m-%d')
         target = now.replace(hour=7, minute=0, second=0, microsecond=0)
         
-        # Consultar las tareas de todos los usuarios
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM user_scraping_tasks')
@@ -84,14 +81,12 @@ def daily_scheduler():
         conn.close()
         
         if now >= target:
-            # 1. Rutina global masiva de PcComponentes
             if last_daily_routine_date != today_str:
                 print(f"[Scheduler] Lanzando rutina masiva de PcComponentes del {today_str}...")
                 from services import _scrape_all_laptops_daily
                 task_queue.put((_scrape_all_laptops_daily, (), {'cancellable': False}))
                 last_daily_routine_date = today_str
 
-            # Comprobar si hay tareas pendientes hoy
             pending_tasks = [t for t in tasks if t['last_run_date'] != today_str]
             if pending_tasks:
                 print(f"[Scheduler] ¡Ejecución pendiente detectada! Ejecutando extracciones personalizadas del {today_str}...")
@@ -104,7 +99,6 @@ def daily_scheduler():
                         print(f"[Scheduler] Error en la extracción de '{task['query']}': {e}")
                 print(f"[Scheduler] Extracciones personalizadas del {today_str} completadas.")
             
-            # Reprogramar para mañana
             target += datetime.timedelta(days=1)
             
         sleep_seconds = (target - now).total_seconds()
@@ -133,7 +127,6 @@ def cancel_routine():
     import services
     services.CANCEL_ROUTINE = True
     
-    # Conservar solo las tareas no cancelables
     saved_tasks = []
     while not task_queue.empty():
         try:
@@ -276,7 +269,6 @@ def athome_scheduler():
     import time
     print("[Scheduler] Planificador de atHome (cada 2h) iniciado.")
     from services import _scrape_athome_routine
-    # Dormir 2 horas (7200 segundos) antes de la primera ejecución para no saturar al inicio
     time.sleep(7200)
     while True:
         try:
@@ -284,7 +276,6 @@ def athome_scheduler():
             task_queue.put((_scrape_athome_routine, (), {'cancellable': False}))
         except Exception as e:
             print(f"[Scheduler] Error en la rutina automática de atHome: {e}")
-        # Dormir 2 horas (7200 segundos)
         time.sleep(7200)
 
 @app.route('/export_list_pdf', methods=['POST'])
@@ -312,7 +303,7 @@ def export_list_pdf_route():
     W, _    = PAGE
     content_w = W - 3*cm
 
-    # ── Estilos ────────────────────────────────────────────────────────────
+    # Estilos ────────────────────────────────────────────────────────────
     s_title = ParagraphStyle('t', fontSize=16, fontName='Helvetica-Bold',
                               textColor=colors.HexColor('#1e293b'))
     s_sub   = ParagraphStyle('s', fontSize=8,  fontName='Helvetica',
@@ -330,7 +321,7 @@ def export_list_pdf_route():
 
     story = []
 
-    # ── Cabecera del documento ─────────────────────────────────────────────
+    # Cabecera del documento ─────────────────────────────────────────────
     now_str = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
     label   = 'atHome.lu — Apartamentos' if target == 'athome' else 'PcComponentes — Componentes'
     story.append(Paragraph(f'Listado de resultados · {label}', s_title))
@@ -343,7 +334,7 @@ def export_list_pdf_route():
                              color=colors.HexColor('#e2e8f0')))
     story.append(Spacer(1, 10))
 
-    # ── Cabecera de tabla ──────────────────────────────────────────────────
+    # Cabecera de tabla ──────────────────────────────────────────────────
     is_athome = target == 'athome'
 
     if is_athome:
@@ -444,7 +435,7 @@ def export_list_pdf_route():
 
         rows.append(row)
 
-    # ── Construcción de la tabla ───────────────────────────────────────────
+    # Construcción de la tabla ───────────────────────────────────────────
     main_table = Table(rows, colWidths=col_w, repeatRows=1)
     row_bg = [colors.HexColor('#f8fafc'), colors.white]
 
@@ -467,7 +458,7 @@ def export_list_pdf_route():
 
     story.append(main_table)
 
-    # ── Pie ───────────────────────────────────────────────────────────────
+    # Pie ───────────────────────────────────────────────────────────────
     story.append(Spacer(1, 12))
     story.append(HRFlowable(width='100%', thickness=1,
                              color=colors.HexColor('#e2e8f0')))

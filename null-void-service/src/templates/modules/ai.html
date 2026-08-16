@@ -7,6 +7,7 @@
     <title>Nexus AI | Native Interface</title>
     <script src="{{ url_for('static', filename='js/ai/marked.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/github-dark.min.css') }}">
+    <script src="{{ url_for('static', filename='js/ai/purify.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ai/highlight.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ai/pdf.min.js') }}"></script>
 
@@ -76,13 +77,18 @@
                 }
             };
 
-            marked.use({ extensions: [blockMathBrackets, inlineMathParens, blockMathDollars, inlineMathDollars] });
+            marked.use({
+                extensions: [blockMathBrackets, inlineMathParens, blockMathDollars, inlineMathDollars],
+                tokenizer: {
+                    html() { return false; }
+                }
+            });
         }
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/global-theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/ai.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/ai.css') }}">
 </head>
 
 <body>
@@ -231,6 +237,13 @@
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                     </button>
+                    <!-- Model Settings Button -->
+                    <button class="btn-icon" title="Configuración del Modelo" onclick="openModelSettingsDialog()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </button>
                     <!-- External APIs Button — Official DeepSeek logo (hardcoded inline SVG) -->
                     <button class="btn-icon" title="Configurar APIs Externas" onclick="openApiKeysDialog()"
                         style="padding:2px;">
@@ -250,10 +263,14 @@
             </nav>
 
             <div class="chat-container" id="chat-log">
-                <div id="chat-gen-status" style="display:none;position:sticky;top:0;z-index:5;background:var(--surface,#15151f);border:1px solid var(--border,#282836);border-radius:10px;padding:6px 12px;font-size:0.75rem;color:var(--text-muted,#8b8b9c);margin-bottom:10px;align-items:center;justify-content:center;gap:6px;"></div>
                 <div id="welcome-screen" class="welcome-screen">
                     <div class="welcome-title">Hola, {{ user.username }}</div>
                     <div class="welcome-subtitle">¿Cómo puedo ayudarte hoy?</div>
+                    <div style="margin:-25px 0 35px 0;display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-dim);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:5px 12px;border-radius:20px;">
+                        <span>Escribe</span>
+                        <code style="color:#818cf8;background:rgba(129,140,248,0.15);padding:2px 6px;border-radius:4px;font-weight:700;">/</code>
+                        <span>para abrir la barra de comandos y elegir modelos</span>
+                    </div>
                     <div class="suggestion-grid">
                         <div class="suggestion-card" onclick="setInput('Dame ideas para un proyecto de Python')">
                             <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Dame ideas</div>
@@ -325,20 +342,8 @@
                         <div style="display:flex; align-items:center; gap: 4px;">
                             <div style="position:relative;display:flex;align-items:center;margin-right:4px;">
                                 <input type="hidden" id="model-select" value="loading">
-                                <button id="main-model-btn" onclick="toggleMainModelMenu(event)"
-                                    style="background:transparent;border:none;color:var(--text-dim);font-size:0.85rem;outline:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px;"
-                                    title="Click derecho para eliminar el modelo seleccionado">
-                                    <span id="main-model-label">Cargando modelos...</span>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <polyline points="6 9 12 15 18 9"></polyline>
-                                    </svg>
-                                </button>
-
-                                <div class="chat-context-menu" id="main-model-menu"
-                                    style="display:none; position:absolute; bottom:100%; right:0; margin-bottom:12px; z-index:100; min-width:200px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.4); padding:8px 0;">
-                                    <!-- Items injected dynamically -->
-                                </div>
+                                <span id="main-model-label" title="Cambia de modelo escribiendo /models en el chat"
+                                    style="color:var(--text-dim);font-size:0.85rem;padding:4px;cursor:help;user-select:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Cargando modelos...</span>
                             </div>
 
                             <button class="btn-icon toggle-btn" id="web-search-btn" onclick="toggleWebSearch()"
@@ -353,6 +358,25 @@
                                 </svg>
                             </button>
 
+                            <button class="btn-icon toggle-btn" id="ai-mode-btn" onclick="toggleAIMode()"
+                                title="Modo Agenda: respuestas con datos reales del calendario">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+                                    <line x1="8" y1="10" x2="16" y2="10"></line>
+                                    <line x1="8" y1="14" x2="13" y2="14"></line>
+                                </svg>
+                            </button>
+
+                            <button class="btn-icon toggle-btn" id="reasoning-mode-btn" onclick="toggleReasoningMode()"
+                                title="Modo Razonamiento (Pensamiento Profundo)">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 18h6"/>
+                                    <path d="M10 22h4"/>
+                                    <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>
+                                </svg>
+                            </button>
+
                             <button class="btn-icon" id="mic-btn" onclick="toggleMicRecording()" title="Grabar audio">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
@@ -364,14 +388,21 @@
                             </button>
 
                             <button class="btn-send" id="send-btn" onclick="sendMessage(true)" title="Enviar mensaje">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M9.04 15.93l-.11 4.53c.57 0 .82-.25 1.13-.56l2.7-2.59 5.61 4.13c1.03.57 1.77.27 2.05-.96l3.71-17.48c.38-1.7-.64-2.63-1.78-2.19L1.02 10.08c-1.69.66-1.67 1.62-.31 2.04l5.04 1.58 11.95-7.54c.56-.37 1.08-.17.66.21L9.04 15.93z"/>
                                 </svg>
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <div id="ai-privacy-footer-notice"
+                    style="max-width:800px;margin:12px auto 0 auto;text-align:center;font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;opacity:0.85;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="flex-shrink:0;">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg><strong style="color:#fbbf24;">Aviso:</strong><span>Los modelos de API externos pueden almacenar datos. No compartas información sensible.</span>
                 </div>
             </div>
         </main>
@@ -775,15 +806,15 @@
                     </div>
                 </div>
 
-                <div style="display:flex;gap:20px;flex:1;flex-wrap:wrap;align-items:flex-start;">
+                <div class="workspace-detail-layout">
                     <!-- Main Stack (Left Column) -->
-                    <div style="flex:2;min-width:280px;display:flex;flex-direction:column;gap:12px;">
+                    <div class="ws-col-chat">
                         <!-- Start Chat Box -->
                         <div
                             style="background:#2d2d2d;border:1px solid #404040;border-radius:16px;padding:10px 15px;display:flex;flex-direction:column;gap:8px;">
                             <textarea id="workspace-chat-input" placeholder="¿Cómo puedo ayudarle hoy?"
                                 style="width:100%;background:transparent;border:none;color:#fff;font-size:1rem;resize:none;outline:none;min-height:32px;font-family:inherit;"
-                                onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); startWorkspaceChatFromInput(); }"></textarea>
+                                onkeydown="if(event.key === 'Enter' && !event.shiftKey) { if(document.getElementById('workspace-chat-input').dataset.picker) return; event.preventDefault(); startWorkspaceChatFromInput(); }"></textarea>
 
                             <div style="display:flex;justify-content:space-between;align-items:center;">
                                 <div style="display:flex;gap:10px;align-items:center;">
@@ -855,7 +886,7 @@
                     </div>
 
                     <!-- Below Stack for Instructions and Files (Right Column) -->
-                    <div style="flex:1;min-width:280px;display:flex;flex-direction:column;margin-bottom:20px;">
+                    <div class="ws-col-side">
                         <div
                             style="border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;">
 
@@ -925,8 +956,6 @@
                     </div>
                 </div>
             </div>
-    </div>
-    </div>
     </section>
     </div>
 
@@ -1214,13 +1243,39 @@
             <div class="app-modal-body" style="padding:0 24px 20px;display:flex;flex-direction:column;gap:14px;">
                 <div
                     style="background:rgba(79,142,247,0.08);border:1px solid rgba(79,142,247,0.2);border-radius:8px;padding:10px 14px;font-size:0.78rem;color:#93c5fd;">
-                    Compatible con DeepSeek, Groq, OpenAI, Anthropic y cualquier proveedor con API estilo OpenAI.
+                    Compatible con OpenRouter, DeepSeek, Groq, OpenAI, Anthropic y cualquier proveedor con API estilo OpenAI.
+                    Puedes añadir varios proveedores: cada uno aparecerá como <code>API: proveedor</code> en el selector de modelos.
                 </div>
+                <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <label
+                            style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Proveedores
+                            guardados</label>
+                        <button type="button" id="api-keys-new" onclick="resetApiKeysForm()"
+                            style="background:none;border:none;color:#4F8EF7;cursor:pointer;font-size:0.75rem;font-weight:600;padding:2px 6px;">+ Nuevo</button>
+                    </div>
+                    <div id="api-keys-saved-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                </div>
+                <datalist id="api-providers-list">
+                    <option value="openrouter"></option>
+                    <option value="deepseek"></option>
+                    <option value="openai"></option>
+                    <option value="groq"></option>
+                    <option value="anthropic"></option>
+                    <option value="mistral"></option>
+                    <option value="together"></option>
+                    <option value="xai"></option>
+                    <option value="perplexity"></option>
+                    <option value="nvidia"></option>
+                </datalist>
                 <div>
                     <label
                         style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">Proveedor</label>
-                    <input type="text" id="api-keys-provider" placeholder="deepseek, openai, groq..." value="deepseek"
+                    <input type="text" id="api-keys-provider" list="api-providers-list" placeholder="openrouter, deepseek, openai..."
+                        value="openrouter"
                         autocomplete="off"
+                        data-1p-ignore
+                        data-lpignore="true"
                         style="width:100%;box-sizing:border-box;padding:10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;"
                         onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
                         onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
@@ -1229,19 +1284,39 @@
                     <label
                         style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">URL
                         Base</label>
-                    <input type="text" id="api-keys-url" placeholder="https://api.deepseek.com"
-                        value="https://api.deepseek.com"
+                    <input type="text" id="api-keys-url" placeholder="https://openrouter.ai/api/v1"
+                        value="https://openrouter.ai/api/v1"
+                        autocomplete="off"
+                        data-1p-ignore
+                        data-lpignore="true"
                         style="width:100%;box-sizing:border-box;padding:10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;"
                         onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
                         onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                 </div>
                 <div>
                     <label
+                        style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">Modelo
+                        (opcional)</label>
+                    <input type="text" id="api-keys-model" placeholder="openrouter/auto"
+                        value="openrouter/auto"
+                        autocomplete="off"
+                        data-1p-ignore
+                        data-lpignore="true"
+                        style="width:100%;box-sizing:border-box;padding:10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;font-family:monospace;"
+                        onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
+                        onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                    <div style="margin-top:4px;font-size:0.7rem;color:var(--text-dim);">Id del modelo (p. ej. <code
+                            style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">openrouter/auto</code>,
+                        <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">google/gemini-2.5-flash</code>).
+                        Solo se usa en OpenRouter y similares.</div>
+                </div>
+                <div>
+                    <label
                         style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">API
                         Key</label>
                     <div style="position:relative;">
-                        <input type="password" id="api-keys-key" placeholder="sk-..." autocomplete="new-password"
-                            style="width:100%;box-sizing:border-box;padding:10px 44px 10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;font-family:monospace;"
+                        <input type="text" id="api-keys-key" placeholder="sk-..." autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"
+                            style="width:100%;box-sizing:border-box;padding:10px 44px 10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;font-family:monospace;-webkit-text-security:disc;"
                             onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
                             onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                         <button type="button" onclick="toggleApiKeyVisibility()" title="Mostrar/Ocultar clave"
@@ -1526,7 +1601,11 @@
         window.socket = io();
         window.addEventListener('popstate', () => window.handleRouting && window.handleRouting());
         document.getElementById('chat-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(false); }
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const pickerOpen = document.getElementById('chat-input').dataset.picker;
+                if (pickerOpen) return;  // la paleta /models gestiona el Enter
+                e.preventDefault(); sendMessage(false);
+            }
         });
         document.addEventListener('click', (e) => {
             const menu = document.getElementById('user-menu');
@@ -1577,10 +1656,6 @@
             if (window._inputDialogCallback && val.trim()) window._inputDialogCallback(val);
             document.getElementById('input-dialog-overlay').classList.remove('show');
             window._inputDialogCallback = null;
-        });
-        document.getElementById('main-model-btn').addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            deleteSelectedModel();
         });
         let _confirmDialogCallback = null;
 
@@ -1661,6 +1736,12 @@
             }
         });
     </script>
+    <style>
+        .nv-model-picker-item:hover,
+        .nv-model-picker-item.active {
+            background: rgba(99, 102, 241, 0.16);
+        }
+    </style>
 </body>
 
 </html>

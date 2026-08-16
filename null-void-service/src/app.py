@@ -288,11 +288,9 @@ def create_app():
         user = sess.get_user(token)
         if user:
             return  # Session valid, nothing to do
-        # Token exists but session is invalid
         if request.path.startswith('/api/'):
             g.clear_cookies = True
         else:
-            # For page routes, redirect to login immediately
             resp = redirect(url_for('auth.index'))
             resp.delete_cookie('token')
             resp.delete_cookie('user')

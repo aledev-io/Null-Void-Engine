@@ -309,7 +309,7 @@ def init_db() -> None:
             );
         """)
 
-        # ─── Migraciones post-creación ───
+        # Migraciones post-creación
 
         # Migrar columna 'role' en users (control de acceso administrativo por rol)
         users_cols = {c[1] for c in conn.execute("PRAGMA table_info(users)").fetchall()}
@@ -354,7 +354,7 @@ def init_db() -> None:
 
         # Columnas opcionales en events
         events_cols = {c[1] for c in conn.execute("PRAGMA table_info(events)").fetchall()}
-        for col, default in [("reminders", "DEFAULT '[]'"), ("is_important", "DEFAULT 0"), ("type", "DEFAULT 'event'"), ("location", "DEFAULT ''"), ("guests", "DEFAULT '[]'")]:
+        for col, default in [("reminders", "DEFAULT '[]'"), ("is_important", "DEFAULT 0"), ("type", "DEFAULT 'event'"), ("location", "DEFAULT ''"), ("guests", "DEFAULT '[]'"), ("series_id", "DEFAULT NULL")]:
             if col not in events_cols:
                 conn.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT {default}")
 
@@ -397,7 +397,7 @@ def init_db() -> None:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN file_name TEXT")
             conn.execute("ALTER TABLE chat_messages ADD COLUMN file_size INTEGER")
 
-        # ─── CHECK constraints en tablas existentes (rebuild seguro) ───
+        # CHECK constraints en tablas existentes (rebuild seguro)
         # Para bases de datos legacy (las nuevas ya traen los CHECK en el CREATE TABLE).
         _rebuild_table_with_check(
             conn, 'invoices',
@@ -408,7 +408,7 @@ def init_db() -> None:
             "CHECK (status IN ('pending', 'approved', 'rejected'))"
         )
 
-        # ─── Índices ───
+        # Índices
         # Limpiar duplicados de cloud_shared antes de imponer unicidad:
         # un archivo solo se comparte una vez con el mismo usuario.
         conn.execute("""
@@ -507,6 +507,7 @@ def row_to_dict(row: sqlite3.Row) -> dict:
         'type':        d.get('type', 'event'),
         'location':    d.get('location') or '',
         'guests':      guests,
+        'seriesId':    d.get('series_id') or None,
     }
 
 

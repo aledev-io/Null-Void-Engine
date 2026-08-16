@@ -307,7 +307,6 @@ def get_all_users_admin():
     with get_db() as conn:
         users = conn.execute("SELECT username, email, quota_gb, user_id FROM users").fetchall()
     
-    # Check if online using sess
     active_users = [u['username'] for u in sess.online_users()]
     
     result = []

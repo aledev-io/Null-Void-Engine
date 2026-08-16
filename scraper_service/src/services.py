@@ -304,7 +304,6 @@ def _scrape_pccomp_routine(terms_list, cancellable=True):
         )
         page = context.new_page()
         
-        # Bucle infinito para actualizar precios constantemente
         while True:
             if cancellable and CANCEL_ROUTINE:
                 print("[Scraper Pccomp Routine] Cancelado. Saliendo del bucle infinito.")
@@ -322,7 +321,6 @@ def _scrape_pccomp_routine(terms_list, cancellable=True):
                     if cancellable and CANCEL_ROUTINE: break
                     
                     if pagina > 1:
-                        # Pausa humana
                         human_delay = random.uniform(8.0, 16.0)
                         for _ in range(int(human_delay)):
                             if cancellable and CANCEL_ROUTINE: break
@@ -383,7 +381,6 @@ def _scrape_pccomp_routine(terms_list, cancellable=True):
                         print(f"[Scraper Pccomp Routine] Error en {query} pág {pagina}: {e}")
                         break # Skip to next term if timeout
                         
-                # Pausa entre términos
                 for _ in range(int(random.uniform(15.0, 25.0))):
                     if cancellable and CANCEL_ROUTINE: break
                     time.sleep(1)
@@ -604,7 +601,6 @@ def _process_detail_background(link, rule, price, surface, city, dist, sku, rule
         except:
             desc_text = ""
             
-        # Filter out already rented or unavailable apartments
         if any(phrase in desc_text for phrase in ['est loué', 'is rented', 'déjà loué', 'already rented', 'is rent', 'under offer', 'sous compromis', 'loué !']):
             print(f"      [BG] -> [Regla: {rule['name']}] Apartamento ya alquilado/reservado, saltando.")
             return
@@ -703,7 +699,6 @@ def _process_detail_background(link, rule, price, surface, city, dist, sku, rule
                           json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": False},
                           timeout=5)
 
-        # Marcar como favorito
         if rule_user_id:
             scraper_db.add_user_product(rule_user_id, sku)
             print(f"      [BG] -> [Regla: {rule['name']}] Añadido a favoritos.")
@@ -725,7 +720,6 @@ def _scrape_athome_task(location="Howald", min_surface=45, user_id=None):
             viewport={'width': 1920, 'height': 1080}
         )
         
-        # URL construction based on location
         base_url = location if location.startswith("http") else f"https://www.athome.lu/en/rent/apartment/{location.lower()}"
         
         all_products = []
@@ -768,11 +762,9 @@ def _scrape_athome_task(location="Howald", min_surface=45, user_id=None):
                 products = []
                 
                 for article in articles:
-                    # Extract title/description
                     title_el = article.query_selector("h3")
                     title = title_el.inner_text().strip() if title_el else "Apartamento"
                     
-                    # Extract price
                     price_text = article.inner_text()
                     import re
                     price_match = re.search(r'(?:€\s*([\d.,]+))|(?:([\d.,]+)\s*€)', price_text)
@@ -782,7 +774,6 @@ def _scrape_athome_task(location="Howald", min_surface=45, user_id=None):
                     else:
                         price = 0.0
                 
-                # Extract surface area to check condition
                 surface_match = re.search(r'(\d+)\s*m²', price_text)
                 surface = int(surface_match.group(1)) if surface_match else 0
                 
@@ -1059,7 +1050,6 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
                             
                         sku = link.split("/")[-1] if link else str(time.time())
                         
-                        # Extract city from URL
                         try:
                             city = link.split("/")[-2].replace("-", " ").title()
                         except:
@@ -1110,7 +1100,7 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
 
                         print(f"  [+] Capturado: '{title[:40]}...' ({prop_type}) en {city} | {bedrooms} dorm, {surface}m² | {price}€ | {agency}")
                         
-                        # --- EVALUACIÓN REGLAS TELEGRAM (BOTS) ---
+                        # EVALUACIÓN REGLAS TELEGRAM (BOTS)
                         import requests
                         import os
                         for rule in active_bot_rules:
@@ -1120,7 +1110,6 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
                                 
                                 rule_user_id = rule.get('user_id')
                                 
-                                # Calcular distancia
                                 ref_address = scraper_db.get_user_scraper_ref(rule_user_id) if rule_user_id else "4 Rue Peternelchen, Howald"
                                 if not ref_address: ref_address = "4 Rue Peternelchen, Howald"
                                 office_coords = geocode_address(ref_address) or {'lat': 49.5826, 'lon': 6.1423}
@@ -1184,7 +1173,6 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
                                         print(f"      -> [Regla: {rule['name']}] Añadido a favoritos.")
                             except Exception as ex:
                                 print(f"      [!] Error evaluando regla {rule['name']}: {ex}")
-                        # -----------------------------------------
                         products.append({
                             "sku": sku,
                             "title": title,
@@ -1216,7 +1204,6 @@ def _scrape_athome_routine(min_surface=0, cancellable=True):
             finally:
                 page.close()
                 
-            # Random wait between locations to avoid blocks
             import random
             for _ in range(int(random.uniform(5.0, 10.0))):
                 if cancellable and CANCEL_ROUTINE: break

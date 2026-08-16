@@ -2012,12 +2012,10 @@
             }
         }
 
-        /* ═══════════════════════════════════════════════════
-           MOBILE VERTICAL ≤ 560px — Premium Redesign
-        ═══════════════════════════════════════════════════ */
+        /* MOBILE VERTICAL ≤ 560px */
         @media (max-width: 560px) {
 
-            /* ── BACKGROUND: animated gradient mesh ── */
+            /* BACKGROUND: animated gradient mesh */
             #shell::before {
                 content: '';
                 position: fixed;
@@ -2036,7 +2034,7 @@
                 z-index: 1;
             }
 
-            /* ── TOPBAR ── */
+            /* TOPBAR */
             #topbar {
                 padding: 0 16px;
                 height: 56px;
@@ -2054,12 +2052,12 @@
                 padding: 2px 6px !important;
             }
 
-            /* ── MAIN PADDING ── */
+            /* MAIN PADDING */
             #main {
                 padding: 0 0 24px 0;
             }
 
-            /* ── HERO HEADER SECTION ── */
+            /* HERO HEADER SECTION */
             .monitor-head {
                 margin: 0 !important;
                 padding: 20px 16px 0 16px !important;
@@ -2082,7 +2080,7 @@
                 margin-top: 2px;
             }
 
-            /* ── METRICS STRIP: horizontal glassmorphism cards ── */
+            /* METRICS STRIP: horizontal glassmorphism cards */
             .metrics-grid {
                 display: flex !important;
                 flex-direction: row !important;
@@ -2186,7 +2184,7 @@
                 display: none !important;
             }
 
-            /* ── SECTION DIVIDER ── */
+            /* SECTION DIVIDER */
             .sec-row {
                 margin: 20px 16px 12px 16px !important;
                 display: flex !important;
@@ -2209,7 +2207,7 @@
                 background: linear-gradient(to right, var(--border), transparent) !important;
             }
 
-            /* ── APP GRID: 2 columns, premium cards ── */
+            /* APP GRID: 2 columns, premium cards */
             .nav-grid {
                 display: grid !important;
                 grid-template-columns: repeat(2, 1fr) !important;
@@ -2281,7 +2279,7 @@
                 opacity: 0.85 !important;
             }
 
-            /* ── PROFILE DROPDOWN ── */
+            /* PROFILE DROPDOWN */
             .profile-dropdown {
                 width: 260px !important;
                 padding: 20px !important;
@@ -2314,7 +2312,7 @@
                 padding: 6px 12px !important;
             }
 
-            /* ── STATUS/TOOLS GRIDS ── */
+            /* STATUS/TOOLS GRIDS */
             .status-grid,
             .tools-grid {
                 grid-template-columns: 1fr !important;
@@ -2674,11 +2672,7 @@
             animation: fadeUp 0.4s ease both;
         }
 
-        /* ═══════════════════════════════════════
-           LANDSCAPE MOBILE  ≤900px × ≤500px
-           Layout: left=metrics | right=modules
-           Modules: 3 rows visible + internal scroll
-        ═══════════════════════════════════════ */
+        /* LANDSCAPE MOBILE ≤900px × ≤500px Layout: left=metrics | right=modules Modules: 3 rows visible + internal scroll */
         @media (max-width: 900px) and (max-height: 500px) {
 
             html,
@@ -2696,7 +2690,7 @@
                 flex-direction: column !important;
             }
 
-            /* ── Topbar ── */
+            /* Topbar */
             #topbar {
                 height: 40px !important;
                 padding: 0 12px !important;
@@ -2715,7 +2709,7 @@
                 padding: 1px 5px !important;
             }
 
-            /* ── Main: flex col, NO scroll ── */
+            /* Main: flex col, NO scroll */
             #main {
                 flex: 1 !important;
                 min-height: 0 !important;
@@ -2725,7 +2719,7 @@
                 flex-direction: column !important;
             }
 
-            /* ── view-menu: two-column grid, NO scroll ── */
+            /* view-menu: two-column grid, NO scroll */
             #view-menu.active {
                 flex: 1 !important;
                 min-height: 0 !important;
@@ -2736,7 +2730,7 @@
                 column-gap: 8px !important;
             }
 
-            /* ── LEFT COL: title hidden, metrics stacked ── */
+            /* LEFT COL: title hidden, metrics stacked */
             .monitor-head {
                 grid-column: 1 !important;
                 grid-row: 1 !important;
@@ -2832,7 +2826,7 @@
                 display: none !important;
             }
 
-            /* ── RIGHT COL row 1: section header ── */
+            /* RIGHT COL row 1: section header */
             .sec-row {
                 grid-column: 2 !important;
                 grid-row: 1 !important;
@@ -2858,7 +2852,7 @@
                 background: linear-gradient(to right, var(--border), transparent) !important;
             }
 
-            /* ── RIGHT COL row 2: nav-grid with internal scroll ── */
+            /* RIGHT COL row 2: nav-grid with internal scroll */
             .nav-grid {
                 grid-column: 2 !important;
                 grid-row: 2 !important;
@@ -2952,7 +2946,7 @@
                 margin-top: 2px !important;
             }
 
-            /* ── Profile dropdown compact ── */
+            /* Profile dropdown compact */
             .profile-dropdown {
                 width: 215px !important;
                 padding: 12px !important;

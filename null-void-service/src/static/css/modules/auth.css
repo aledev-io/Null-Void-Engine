@@ -1,4 +1,4 @@
-/* ─── RESET ───────────────────────────────────────────────── */
+/* RESET */
 *,
 *::before,
 *::after {
@@ -17,7 +17,7 @@ body {
     transition: background 0.3s;
 }
 
-/* ─── ROOT LAYOUT ─────────────────────────────────────────── */
+/* ROOT LAYOUT */
 #root {
     display: flex;
     height: 100vh;
@@ -25,7 +25,7 @@ body {
     width: 100vw;
 }
 
-/* ─── PANEL IZQUIERDO (imagen) ────────────────────────────── */
+/* PANEL IZQUIERDO (imagen) */
 #panel-left {
     flex: 1;
     position: relative;
@@ -49,7 +49,7 @@ body {
     transition: background 0.35s;
 }
 
-/* ─── BRANDING ────────────────────────────────────────────── */
+/* BRANDING */
 #branding {
     position: absolute;
     bottom: clamp(100px, 45vh, 400px);
@@ -118,7 +118,7 @@ body {
     transition: color 0.3s;
 }
 
-/* ─── PANEL DERECHO (formulario) ──────────────────────────── */
+/* PANEL DERECHO (formulario) */
 #panel-right {
     width: clamp(320px, 38vw, 460px);
     flex-shrink: 0;
@@ -132,7 +132,7 @@ body {
     transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
 }
 
-/* ─── CARD ────────────────────────────── */
+/* CARD */
 #card {
     width: 100%;
     padding: 0 48px;
@@ -167,7 +167,7 @@ body {
     transition: color 0.3s;
 }
 
-/* ─── FIELDS ──────────────────────────────────────────────── */
+/* FIELDS */
 .field-group {
     margin-bottom: 14px;
 }
@@ -254,7 +254,7 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     transform: scale(1.1);
 }
 
-/* ─── MESSAGES ────────────────────────────────────────────── */
+/* MESSAGES */
 .msg-area {
     min-height: 20px;
     font-size: 0.73rem;
@@ -272,7 +272,7 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     color: #34d399;
 }
 
-/* ─── BUTTON ──────────────────────────────────────────────── */
+/* BUTTON */
 .form-btn {
     width: 100%;
     height: 48px;
@@ -332,7 +332,7 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     display: block;
 }
 
-/* ─── TOGGLE LINK ─────────────────────────────────────────── */
+/* TOGGLE LINK */
 .toggle-link {
     text-align: center;
     margin-top: 18px;
@@ -351,7 +351,7 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     color: #a5b4fc;
 }
 
-/* ─── THEME BUTTON ────────────────────────────────────────── */
+/* THEME BUTTON */
 .btn-theme-float {
     position: fixed;
     top: 20px;
@@ -414,7 +414,7 @@ html[data-theme="light"] .btn-theme-float:hover {
     box-shadow: 0 4px 20px rgba(79, 70, 229, 0.35);
 }
 
-/* ─── ANIMATIONS ──────────────────────────────────────────── */
+/* ANIMATIONS */
 @keyframes kenburns {
     from {
         opacity: 0.35;
@@ -487,7 +487,7 @@ html[data-theme="light"] .btn-theme-float:hover {
     }
 }
 
-/* ─── ENTRADA APP (splash profesional) ────────────────────── */
+/* ENTRADA APP (splash profesional) */
 body::before {
     content: '';
     position: fixed;
@@ -602,7 +602,7 @@ body::before {
     animation-delay: 0.9s;
 }
 
-/* ─── RESPONSIVE ──────────────────────────────────────────── */
+/* RESPONSIVE */
 @media (max-width: 860px) {
 
     html,
@@ -773,7 +773,7 @@ body::before {
     }
 }
 
-/* ── LANDSCAPE MÓVIL (ancho > alto, pantalla pequeña) ─────── */
+/* LANDSCAPE MÓVIL (ancho > alto, pantalla pequeña) */
 @media (max-height: 600px) and (orientation: landscape) {
 
     html,
@@ -927,7 +927,7 @@ body::before {
         height: 34px;
     }
 }
-/* ─── ENTRADA ZOOM PANEL IZQUIERDO (solo pantallas amplias) ─ */
+/* ENTRADA ZOOM PANEL IZQUIERDO (solo pantallas amplias) */
 @media (min-width: 861px) {
     #panel-left {
         animation: kenburns 2.8s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -935,7 +935,7 @@ body::before {
     }
 }
 
-/* ─── ACCESIBILIDAD: sin movimiento reducido ──────────────── */
+/* ACCESIBILIDAD: sin movimiento reducido */
 @media (prefers-reduced-motion: reduce) {
 
     *,

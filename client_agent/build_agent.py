@@ -21,12 +21,12 @@ import sys
 import time
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-AGENT_SCRIPT = "agent.py"
-RELEASE_SCRIPT = "agent_release.py"
+AGENT_SCRIPT = os.path.join(BASE_DIR, "src", "main.py")
+RELEASE_SCRIPT = os.path.join(BASE_DIR, "src", "main_release.py")
 EXE_NAME = "nv-agent"
 LOCK_FILE = os.path.join(BASE_DIR, ".build.lock")
 DIST_DIR = os.path.join(BASE_DIR, "dist")
-BUILD_DIR = os.path.join(BASE_DIR, "build")
+PYINSTALLER_BUILD_DIR = os.path.join(BASE_DIR, "build")
 
 # Variantes de nombre por plataforma (también usadas para limpiar artefactos obsoletos)
 TARGET_NAMES = {
@@ -61,42 +61,40 @@ def platform_target():
 
 
 def find_bootstrap_servers():
-    """Busca AGENT_BOOTSTRAP_SERVERS en la variable de entorno o en .env del proyecto."""
-    from_env = os.environ.get("AGENT_BOOTSTRAP_SERVERS", "").strip()
-    if from_env:
-        return [s.strip() for s in from_env.split(",") if s.strip()]
+    """Busca AGENT_BOOTSTRAP_SERVERS en el entorno o en los .env."""
+    env_servers = os.environ.get("AGENT_BOOTSTRAP_SERVERS")
+    if env_servers:
+        return [s.strip() for s in env_servers.split(",") if s.strip()]
 
-    candidates = [
+    env_paths = [
         os.path.join(BASE_DIR, ".env"),
         os.path.join(BASE_DIR, "..", ".env"),
         os.path.join(BASE_DIR, "..", "..", ".env"),
     ]
-    for path in candidates:
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("AGENT_BOOTSTRAP_SERVERS="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        servers = [s.strip() for s in val.split(",") if s.strip()]
-                        if servers:
-                            return servers
-        except OSError as e:
-            log(f"Aviso: no se pudo leer {path}: {e}")
+    for path in env_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("AGENT_BOOTSTRAP_SERVERS="):
+                            val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            servers = [s.strip() for s in val.split(",") if s.strip()]
+                            if servers:
+                                return servers
+            except Exception:
+                pass
     return []
 
 
 def acquire_build_lock():
-    """Lock exclusivo de build: impide que dos compilaciones pisoteen build/."""
-    try:
-        import fcntl
-    except ImportError:  # Windows: sin soporte de flock
-        log("Aviso: fcntl no disponible; no se aplica bloqueo entre builds.")
-        return None
+    """Asegura que sólo haya una compilación simultánea (evita race conditions)."""
+    if sys.platform.startswith("win"):
+        return None  # En Windows flock no está disponible de forma estándar; el control se confía al proceso
 
-    lock_file = open(LOCK_FILE, "w", encoding="utf-8")
+    import fcntl
+
+    lock_file = open(LOCK_FILE, "w")
     try:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -112,7 +110,7 @@ def acquire_build_lock():
 
 def bake_release_script(servers):
     """Inyecta la lista de bootstrap servers en el código del agente."""
-    agent_path = os.path.join(BASE_DIR, AGENT_SCRIPT)
+    agent_path = AGENT_SCRIPT
     with open(agent_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -121,7 +119,7 @@ def bake_release_script(servers):
     if start_marker not in code or end_marker not in code:
         raise BuildError(
             f"No se encontraron los marcadores de bootstrap en {AGENT_SCRIPT}. "
-            "El código del agente ha cambiado; actualiza build_agent.py."
+            "El código del agente ha cambiado; actualiza builder.py."
         )
 
     baked_code = (
@@ -129,7 +127,7 @@ def bake_release_script(servers):
         + f"BOOTSTRAP_SERVERS = {servers}\n"
         + code.split(end_marker)[1]
     )
-    release_path = os.path.join(BASE_DIR, RELEASE_SCRIPT)
+    release_path = RELEASE_SCRIPT
     with open(release_path, "w", encoding="utf-8") as f:
         f.write(baked_code)
     return release_path
@@ -141,17 +139,19 @@ def run_pyinstaller(servers):
         cmd = [
             sys.executable, "-m", "PyInstaller",
             "--onefile", "--noconsole", "--noconfirm", "--clean",
+            f"--workpath={PYINSTALLER_BUILD_DIR}",
+            f"--distpath={DIST_DIR}",
             "--hidden-import=watchdog.observers.inotify",
             "--hidden-import=watchdog.observers.polling",
-            "--hidden-import=qt_gui",
-            "--hidden-import=cloud_api",
+            "--hidden-import=src.ui.qt_gui",
+            "--hidden-import=src.api.cloud_api",
             "--hidden-import=PySide6.QtCore",
             "--hidden-import=PySide6.QtGui",
             "--hidden-import=PySide6.QtWidgets",
             "--hidden-import=PySide6.QtSvg",
             "--hidden-import=threading",
             "--name", EXE_NAME,
-            os.path.basename(release_path),
+            release_path,
         ]
         log("Iniciando PyInstaller (binario autocontenido, GUI PySide6/Qt)...")
         subprocess.run(cmd, cwd=BASE_DIR, check=True)
@@ -180,8 +180,8 @@ def report_missing_modules():
     """
     missing = []
     libs = set()
-    if os.path.isdir(BUILD_DIR):
-        for root, _dirs, files in os.walk(BUILD_DIR):
+    if os.path.isdir(PYINSTALLER_BUILD_DIR):
+        for root, _dirs, files in os.walk(PYINSTALLER_BUILD_DIR):
             for name in fnmatch.filter(files, "warn-*.txt"):
                 path = os.path.join(root, name)
                 try:

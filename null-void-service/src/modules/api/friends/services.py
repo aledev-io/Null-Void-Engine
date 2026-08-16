@@ -61,10 +61,8 @@ def send_friend_request(requester_id, addressee_id):
     if len(addressee_friends) >= MAX_FRIENDS:
         return None, f"El usuario ha alcanzado el límite máximo de {MAX_FRIENDS} amigos"
         
-    # Check if the other user already sent a request to this user
     pending_id = repository.get_pending_request_id(addressee_id, requester_id)
     if pending_id:
-        # Auto-accept the reciprocal request
         ok = repository.respond_request(pending_id, requester_id, 'accepted')
         if ok:
             return {"ok": True, "auto_accepted": True}, None

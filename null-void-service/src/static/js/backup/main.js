@@ -11,8 +11,6 @@ function bootBackups() {
     });
 }
 
-// Arranque robusto: ejecuta la inicialización de inmediato si el DOM ya está
-// listo (carga desde caché o shell nativo), sin esperar DOMContentLoaded.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bootBackups);
 } else {

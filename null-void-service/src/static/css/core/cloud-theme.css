@@ -1,10 +1,8 @@
-/* ─── CLOUD THEME · PALETA GLOBAL ────────────────────────────────────────────
-   Extraída del módulo Cloud para que el módulo Mail (correo) reutilice
-   los mismos colores. Cargar después de tokens.css.
-   ──────────────────────────────────────────────────────────────────────────── */
+/* CLOUD THEME · PALETA GLOBAL: colores compartidos con el módulo Mail.
+   Cargar después de tokens.css. */
 :root,
 [data-theme="dark"] {
-    /* ── Backgrounds (dark-to-light: bg-primary → surface-hi) ── */
+    /* Backgrounds (dark-to-light: bg-primary → surface-hi) */
     --bg-primary: #151f35;
     --bg-secondary: #111827;
     --bg-card: #161d2f;
@@ -13,30 +11,30 @@
     --bg-tertiary: #1e2842;
     --bg: #111827;
 
-    /* ── Accent — indigo/violet ── */
+    /* Accent — indigo/violet */
     --accent: #6366f1;
     --accent-2: #8b5cf6;
     --indigo: #6366f1;
     --indigo-dim: rgba(99, 102, 241, 0.2);
 
-    /* ── Semantic ── */
+    /* Semantic */
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
     --info: #6366f1;
 
-    /* ── Text hierarchy ── */
+    /* Text hierarchy */
     --text-main: #e8edf8;
     --text-secondary: #8b95b0;
     --text-dim: #e8edf8;
     --text-muted: #8b95b0;
 
-    /* ── Borders ── */
+    /* Borders */
     --border: rgba(255, 255, 255, 0.07);
     --border-hi: rgba(99, 102, 241, 0.3);
     --border-hover: rgba(99, 102, 241, 0.4);
 
-    /* ── Shape & motion ── */
+    /* Shape & motion */
     --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     --radius: 12px;
     --radius-lg: 16px;
@@ -46,7 +44,7 @@
 }
 
 [data-theme="light"] {
-    /* ── Backgrounds ── */
+    /* Backgrounds */
     --bg-primary: #f9fafb;
     --bg-secondary: #ffffff;
     --bg-card: #ffffff;
@@ -55,30 +53,30 @@
     --bg-tertiary: #e5e7eb;
     --bg: #f9fafb;
 
-    /* ── Accents ── */
+    /* Accents */
     --accent: #6366f1;
     --accent-2: #8b5cf6;
     --indigo: #6366f1;
     --indigo-dim: rgba(99, 102, 241, 0.15);
 
-    /* ── Semantic ── */
+    /* Semantic */
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
     --info: #6366f1;
 
-    /* ── Text ── */
+    /* Text */
     --text-main: #1f2937;
     --text-secondary: #4b5563;
     --text-dim: #3730a3;
     --text-muted: #6b7280;
 
-    /* ── Borders ── */
+    /* Borders */
     --border: rgba(0, 0, 0, 0.1);
     --border-hi: rgba(0, 0, 0, 0.15);
     --border-hover: rgba(99, 102, 241, 0.4);
 
-    /* ── Shape & motion ── */
+    /* Shape & motion */
     --shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     --radius: 12px;
     --radius-lg: 16px;
