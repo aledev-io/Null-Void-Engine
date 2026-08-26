@@ -1,0 +1,378 @@
+/* ============================================================
+   MODO COMPATIBILIDAD LEGACY — Null Void Engine
+   Activado por JS al detectar dispositivos antiguos/Android WebView
+   Selector raíz: html[data-compat="legacy"]
+   ============================================================ */
+
+/* ─── 0. POLYFILL DVH / ALTURA REAL DE PANTALLA ────────────────
+   JS calcula window.innerHeight y escribe --real-vh (1% de esa altura)
+   y --app-height (px totales). Estas reglas los usan como fallback
+   universal — activo incluso sin data-compat="legacy".            */
+
+/* html y body: ancla en 100% para que los hijos puedan heredar   */
+html {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    /* Orden de cascada: % (herencia segura) → vh (compatibilidad) → dvh (moderno) */
+    height: 100%;
+    height: 100vh;
+    height: 100dvh;
+    /* Usar --app-height si JS ha calculado la altura real               */
+    height: var(--app-height, 100dvh);
+    width: 100%;
+}
+
+/* Contenedores principales: misma cadena de fallback               */
+.app-container,
+.app-layout,
+#root,
+#shell {
+    height: 100%;
+    height: 100vh;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
+    width: 100%;
+}
+
+/* Utilidad CSS para usar el polyfill manualmente en el markup:
+   height: calc(var(--real-vh, 1vh) * 100)                        */
+
+/* ─── 1. ELIMINAR backdrop-filter en toda la UI ─────────────
+   Android WebView <86 y Chrome <76 en Redmi/gama baja fallan
+   silenciosamente con backdrop-filter, dejando capas negras.   */
+html[data-compat="legacy"] *,
+html[data-compat="legacy"] *::before,
+html[data-compat="legacy"] *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* ─── 2. SUSTITUTOS de fondo sólido para capas translúcidas ─ */
+
+/* Input area del chat AI (glassmorphism → fondo sólido) */
+html[data-compat="legacy"] .input-area {
+    background: #0e0e16 !important;
+    border-top: 1px solid rgba(255,255,255,0.10) !important;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.4) !important;
+}
+
+/* Panel de login (glassmorphism → fondo casi sólido: sin blur el
+   rgba(...,0.65) deja ver la imagen de fondo y parece transparente) */
+html[data-compat="legacy"] #panel-right {
+    background: rgba(30, 41, 59, 0.95) !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-compat="legacy"] [data-theme="light"] #panel-right {
+    background: rgba(255, 255, 255, 0.97) !important;
+}
+
+/* Tools menu bottom sheet */
+html[data-compat="legacy"] .tools-menu-panel {
+    background: #1a1b26 !important;
+    box-shadow: 0 -6px 20px rgba(0,0,0,0.55) !important;
+}
+
+/* Scrims / overlays */
+html[data-compat="legacy"] #tools-scrim,
+html[data-compat="legacy"] .search-overlay,
+html[data-compat="legacy"] .app-modal-overlay,
+html[data-compat="legacy"] .modal-overlay,
+html[data-compat="legacy"] #chat-lightbox {
+    background: rgba(0,0,0,0.75) !important;
+}
+
+/* Toasts */
+html[data-compat="legacy"] .toast,
+html[data-compat="legacy"] .ai-toast {
+    background: #1e1e2a !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5) !important;
+}
+
+/* Sidebar / profile dropdown */
+html[data-compat="legacy"] .sidebar {
+    background: #0e0e16 !important;
+}
+
+html[data-compat="legacy"] .profile-dropdown,
+html[data-compat="legacy"] .chat-context-menu,
+html[data-compat="legacy"] .attach-menu,
+html[data-compat="legacy"] .tools-menu-panel {
+    background: #1a1b26 !important;
+}
+
+/* Cards y paneles con fondo semitransparente */
+html[data-compat="legacy"] .suggestion-card {
+    background: rgba(255,255,255,0.04) !important;
+    box-shadow: none !important;
+}
+
+/* ─── 3. ELIMINAR position: fixed en barras de entrada ──────
+   En Android WebView antiguo, position:fixed se "rompe" cuando
+   el teclado virtual empuja la ventana, dejando bloques negros.
+   Se usan alternativas que respetan el flujo del documento.   */
+
+/* La barra de entrada AI pasa a sticky dentro de su flex-container */
+html[data-compat="legacy"] .input-area {
+    position: sticky !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    transform: translateZ(0) !important;
+}
+
+/* Bottom sheet de herramientas: de fixed → absolute con scroll padre */
+html[data-compat="legacy"] .tools-menu-panel {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+}
+
+/* Overlays / scrims que necesitan cubrir toda la pantalla */
+html[data-compat="legacy"] .search-overlay,
+html[data-compat="legacy"] .app-modal-overlay,
+html[data-compat="legacy"] #chat-lightbox,
+html[data-compat="legacy"] #tools-scrim {
+    position: fixed !important;
+}
+
+/* ─── 4. SIMPLIFICAR sombras complejas ──────────────────────*/
+html[data-compat="legacy"] .input-wrapper {
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.09) !important;
+    transform: none !important;
+    transition: border-color 0.15s ease !important;
+}
+
+html[data-compat="legacy"] .input-wrapper:focus-within {
+    transform: none !important;
+    box-shadow: 0 0 0 2px var(--primary) !important;
+}
+
+html[data-compat="legacy"] .sidebar {
+    box-shadow: none !important;
+}
+
+html[data-compat="legacy"] .sidebar.open {
+    box-shadow: 4px 0 16px rgba(0,0,0,0.5) !important;
+}
+
+/* ─── 5. will-change ACOTADO — solo contenedores críticos ──
+   En gama baja, will-change en muchos elementos simultáneos
+   agota la VRAM y puede causar más artefactos. Se limita a
+   los 2 contenedores que más beneficio dan.                  */
+html[data-compat="legacy"] .input-area,
+html[data-compat="legacy"] .chat-container {
+    will-change: transform;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+}
+
+/* ─── 6. DESACTIVAR animaciones costosas ────────────────────
+   Se excluyen elementos de UI que dependen de animaciones para
+   ser visibles (modals, overlays) o que tienen lógica propia.  */
+html[data-compat="legacy"] *:not(.modal):not(.app-modal-overlay):not(.search-overlay):not(#tools-scrim):not(.tools-menu-panel):not(.ai-toast):not(.toast) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.10s !important;
+}
+
+/* Preservar transiciones de opacidad para modals */
+html[data-compat="legacy"] .modal,
+html[data-compat="legacy"] .app-modal-overlay,
+html[data-compat="legacy"] .search-overlay,
+html[data-compat="legacy"] #tools-scrim,
+html[data-compat="legacy"] .tools-menu-panel {
+    transition: opacity 0.12s ease !important;
+}
+
+/* ─── 7. MODO TECLADO ABIERTO ───────────────────────────────
+   Clase .keyboard-open añadida por JS al detectar teclado virtual */
+
+html[data-compat="legacy"].keyboard-open .logo-text,
+html[data-compat="legacy"].keyboard-open .tb-brand-sub,
+html[data-compat="legacy"].keyboard-open .badge,
+html[data-compat="legacy"].keyboard-open #topbar .tb-right .btn-icon:not(#mobile-menu-btn),
+html[data-compat="legacy"].keyboard-open .ai-sidebar-header .logo-text,
+html[data-compat="legacy"].keyboard-open .ai-privacy-footer,
+html[data-compat="legacy"].keyboard-open #ai-privacy-footer-notice,
+html[data-compat="legacy"].keyboard-open .suggestion-grid {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+html[data-compat="legacy"].keyboard-open #topbar {
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 10px !important;
+}
+
+html[data-compat="legacy"].keyboard-open .chat-container {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* ─── 8. MEDIA QUERY ≤480px ────────────────────────────────
+   Reglas de seguridad independientes de la detección JS       */
+@media (max-width: 480px) {
+    .tools-menu-panel,
+    .suggestion-card,
+    .input-area {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    .input-area {
+        background: rgba(14,14,22,0.98) !important;
+        position: sticky !important;
+        bottom: 0 !important;
+    }
+
+    .input-wrapper {
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.08) !important;
+    }
+
+    .chat-container,
+    .input-area,
+    .main-chat {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        will-change: transform;
+    }
+}
+
+/* ============================================================
+   BOTÓN "VOLVER" ESTANDARIZADO (.app-back-btn) — todos los módulos
+   Icono de flecha <, 36x36px de área táctil, translúcido, dark/light.
+   ============================================================ */
+.app-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.app-back-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-hi);
+    transform: translateX(-2px);
+}
+
+.app-back-btn:active {
+    transform: scale(0.92);
+}
+
+[data-theme="light"] .app-back-btn {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .app-back-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Cabecera de módulo unificada (estilo Material Design): la flecha de
+   retroceso y el título de la sección forman UN solo bloque clickeable que
+   actúa como salida del módulo (→ dashboard). ← Título ─────────────────── */
+.app-back-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: transparent;
+    border: none;
+    margin: 0;
+    padding: 6px 10px 6px 4px;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    text-align: left;
+    min-height: 36px;
+    max-width: 100%;
+    border-radius: 12px;
+    flex-shrink: 0;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.app-back-header:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.app-back-header:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.98);
+}
+
+.app-back-header svg {
+    flex-shrink: 0;
+    display: block;
+    color: var(--text-dim);
+}
+
+.app-back-header:hover svg {
+    color: var(--text-main);
+}
+
+.app-back-header-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--text-main);
+}
+
+/* Hamburguesa estándar de módulo: abre/pliega el menú lateral.
+   Solo visible en móvil; en escritorio el sidebar es persistente. */
+.mobile-menu-btn {
+    display: none !important;
+    background: none;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.mobile-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="light"] .mobile-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-btn {
+        display: inline-flex !important;
+    }
+}
+
+[data-theme="light"] .app-back-header:hover {
+    background: rgba(0, 0, 0, 0.05);
+}

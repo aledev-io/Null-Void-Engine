@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NullVoid</string>
+    <string name="title_activity_main">NullVoid</string>
+    <string name="package_name">com.nullvoid.app</string>
+    <string name="custom_url_scheme">com.nullvoid.app</string>
+    <string name="title_activity_settings">Configuración del Servidor</string>
+
+    <!-- Menu Nativo -->
+    <string name="menu_edit">Editar Conexión</string>
+    <string name="menu_new">Nueva Conexión</string>
+    <string name="menu_close">Cerrar Conexión</string>
+    <string name="menu_exit">Salir</string>
+    <string name="menu_refresh">Recargar</string>
+
+    <!-- Notificaciones y Mensajes -->
+    <string name="notification_channel_name">Alertas del Motor</string>
+    <string name="notification_channel_desc">Notificaciones privadas de Null-Void</string>
+
+    <!-- Canales de Notificación por Módulo -->
+    <string name="channel_social_name">Mensajes y Amigos</string>
+    <string name="channel_social_desc">Mensajes de chat y solicitudes de amistad</string>
+    <string name="channel_ai_name">IA y Agente</string>
+    <string name="channel_ai_desc">Respuestas de la IA y recordatorios de tareas</string>
+    <string name="channel_scraper_name">Scraper y Automatización</string>
+    <string name="channel_scraper_desc">Alertas de precios y actualizaciones web</string>
+    <string name="channel_cloud_name">Nube y Archivos</string>
+    <string name="channel_cloud_desc">Subidas de archivos y eventos compartidos</string>
+    <string name="channel_calendar_name">Calendario y Eventos</string>
+    <string name="channel_calendar_desc">Recordatorios de eventos y alertas de agenda</string>
+    <string name="channel_system_name">Sistema y Motor</string>
+    <string name="channel_system_desc">Estado del servidor y alertas de Docker</string>
+
+    <!-- Resúmenes de Notificación -->
+    <string name="summary_social">Mensajes de Amigos</string>
+    <string name="summary_ai">Respuestas de la IA</string>
+    <string name="summary_scraper">Alertas de Scraper</string>
+    <string name="summary_cloud">Eventos de Cloud</string>
+    <string name="summary_calendar">Alertas de Calendario</string>
+    <string name="summary_system">Sistema Null Void</string>
+
+    <string name="toast_reloading">Recargando...</string>
+    <string name="ssl_error_warning">Conexión no segura (%1$s). Revisa el certificado SSL del servidor.</string>
+    <string name="file_chooser_title">Seleccionar archivo</string>
+    <string name="downloading_file">Descargando archivo...</string>
+    <string name="starting_download">Iniciando descarga...</string>
+    <string name="download_complete">Descarga completada</string>
+    <string name="download_saved">Archivo guardado en Descargas</string>
+    <string name="default_notification_body">Nueva notificación</string>
+    <string name="web_permission_title">Permiso de la web</string>
+    <string name="web_permission_msg">\"%1$s\" quiere acceder a: %2$s.</string>
+    <string name="allow">Permitir</string>
+    <string name="deny">Denegar</string>
+    <string name="camera">cámara</string>
+    <string name="microphone">micrófono</string>
+    <string name="protected_media">medios protegidos</string>
+    <string name="unknown_host">desconocido</string>
+    <string name="website">sitio web</string>
+
+    <!-- Settings Activity -->
+    <string name="title_settings">Configuración del Servidor</string>
+    <string name="hint_server_address">IP o Dominio del servidor</string>
+    <string name="hint_port">Puerto (opcional)</string>
+    <string name="label_use_https">Usar HTTPS</string>
+    <string name="btn_save_connect">Guardar y Conectar</string>
+    <string name="err_server_required">La dirección del servidor es obligatoria</string>
+    <string name="settings_saved">Configuración guardada</string>
+</resources>
