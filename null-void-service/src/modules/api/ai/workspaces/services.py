@@ -33,12 +33,12 @@ def list_workspace_files(workspace_id: str) -> list[dict]:
     """Lista los archivos del workspace enriquecidos con metadatos del módulo
     cloud (tamaño, tipo, etc.), tal como espera el frontend."""
     files = repository.get_workspace_files(workspace_id)
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     enriched = []
     for f in files:
         entry = {"id": f["id"], "filename": f["filename"], "fileId": f.get("file_id")}
         if f.get("file_id"):
-            row = cloud_services.ai_get_refs_by_uid(f.get("user_id"), [f["file_id"]])
+            row = store.ai_get_refs_by_uid(f.get("user_id"), [f["file_id"]])
             if row:
                 ref = row[0]
                 entry.update({"size": ref["size"], "sizeLabel": ref["sizeLabel"],

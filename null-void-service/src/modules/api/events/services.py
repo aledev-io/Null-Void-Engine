@@ -18,6 +18,25 @@ def get_user_events(uid):
         ).fetchall()
         return [row_to_dict(r) for r in rows]
 
+
+def get_upcoming_reminder_events():
+    """Devuelve los eventos pendientes de notificación (recordatorios) para el
+    notificador global (core.notifications).
+
+    Provee la lectura de datos de calendario a través del dominio `events` en
+    lugar de que core consulte la tabla `events` directamente (ownership de
+    datos). Firma neutra, sin filtro de usuario: el notificador procesa todos
+    los eventos incompletos con hora de inicio."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, date, start_time, description, category, reminders, user_id "
+            "FROM events "
+            "WHERE completed = 0 AND start_time IS NOT NULL"
+        ).fetchall()
+        # Dicts planos (snake_case), tal como espera el notificador de core
+        # (row_to_dict mapea a camelCase para la API y no es aplicable aquí).
+        return [dict(r) for r in rows]
+
 def create_user_event(uid, data):
     data, err = _validate_event(data)
     if err:

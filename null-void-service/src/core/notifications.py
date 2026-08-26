@@ -66,63 +66,61 @@ class SystemNotifier:
             self.notified_ids.clear()
 
         try:
-            with get_db() as conn:
-                rows = conn.execute(
-                    "SELECT id, title, date, start_time, description, category, reminders, user_id "
-                    "FROM events "
-                    "WHERE completed = 0 AND start_time IS NOT NULL"
-                ).fetchall()
+            # Lectura de datos de calendario a través del dominio `events`
+            # (contract de servicio), no consultando la tabla directamente.
+            from modules.api.events import services as events_services
+            rows = events_services.get_upcoming_reminder_events()
 
-                for row in rows:
-                    ev_id = row['id']
-                    try:
-                        ev_dt = datetime.strptime(f"{row['date']} {row['start_time']}", "%Y-%m-%d %H:%M")
-                        diff_minutes = int((ev_dt - now).total_seconds() / 60)
+            for row in rows:
+                ev_id = row['id']
+                try:
+                    ev_dt = datetime.strptime(f"{row['date']} {row['start_time']}", "%Y-%m-%d %H:%M")
+                    diff_minutes = int((ev_dt - now).total_seconds() / 60)
 
-                        if diff_minutes < -1:
-                            continue
-
-                        reminders_json = row['reminders']
-                        reminders = json.loads(reminders_json) if reminders_json else [0]
-                        if not reminders: reminders = [0]
-
-                        for reminder_minutes in reminders:
-                            if 0 <= diff_minutes <= reminder_minutes:
-                                # Lógica de repetición:
-                                # Si faltan <= 10 min o es el momento del evento (reminder 0), 
-                                # repetimos cada 2 minutos para que sea "persistente".
-                                if diff_minutes <= 10 or reminder_minutes == 0:
-                                    import math
-                                    interval_bucket = math.floor(time.time() / 120) 
-                                    notify_key = f"{ev_id}:{reminder_minutes}:rep_{interval_bucket}"
-                                else:
-                                    # Recordatorios lejanos (ej: 1 hora antes) solo suenan una vez
-                                    notify_key = f"{ev_id}:{reminder_minutes}"
-
-                                if notify_key in self.notified_ids:
-                                    continue
-
-                                # Si es un recordatorio puntual (no persistente), 
-                                # solo lo lanzamos si estamos en el minuto exacto (o se acaba de pasar)
-                                # para evitar que un recordatorio de "1 día" suene cada minuto del día.
-                                if "rep_" not in notify_key and (reminder_minutes - diff_minutes) > 1:
-                                    continue
-
-                                self._send_system_notification(
-                                    row['title'], 
-                                    f"{row['date']} {row['start_time']}", 
-                                    diff_minutes, 
-                                    row['description'],
-                                    row['category']
-                                )
-                                self.notified_ids.add(notify_key)
-                                
-                                user_id = row['user_id'] or 'admin'
-                                self._add_to_history(row['title'], row['date'], row['start_time'], row['description'], row['category'], user_id)
-                                
-                    except (ValueError, json.JSONDecodeError) as e:
-                        print(f"[Notifier] Error procesando evento {ev_id}: {e}")
+                    if diff_minutes < -1:
                         continue
+
+                    reminders_json = row['reminders']
+                    reminders = json.loads(reminders_json) if reminders_json else [0]
+                    if not reminders: reminders = [0]
+
+                    for reminder_minutes in reminders:
+                        if 0 <= diff_minutes <= reminder_minutes:
+                            # Lógica de repetición:
+                            # Si faltan <= 10 min o es el momento del evento (reminder 0), 
+                            # repetimos cada 2 minutos para que sea "persistente".
+                            if diff_minutes <= 10 or reminder_minutes == 0:
+                                import math
+                                interval_bucket = math.floor(time.time() / 120) 
+                                notify_key = f"{ev_id}:{reminder_minutes}:rep_{interval_bucket}"
+                            else:
+                                # Recordatorios lejanos (ej: 1 hora antes) solo suenan una vez
+                                notify_key = f"{ev_id}:{reminder_minutes}"
+
+                            if notify_key in self.notified_ids:
+                                continue
+
+                            # Si es un recordatorio puntual (no persistente), 
+                            # solo lo lanzamos si estamos en el minuto exacto (o se acaba de pasar)
+                            # para evitar que un recordatorio de "1 día" suene cada minuto del día.
+                            if "rep_" not in notify_key and (reminder_minutes - diff_minutes) > 1:
+                                continue
+
+                            self._send_system_notification(
+                                row['title'], 
+                                f"{row['date']} {row['start_time']}", 
+                                diff_minutes, 
+                                row['description'],
+                                row['category']
+                            )
+                            self.notified_ids.add(notify_key)
+                            
+                            user_id = row['user_id'] or 'admin'
+                            self._add_to_history(row['title'], row['date'], row['start_time'], row['description'], row['category'], user_id)
+
+                except (ValueError, json.JSONDecodeError) as e:
+                    print(f"[Notifier] Error procesando evento {ev_id}: {e}")
+                    continue
         except Exception as e:
             print(f"[Notifier] Error crítico en _check_events: {e}")
 

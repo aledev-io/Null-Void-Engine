@@ -106,7 +106,7 @@ def upload_workspace_file(workspace_id):
     username, uid, token = _get_user()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     file = request.files.get('file')
     if file and file.filename:
         file.seek(0, os.SEEK_END)
@@ -114,7 +114,7 @@ def upload_workspace_file(workspace_id):
         file.seek(0)
         if size > 64 * 1024 * 1024:
             return jsonify(error="El archivo supera el límite de 64MB"), 400
-        ref = cloud_services.ai_save_file(token, file.filename, file.read(), username, uid)
+        ref = store.ai_save_file(token, file.filename, file.read(), username, uid)
     else:
         # Compat: JSON {filename, content}
         data = request.json or {}
@@ -124,7 +124,7 @@ def upload_workspace_file(workspace_id):
             return jsonify(error="Faltan datos"), 400
         if not isinstance(content, str):
             content = str(content)
-        ref = cloud_services.ai_save_file(token, filename, content.encode("utf-8"), username, uid)
+        ref = store.ai_save_file(token, filename, content.encode("utf-8"), username, uid)
     if "error" in ref:
         return jsonify(error=ref["error"]), 400
     fid = repository.add_workspace_file(workspace_id, ref["name"], ref["id"])
@@ -147,6 +147,6 @@ def delete_workspace_file(workspace_id, file_id):
         return jsonify(error="No autorizado"), 401
     owner_uid, attachment_id = repository.delete_workspace_file(file_id)
     if owner_uid and attachment_id:
-        from modules.api.cloud import services as cloud_services
-        cloud_services.ai_delete_files_by_uid(owner_uid, [attachment_id])
+        from modules.storage import store
+        store.ai_delete_files_by_uid(owner_uid, [attachment_id])
     return jsonify(success=True), 200

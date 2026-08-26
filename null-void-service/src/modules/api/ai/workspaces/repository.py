@@ -77,8 +77,8 @@ def get_workspace_file_content(file_id: str) -> str:
         ).fetchone()
     if not row or not row['file_id']:
         return ""
-    from modules.api.cloud import services as cloud_services
-    data = cloud_services.ai_read_file_by_uid(row['user_id'], row['file_id'])
+    from modules.storage import store
+    data = store.ai_read_file_by_uid(row['user_id'], row['file_id'])
     if data is None:
         return ""
     return data.decode("utf-8", errors="replace")

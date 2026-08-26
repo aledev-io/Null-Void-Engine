@@ -43,7 +43,7 @@ build/
 *.exe
 agent_release.py
 *_release.py
-
+docs
 null-void-app/android/.gradle/
 null-void-app/android/build/
 null-void-app/android/app/build/
@@ -76,3 +76,4 @@ node_modules/
 *.gguf
 .cache/
 **/.cache/
+docs/ARCHITECTURE_DEPENDENCY_AUDIT.md

@@ -548,7 +548,8 @@ def save_message_to_cloud():
         return jsonify(error="Archivo no encontrado en el servidor"), 404
         
     from modules.api.cloud import services as cloud_services
-    cloud_root = cloud_services.get_view_root('drive', token)
+    from modules.storage import store
+    cloud_root = store.get_view_root('drive', token)
     if not cloud_root:
         return jsonify(error="No se pudo acceder a tu almacenamiento en la nube"), 403
         
@@ -556,9 +557,9 @@ def save_message_to_cloud():
     dest_path = os.path.join(cloud_root, dest_name)
     
     file_size = os.path.getsize(source_file_path)
-    limit_gb = cloud_services.get_user_quota(token)
+    limit_gb = store.get_user_quota(token)
     limit_bytes = limit_gb * 1024 * 1024 * 1024
-    current_usage = cloud_services.get_dir_size(cloud_services.get_user_root(token))
+    current_usage = store.get_dir_size(store.get_user_root(token))
     
     if current_usage + file_size > limit_bytes:
         return jsonify(error="Espacio insuficiente en Null-Void Cloud"), 400

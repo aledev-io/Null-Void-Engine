@@ -221,7 +221,7 @@ def save_note():
     if "id" not in data:
         return jsonify(error="Falta ID de la nota"), 400
 
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     # El contenido de la nota se persiste como archivo en <DATA_DIR>/ai/<uid>/
     # (gestión cloud); en la BD solo queda la FK.
     content = data.get("content", "")
@@ -235,13 +235,13 @@ def save_note():
     data["user_id"] = owner_uid
     file_id = (storage or {}).get("file_id")
     if file_id:
-        updated = cloud_services.ai_update_file_by_uid(owner_uid, file_id, content.encode("utf-8"), check_quota=True)
+        updated = store.ai_update_file_by_uid(owner_uid, file_id, content.encode("utf-8"), check_quota=True)
         if isinstance(updated, dict) and "error" in updated:
             return jsonify(error=updated["error"]), 400
         if updated is None:
             return jsonify(error="Archivo de la nota no encontrado"), 404
     else:
-        ref = cloud_services.ai_save_file_uid(owner_uid,
+        ref = store.ai_save_file_uid(owner_uid,
                                               repository.note_filename_for_title(data.get("title")),
                                               content.encode("utf-8"), check_quota=True)
         if isinstance(ref, dict) and "error" in ref:
@@ -261,8 +261,8 @@ def delete_note(note_id):
         return jsonify(error="No autorizado"), 401
     owner_uid, file_id = repository.delete_note(note_id, uid)
     if owner_uid and file_id:
-        from modules.api.cloud import services as cloud_services
-        cloud_services.ai_delete_files_by_uid(owner_uid, [file_id])
+        from modules.storage import store
+        store.ai_delete_files_by_uid(owner_uid, [file_id])
     return jsonify(ok=True)
 
 @ai_bp.route("/api/ai/notes/share", methods=["POST"])
@@ -545,8 +545,8 @@ def upload_ai_attachment():
     file.seek(0)
     if size > 64 * 1024 * 1024:
         return jsonify(error="El archivo supera el límite de 64MB"), 400
-    from modules.api.cloud import services as cloud_services
-    ref = cloud_services.ai_save_file(token, file.filename, file.read(), username, uid)
+    from modules.storage import store
+    ref = store.ai_save_file(token, file.filename, file.read(), username, uid)
     if "error" in ref:
         return jsonify(error=ref["error"]), 400
     return jsonify(ref), 201
@@ -557,8 +557,8 @@ def list_ai_attachments():
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    from modules.api.cloud import services as cloud_services
-    return jsonify(cloud_services.ai_list_files(_ai_token())), 200
+    from modules.storage import store
+    return jsonify(store.ai_list_files(_ai_token())), 200
 
 
 @ai_bp.route("/api/ai/attachments/<path:name>", methods=["GET"])
@@ -566,8 +566,8 @@ def download_ai_attachment(name):
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    from modules.api.cloud import services as cloud_services
-    path = cloud_services.ai_download_file(_ai_token(), name)
+    from modules.storage import store
+    path = store.ai_download_file(_ai_token(), name)
     if not path:
         return jsonify(error="Archivo no encontrado"), 404
     return send_file(path, as_attachment=False, download_name=os.path.basename(name), conditional=True)
@@ -578,8 +578,8 @@ def delete_ai_attachment(name):
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    from modules.api.cloud import services as cloud_services
-    if not cloud_services.ai_delete_file(_ai_token(), name):
+    from modules.storage import store
+    if not store.ai_delete_file(_ai_token(), name):
         return jsonify(error="Archivo no encontrado"), 404
     return jsonify(success=True), 200
 
@@ -596,7 +596,7 @@ def generate_ai_file():
     filename = data.get("filename")
     if not filename:
         return jsonify(error="Falta el nombre del archivo"), 400
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     import base64
     if data.get("data") is not None:
         try:
@@ -613,7 +613,7 @@ def generate_ai_file():
             payload = bytes(content)
         else:
             return jsonify(error="content debe ser texto o bytes"), 400
-    ref = cloud_services.ai_save_file(token, filename, payload, username, uid)
+    ref = store.ai_save_file(token, filename, payload, username, uid)
     if "error" in ref:
         return jsonify(error=ref["error"]), 400
     return jsonify(ref), 201
@@ -661,8 +661,8 @@ def export_conversation():
     import time
     filename = f"{safe}_{time.strftime('%Y%m%d_%H%M%S')}.{fmt}"
 
-    from modules.api.cloud import services as cloud_services
-    ref = cloud_services.ai_save_file(token, filename, body.encode("utf-8"), username, uid)
+    from modules.storage import store
+    ref = store.ai_save_file(token, filename, body.encode("utf-8"), username, uid)
     if "error" in ref:
         return jsonify(error=ref["error"]), 400
     ref["content"] = body
@@ -688,8 +688,8 @@ def export_note():
         return jsonify(error="Nota no encontrada"), 404
     body = f"# {note.get('title') or 'Sin título'}\n\n{note.get('content') or ''}"
 
-    from modules.api.cloud import services as cloud_services
-    ref = cloud_services.ai_save_file(token, repository.note_filename_for_title(note.get('title')),
+    from modules.storage import store
+    ref = store.ai_save_file(token, repository.note_filename_for_title(note.get('title')),
                                       body.encode("utf-8"), username, uid)
     if "error" in ref:
         return jsonify(error=ref["error"]), 400

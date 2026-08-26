@@ -3,8 +3,15 @@ import shutil
 import uuid
 from datetime import datetime
 from core.database import get_db
-from modules.api.cloud import get_view_root
+from modules.storage import store
 from .parsers import parse_pdf, parse_pdf_date
+
+# Alias de módulo para resolver la vista de negocio a través del Storage
+# Contract. Se mantiene como atributo de módulo (y no se llama vía `store.`)
+# para conservar la compatibilidad/inyección en tests que hacen
+# monkeypatch.setattr(inv_services, "get_view_root", ...) y para que las
+# llamadas internas pasen por globals() y sean parcheables.
+get_view_root = store.get_view_root
 
 MONTHS_ES = (
     "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
