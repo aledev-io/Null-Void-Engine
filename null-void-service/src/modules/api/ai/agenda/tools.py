@@ -510,6 +510,175 @@ def strip_text_tool_calls(text: str) -> str:
     return clean
 
 
+# ─── Detección determinista de campos de creación incompletos ────────────────
+
+# Exenciones de la exigencia de fecha: jornada ('he trabajado' = hoy) y planes
+# de estudio (las fechas derivan del examen real inyectado), además de la
+# delegación de la fecha al sistema y respuestas de confirmación.
+_DATE_GATE_EXEMPT_RE = re.compile(
+    r"trabaj(?:é|e|ado)|worked|had\s+work|"
+    r"plan\s+de\s+estudio|study\s+plan|sesiones?\s+de\s+estudio|preparar(?:me)?\s+para|"
+    r"reparte|repartir\s+el\s+plan|"
+    r"la\s+fecha\s+que\s+(?:quieras|prefieras|elijas)|el\s+d[ií]a\s+que\s+(?:quieras|prefieras|elijas)|"
+    r"cuando\s+quieras|elige\s+t[úu]|(?:any|whatever)\s+(?:date|day)|you\s+choose|you\s+decide|"
+    r"the\s+(?:date|day)\s+you\s+want|"
+    r"\b(?:s[ií]|vale|ok|okay|yes|sure|yep|claro|por\s+supuesto|adelante|hazlo|cr[ée]alos|contin[úu]a|do\s+it|go\s+ahead)\b|"
+    r"usa\s+(?:el\s+)?json|herramienta|tool",
+    re.IGNORECASE,
+)
+
+# El usuario delega la elección de la fecha ("en la fecha que quieras",
+# "cuando quieras", "you choose"...): no debe bloquearse, se usa el día de hoy.
+_DATE_DELEGATED_RE = re.compile(
+    r"la\s+fecha\s+que\s+(?:quieras|prefieras|elijas)|el\s+d[ií]a\s+que\s+(?:quieras|prefieras|elijas)|"
+    r"cuando\s+quieras|elige\s+t[úu]|fecha\s+a\s+tu\s+elecci[oó]n|"
+    r"(?:any|whatever)\s+(?:date|day)|whenever\s+you\s+want|you\s+choose|you\s+decide|"
+    r"the\s+(?:date|day)\s+you\s+want",
+    re.IGNORECASE,
+)
+
+# Cualquier mención de día/fecha en un mensaje (para no pedir datos que ya
+# están en el texto).
+DATE_MSG_RE = re.compile(
+    r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|"
+    r"\b(?:hoy|ma[ñn]ana|ayer|today|tomorrow|yesterday)\b|"
+    r"pasado\s+ma[ñn]ana|day\s+after\s+tomorrow|"
+    r"\b(?:lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|"
+    r"(?:el|para\s+el|on\s+(?:the\s+)?|del\s+|desde\s+el\s+)?\d{1,2}(?:\s+de|\s+al|\b(?:st|nd|rd|th)?\b)|"
+    r"semana\s+(?:que\s+viene|siguiente|pr[oó]xima)|next\s+week|this\s+week|"
+    r"\b(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b|"
+    r"fin\s+de\s+semana|finde|weekend|este\s+mes|pr[oó]ximo\s+mes|this\s+month|next\s+month",
+    re.IGNORECASE,
+)
+
+# El verbo de agenda debe ser la primera palabra significativa del mensaje.
+_VERB_FIRST_ES = re.compile(
+    r"^[\s¿¡!?.,;:]*"
+    r"(?:por\s+favor\s+|puedes\s+|me\s+puedes\s+|podr[ií]as\s+)?"
+    r"(créa(?:r)?(?:me)?|crea(?:r)?(?:me)?|hazme|hacer(?:me)?|pon(?:me)?|anota(?:me)?|"
+    r"ap[úu]nta(?:me)?|gu[áa]rda(?:r)?|agenda|apunta|registra|a[ñn]ade(?:me)?|anade(?:me)?|"
+    r"borra|elimina|marca|(?:he\s+)?trabaj(?:\u00e9|e|ado))\b",
+    re.IGNORECASE,
+)
+_VERB_FIRST_EN = re.compile(
+    r"^[\s¿¡!?.,;:]*"
+    r"(?:please\s+|can you\s+|could you\s+|can we\s+|may I\s+)?"
+    r"(?:i\s+)?(?:worked|work|had work)|(create|make|add|set|plan|schedule|book|remind|put|delete|remove|complete)\b",
+    re.IGNORECASE,
+)
+
+_DATE_PREFIX_RE = re.compile(
+    r"^(?:(?:el|the|on|para|por)\s+)?"
+    r"(?:(?:lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+|"
+    r"(?:hoy|ma[ñn]ana|tomorrow|today)\s+|"
+    r"pasado\s+ma[ñn]ana\s+|day\s+after\s+tomorrow\s+|"
+    r"\d{1,2}\s+de\s+[a-záéíóúñ]+\s+|"
+    r"(?:la\s+)?semana\s+(?:que\s+viene|siguiente|pr[oó]xima)\s+|"
+    r"next\s+week\s+)",
+    re.IGNORECASE,
+)
+
+_AGENDA_VERBS = re.compile(
+    r"^\s*(?:por favor\s*)?(?:puedes\s*)?(?:crea(?:r)?(?:me)?\s*|créa(?:r)?(?:me)?\s*|"
+    r"a[ñn]ade(?:me)?\s*|a[ñn]adir\s*|registra(?:r)?\s*|apunta\s*|"
+    r"agenda\s*|hazme\s*|hacer(?:me)?\s*|pon(?:me)?\s*|anota(?:me)?\s*|"
+    r"ap[úu]nta(?:me)?\s*|gu[áa]rda(?:r)?\s*|(?:he\s+)?trabaj(?:\u00e9|e|ado)\s+)(?:una|un|el|la|los|las)?\s*(?:evento|tarea|recordatorio)?\s*"
+    r"(?:para\s+|por\s+)?",
+    re.IGNORECASE,
+)
+_TITLE_TRAIL_RE = re.compile(
+    r"\s*(?:para\s+)?(?:el\s+)?(?:d[ií]a\s+)?(?:hoy|ma[ñn]ana|pasado\s+ma[ñn]ana|(?:lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo))\s*"
+    r"|(?:el\s+)?\d{1,2}\s+de\s+[a-záéíóúñ]+\s*(?:de\s+\d{2,4})?\s*"
+    r"|(?:el\s+)?\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\s*"
+    r"|\d{4}-\d{1,2}-\d{1,2}\s*"
+    r"|(?:a\s+)?(?:las|la|a)\s+\d{1,2}[:.]\d{2}\s*"
+    r"|(?:a\s+)?\d{1,2}\s*(?:h(?!oras?|rs?)\b|horas?|pm|am)\s*"
+    r"|(?:de|desde|a|hasta)\s+(?:las|la)\s+\d{1,2}[:.]?\d{0,2}\s*"
+    r"|(?:un|una)\s+(?:evento|tarea|recordatorio)\s*(?:para\s+|en\s+|a\s+)?[:;,.]?\s*"
+    r"|\s*[:;,]\s*"
+    r"|(?:la\s+)?semana\s+(?:que\s+viene|siguiente|pr[oó]xima)\s*|next\s+week\s*|\s+$",
+    re.IGNORECASE,
+)
+_EN_VERBS = re.compile(
+    r"^\s*(?:please\s+)?(?:can you\s+)?(?:create|make|add|set|plan|schedule|book|remind|put|log|register)\s+"
+    r"(?:an?\s+)?(?:event|task|reminder|appointment)?\s*(?:for\s+|on\s+|at\s+)?",
+    re.IGNORECASE,
+)
+_EN_TITLE_TRAIL_RE = re.compile(
+    r"\s*(?:on|for|at)\s+(?:the\s+)?(?:day\s+)?(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*"
+    r"|\s*(?:on|for)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s+of)?\s+[a-z]+\s*(?:\d{2,4})?\s*"
+    r"|\d{4}-\d{1,2}-\d{1,2}\s*"
+    r"|(?:at\s+)\d{1,2}[:.]\d{2}\s*|\s+$",
+    re.IGNORECASE,
+)
+
+
+def _extract_create_title(src: str, lang: str) -> str:
+    """Título del evento/tarea tras quitar verbos, fechas, horas y conectores.
+    Devuelve '' si el mensaje no aporta ningún título."""
+    src = src or ""
+    if lang == "en":
+        title = _EN_VERBS.sub("", src)
+        title = _EN_TITLE_TRAIL_RE.sub(" ", title)
+        return re.sub(r"\s+", " ", title).strip(" .,;:¿?¡!-")
+    title = re.sub(r"^(?:tengo|hay)\s+(?:un|una)\s+", "", src, flags=re.IGNORECASE)
+    title = _AGENDA_VERBS.sub("", title)
+    title = re.sub(r"(?:de|desde|entre)\s+(\d{1,2}[:.]\d{2})\s+(?:a|hasta|y)\s+(?:las|la)?\s*(\d{1,2}[:.]\d{2})", " ", title, flags=re.IGNORECASE)
+    title = re.sub(r"\d{1,2}[:.]\d{2}", " ", title)
+    title = _TITLE_TRAIL_RE.sub(" ", title)
+    title = re.sub(
+        r"\bque\s+(?:me\s+)?(?:se\s+)?(?:llame|llaman|sea|ser[áa]|es)\s+",
+        " ", title, flags=re.IGNORECASE)
+    title = re.sub(
+        r"\b(?:llamad[oa]s?\s*[=:]?\s*|titulad[oa]s?\s*[=:]?\s*|called\s+|named\s+)",
+        " ", title, flags=re.IGNORECASE)
+    title = re.sub(r"\s+", " ", title).strip(" .,;:¿?¡!-«»\"'“”‘’")
+    title = re.sub(r"[\"'”’«»]+", "", title).strip()
+    title = re.sub(
+        r"\s*(?:ap[úu]?ntalo|an[óo]?talo|gu[áa]rdalo|registr[áa]?lo)?\s*(?:en\s+el\s+calendario|en\s+la\s+agenda)?\s*$",
+        "", title, flags=re.IGNORECASE).strip()
+    title = re.sub(
+        r"\s+(?:para|a|en|el|la|los|las|ap[úu]?ntalo|an[óo]?talo|gu[áa]rdalo|"
+        r"registr[áa]?lo|toma\s+nota)$",
+        "", title, flags=re.IGNORECASE).strip()
+    title = re.sub(r"\s+(?:el|la|los|las|para|en|por)?\s*(?:d[ií]a\s*)?$", "", title, flags=re.IGNORECASE).strip()
+    return title.strip(" .,;:¿?¡!-«»\"'“”‘’")
+
+
+def missing_create_fields(text: str, lang: str = "es") -> Optional[Dict[str, Any]]:
+    """Detecta un intento de CREAR evento/tarea y qué campos obligatorios
+    faltan en el mensaje. Devuelve None si no aplica (consulta, borrado,
+    jornada, plan de estudio...) o {'kind', 'missing'} con los campos
+    ausentes de ['title', 'date'] (la hora es opcional)."""
+    src = (text or "").strip()
+    if not src:
+        return None
+    if _DATE_GATE_EXEMPT_RE.search(src):
+        return None
+    s = _DATE_PREFIX_RE.sub("", src, count=1)
+    if lang == "en":
+        if not _VERB_FIRST_EN.match(s):
+            return None
+    elif not _VERB_FIRST_ES.match(s):
+        return None
+    if re.search(r"borra(?:r)?|elimina(?:r)?|quita(?:r)?|quitar|delete|remove|"
+                 r"marcar\s+como\s+completad|completar|mark\s+(?:as\s+)?(?:complete|completed|done)",
+                 src, re.IGNORECASE):
+        return None
+    is_task = bool(re.search(r"\btarea\b|\btareas\b", src, re.IGNORECASE)) and \
+        not re.search(r"\bevento\b|\beventos\b|\bcita\b", src, re.IGNORECASE)
+    missing = []
+    if not _extract_create_title(src, lang):
+        missing.append("title")
+    if not DATE_MSG_RE.search(src) and not _DATE_DELEGATED_RE.search(src):
+        missing.append("date")
+    if not missing:
+        return None
+    return {"kind": "task" if is_task else "event", "missing": missing}
+
+
 def parse_user_event_request(text: str, lang: str = "es", uid: Optional[str] = None) -> Optional[Tuple[str, Dict[str, Any]]]:
     src = (text or "").strip()
     if not src:

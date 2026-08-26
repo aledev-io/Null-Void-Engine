@@ -916,6 +916,7 @@ def stream_chat(uid: Optional[str], data: dict):
             skip_model = False
             delete_not_found = False
             del_all_count = None
+            missing_fields = None
 
             if not agenda_disabled and re.search(r"borra(?:r)?|elimina(?:r)?|quita(?:r)?|quitar|\bdelete\b|\bremove\b", last_user_text, re.IGNORECASE):
                 skip_model = True
@@ -940,6 +941,17 @@ def stream_chat(uid: Optional[str], data: dict):
                         _del_result, _exec = _run_tool_once(executed_tool_calls, "delete_event", {"id": _del_call[1]["id"]}, uid, last_user_text)
                     else:
                         delete_not_found = True
+
+            # Petición de creación incompleta: el usuario quiere crear un
+            # evento/tarea pero no dio título y/o fecha. Se pregunta por lo
+            # que falta SIN pasar por el modelo (determinista y garantizado).
+            if not agenda_disabled and agenda_intent and not skip_model:
+                try:
+                    missing_fields = tools.missing_create_fields(last_user_text, user_lang)
+                except Exception:
+                    missing_fields = None
+                if missing_fields:
+                    skip_model = True
 
             if (is_external and external_api_key and last_user_text and not skip_model):
                 if not agenda_disabled:
@@ -1244,7 +1256,25 @@ def stream_chat(uid: Optional[str], data: dict):
                 break
 
             if skip_model:
-                if delete_not_found:
+                if missing_fields:
+                    _parts_es = {
+                        "title": "el nombre (¿cómo se llama?)",
+                        "date": "el día (¿para qué día lo pongo?)",
+                    }
+                    _parts_en = {
+                        "title": "the name (what should it be called?)",
+                        "date": "the day (what day should I set it for?)",
+                    }
+                    _parts = _parts_en if user_lang == "en" else _parts_es
+                    _p = " y ".join([_parts[k] for k in missing_fields["missing"]])
+                    _kind = "la tarea" if missing_fields["kind"] == "task" else "el evento"
+                    _kind_en = "the task" if missing_fields["kind"] == "task" else "the event"
+                    msg = (
+                        f"I could not create {_kind_en}: I'm missing {_p}."
+                        if user_lang == "en" else
+                        f"No he podido crear {_kind}: me falta {_p}."
+                    )
+                elif delete_not_found:
                     msg = "No he encontrado ese evento en tu agenda." if user_lang != "en" else "I could not find that event in your calendar."
                 elif del_all_count is not None:
                     if del_all_count:
@@ -1277,9 +1307,10 @@ def stream_chat(uid: Optional[str], data: dict):
                 if _priv_ctx is not None and _priv_ctx.mapping and text:
                     text = privacy.unmask(text, _priv_ctx.mapping)
                 try:
-                    if cancelled:
-                        repository.save_message(uid, session_id, "assistant", "", model, cancelled=True)
-                    else:
+                    # Cancelación explícita: la BD NO persiste interrupciones.
+                    # Sin mensaje assistant (ni siquiera vacío con cancelled=True);
+                    # el frontend recupera el marcador desde almacenamiento local.
+                    if not cancelled:
                         if worker_error:
                             err_suffix = f"\n\n*Error: {worker_error}*"
                             text = (text + err_suffix) if text else err_suffix

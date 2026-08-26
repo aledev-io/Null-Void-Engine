@@ -432,7 +432,7 @@ def _consume_job(q, future, cancel_event, zip_path):
 
 
 # Worker de compresión que ejecuta la tarea pesada en un hilo secundario.
-def _stream_worker(zip_path, entries, manifest_json, user_id, dest_mode, cloud_path,
+def _stream_worker(zip_path, entries, manifest_json, user_id, dest_mode,
                    backup_type, since_ms, zip_name, total, q, cancel_event):
     try:
         os.makedirs(os.path.dirname(zip_path), exist_ok=True)
@@ -441,7 +441,7 @@ def _stream_worker(zip_path, entries, manifest_json, user_id, dest_mode, cloud_p
         if dest_mode == "cloud":
             from core.crypto_utils import encrypt_file
             encrypt_file(zip_path, zip_path)
-            _enforce_copies_limit(user_id, cloud_path, 5)
+            _enforce_copies_limit(user_id, 5)
             _qput(q, {"type": "done", "cloud": True, "zip_name": zip_name,
                       "backup_type": backup_type, "since": since_ms, "count": total}, cancel_event)
         else:
@@ -498,7 +498,7 @@ def _normalize_exclude_exts(value):
     return exts
 
 
-def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_type,
+def _cloud_stream_worker(user_id, source_paths, dest_mode, backup_type,
                          since_ms, zip_name, zip_path, q, cancel_event,
                          exclude_exts=None, exclude_paths=None):
     exclude_exts = _normalize_exclude_exts(exclude_exts)
@@ -573,7 +573,7 @@ def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_ty
         manifest_json = None
         if backup_type != "full":
             manifest_json = _build_manifest(backup_type, since_ms, [a for a, _ in all_files])
-        _stream_worker(zip_path, all_files, manifest_json, user_id, dest_mode, cloud_path,
+        _stream_worker(zip_path, all_files, manifest_json, user_id, dest_mode,
                        backup_type, since_ms, zip_name, total, q, cancel_event)
     except _BackupCancelled:
         _qput(q, {"type": "error", "message": "Operación cancelada."}, cancel_event)
@@ -595,7 +595,7 @@ def _cloud_stream_worker(user_id, source_paths, dest_mode, cloud_path, backup_ty
 
 
 # API pública (firmas y estructuras JSON inalteradas).
-def create_backup(files, dest_mode, cloud_path, token, backup_type="full"):
+def create_backup(files, dest_mode, token, backup_type="full"):
     """
     Procesa la lista de archivos enviados desde el frontend, genera un ZIP
     (en worker secundario) y lo almacena en el búnker o lo prepara para descarga.
@@ -660,7 +660,7 @@ def create_backup(files, dest_mode, cloud_path, token, backup_type="full"):
                 _safe_remove(zip_path)
                 _safe_remove(zip_path + ".tmp_enc")
                 return None, "Error al cifrar el respaldo."
-            _enforce_copies_limit(user_id, cloud_path, 5)
+            _enforce_copies_limit(user_id, 5)
             return {
                 "cloud": True,
                 "zip_name": zip_name,
@@ -678,7 +678,7 @@ def create_backup(files, dest_mode, cloud_path, token, backup_type="full"):
         }, None
 
 
-def create_backup_stream(file_names, upload_dir, dest_mode, cloud_path, token, backup_type="full"):
+def create_backup_stream(file_names, upload_dir, dest_mode, token, backup_type="full"):
     """
     Generador SSE que crea el ZIP en un hilo secundario y emite progreso
     periódico, dejando el event loop libre para heartbeats y peticiones HTTP.
@@ -713,7 +713,7 @@ def create_backup_stream(file_names, upload_dir, dest_mode, cloud_path, token, b
     cancel_event = threading.Event()
     q = queue.Queue(maxsize=256)
     future = _BACKUP_EXECUTOR.submit(
-        _stream_worker, zip_path, entries, manifest_json, user_id, dest_mode, cloud_path,
+        _stream_worker, zip_path, entries, manifest_json, user_id, dest_mode,
         backup_type, since_ms, zip_name, total, q, cancel_event,
     )
     try:
@@ -764,14 +764,6 @@ def save_automations_config(user_id, automations):
         json.dump({"automations": automations}, f, ensure_ascii=False, indent=2)
 
 
-def load_automation_config(user_id):
-    """Compatibilidad: devuelve la primera automatización (o {} si no hay)."""
-    automations = load_automations_config(user_id)
-def save_automation_config(user_id, cfg):
-    """Compatibilidad: guarda una única configuración como lista."""
-    save_automations_config(user_id, [cfg] if isinstance(cfg, dict) else cfg)
-
-
 def get_user_backup_path(user_id, filename):
     """Obtiene la ruta de un archivo de respaldo garantizando pertenencia a user_id (Anti-IDOR)."""
     if not user_id or not filename:
@@ -793,14 +785,6 @@ def get_user_backup_path(user_id, filename):
     return None
 
 
-def get_zip_path(filename, user_id=None):
-    if user_id:
-        return get_user_backup_path(user_id, filename)
-    safe_name = os.path.basename(filename)
-    path = os.path.join(TEMP_BACKUP_DIR, safe_name)
-    return path if os.path.exists(path) else None
-
-
 def cleanup_old_temp():
     """Limpia ZIPs y .tmp huérfanos de más de 1 hora en el directorio temporal."""
     try:
@@ -817,7 +801,7 @@ def cleanup_old_temp():
         pass
 
 
-def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path,
+def create_cloud_backup_stream(user_id, source_paths, dest_mode,
                                backup_type="full", exclude_exts=None, exclude_paths=None):
     """
     Generador SSE que respalda carpetas/archivos del Cloud del usuario.
@@ -846,7 +830,6 @@ def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path,
         user_id,
         source_paths,
         dest_mode,
-        cloud_path,
         backup_type,
         since_ms,
         zip_name,
@@ -860,7 +843,7 @@ def create_cloud_backup_stream(user_id, source_paths, dest_mode, cloud_path,
     return _consume_job(q, future, cancel_event, zip_path)
 
 
-def _enforce_copies_limit(user_id, cloud_path, limit):
+def _enforce_copies_limit(user_id, limit):
     """Conserva únicamente las `limit` copias más recientes por usuario."""
     try:
         dest = backup_vault(user_id)
@@ -886,17 +869,16 @@ def run_automated_backup(user_id, cfg):
     if not source_paths:
         return {"skipped": True, "reason": "no_source_paths"}
     dest_mode = cfg.get("dest_mode", "download")
-    cloud_path = cfg.get("cloud_path", "")
     backup_type = normalize_backup_type(cfg.get("backup_type", "full"))
     limit = cfg.get("copies_limit", 5)
     exclude_exts = cfg.get("exclude_exts")
     exclude_paths = cfg.get("exclude_paths")
     events = list(create_cloud_backup_stream(
-        user_id, source_paths, dest_mode, cloud_path, backup_type,
+        user_id, source_paths, dest_mode, backup_type,
         exclude_exts, exclude_paths))
     last = events[-1] if events else {"type": "error", "message": "Sin eventos"}
     if last.get("type") == "done" and dest_mode == "cloud":
-        _enforce_copies_limit(user_id, cloud_path, limit)
+        _enforce_copies_limit(user_id, limit)
     return last
 
 

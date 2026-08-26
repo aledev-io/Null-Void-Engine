@@ -1255,9 +1255,7 @@ export async function _loadCloudFoldersForBackup() {
 
 export function _selectBkpPath(path) {
     _currentBkpPath = path || '';
-    const pathInput = document.getElementById('bkp-cloud-path');
     const display = document.getElementById('bkp-selected-path-display');
-    if (pathInput) pathInput.value = _currentBkpPath;
     if (display) display.innerText = '/' + (_currentBkpPath || ' (' + _t('my_drive') + ')');
     _refreshBkpTreeUI();
 }
@@ -1478,7 +1476,6 @@ export async function doBackup() {
             body: JSON.stringify({
                 source_paths: sourcePaths,
                 dest_mode: destMode,
-                cloud_path: '',
                 backup_type: 'full',
                 exclude_exts: _bkpManualExcludeExts,
                 exclude_paths: _bkpManualExcludePaths
@@ -1603,13 +1600,12 @@ export async function saveBkpAutomation() {
             .map(b => parseInt(b.dataset.day, 10));
         const destModeInput = document.querySelector('input[name="bkp_dest_mode"]:checked');
         const destMode = destModeInput ? destModeInput.value : 'download';
-        const cloudPath = (document.getElementById('bkp-cloud-path') || {}).value || '';
         const backupType = _getSelectedBackupType();
         const id = (_bkpAutoConfig && _bkpAutoConfig.id) ? String(_bkpAutoConfig.id) : '';
         const res = await fetch('/api/backup/automation', {
             method: 'POST',
             headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ id, name: String(name).trim(), enabled, frequency, days, time, copies_limit: copiesLimit, backup_type: backupType, dest_mode: destMode, cloud_path: cloudPath, source_paths: _bkpAutoSourcePaths, exclude_exts: _bkpAutoExcludeExts, exclude_paths: _bkpAutoExcludePaths })
+            body: JSON.stringify({ id, name: String(name).trim(), enabled, frequency, days, time, copies_limit: copiesLimit, backup_type: backupType, dest_mode: destMode, source_paths: _bkpAutoSourcePaths, exclude_exts: _bkpAutoExcludeExts, exclude_paths: _bkpAutoExcludePaths })
         });
         const data = await res.json();
         if (data.ok) {

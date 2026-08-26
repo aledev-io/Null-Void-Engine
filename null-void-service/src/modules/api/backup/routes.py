@@ -129,10 +129,9 @@ def api_backup():
         return jsonify({"ok": False, "error": "No se han seleccionado archivos."}), 400
 
     dest_mode = request.form.get("dest_mode", "download")
-    cloud_path = request.form.get("cloud_path", "").strip("/")
     backup_type = backup_service.normalize_backup_type(request.form.get("backup_type", "full"))
 
-    result, error = backup_service.create_backup(files, dest_mode, cloud_path, token, backup_type)
+    result, error = backup_service.create_backup(files, dest_mode, token, backup_type)
     if error:
         return jsonify({"ok": False, "error": error}), 400 if "inválida" in error or "Cloud" in error else 500
 
@@ -151,7 +150,6 @@ def api_backup_stream():
         return jsonify({"ok": False, "error": "No se han seleccionado archivos."}), 400
 
     dest_mode = request.form.get("dest_mode", "download")
-    cloud_path = request.form.get("cloud_path", "").strip("/")
     backup_type = backup_service.normalize_backup_type(request.form.get("backup_type", "full"))
 
     # Materializamos los archivos aquí (contexto de request vivo): los FileStorage
@@ -175,7 +173,7 @@ def api_backup_stream():
 
     def generate():
         try:
-            for evt in backup_service.create_backup_stream(saved, upload_dir, dest_mode, cloud_path, token, backup_type):
+            for evt in backup_service.create_backup_stream(saved, upload_dir, dest_mode, token, backup_type):
                 yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
         finally:
             shutil.rmtree(upload_dir, ignore_errors=True)
@@ -274,7 +272,6 @@ def api_backup_automation_post():
         "copies_limit": copies_limit,
         "backup_type": backup_type,
         "dest_mode": dest_mode,
-        "cloud_path": str(data.get("cloud_path", "")).strip("/"),
         "source_paths": source_paths,
         "exclude_exts": exclude_exts,
         "exclude_paths": exclude_paths,
@@ -409,14 +406,13 @@ def api_backup_cloud():
     if dest_mode not in ("download", "cloud"):
         dest_mode = "download"
 
-    cloud_path = str(data.get("cloud_path", "")).strip("/")
     backup_type = backup_service.normalize_backup_type(data.get("backup_type", "full"))
     exclude_exts = _sanitize_exclude_exts(data)
     exclude_paths = _sanitize_exclude_paths(data)
 
     def generate():
         for evt in backup_service.create_cloud_backup_stream(
-                user_id, source_paths, dest_mode, cloud_path, backup_type,
+                user_id, source_paths, dest_mode, backup_type,
                 exclude_exts, exclude_paths):
             yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
