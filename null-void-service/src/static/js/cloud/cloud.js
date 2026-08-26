@@ -137,20 +137,44 @@ function sanitizeName(v, maxLen = 150) {
 // Fallback de avatar seguro: sustituye la <img> rota por un círculo con la
 // primera letra del usuario. Se construye con createElement/textContent para
 // no interpolar datos del usuario en HTML/strings.
-window.cloudAvatarFallback = function (img, username) {
+window.cloudAvatarFallback = function (img, username, hue) {
     if (!img || !img.parentNode) return;
     const style = img.getAttribute('style') || '';
     const size = (style.match(/width:\s*(\d+)px/) || [])[1] || '';
     const letter = String(username || '').trim().charAt(0).toUpperCase() || 'U';
     const div = document.createElement('div');
+    const bg = (hue !== undefined && hue !== null && !isNaN(hue))
+        ? `hsl(${Math.round(hue)}, 65%, 45%)`
+        : 'var(--indigo, #6366f1)';
     div.style.cssText = style.replace(/width:\s*[^;]+;?/, '')
         .replace(/height:\s*[^;]+;?/, '')
         .replace(/;?\s*$/, '') +
         (size ? `; width:${size}px; height:${size}px;` : '; width:32px; height:32px;') +
-        '; border-radius:50%; background:var(--indigo, #6366f1); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:' + Math.max(9, Math.round(parseInt(size || '32') * 0.42)) + 'px;';
+        `; border-radius:50%; background:${bg}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:` + Math.max(9, Math.round(parseInt(size || '32') * 0.42)) + 'px;';
     div.textContent = letter;
     img.parentNode.replaceChild(div, img);
 };
+
+// Color determinista por usuario para el círculo de iniciales del badge.
+function cloudNameHue(name) {
+    let h = 0;
+    const s = String(name || '');
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h % 360;
+}
+
+// Avatar del propietario para el badge: el círculo de inicial de color está
+// SIEMPRE detrás del <img>; si la foto carga la tapa y si falla (this.remove)
+// queda el círculo con la inicial. Nunca aparece una caja negra/blanca vacía.
+function cloudAvatarHtml(ownerId, ownerName, size) {
+    const sz = size || 20;
+    const name = String(ownerName || '').trim();
+    const letter = name.charAt(0).toUpperCase() || 'U';
+    const hue = cloudNameHue(name);
+    const id = String(ownerId || name || 'u');
+    const src = `/api/system/user/avatar/${encodeURIComponent(id)}`;
+    return `<span class="cloud-badge-avatar" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;border-radius:50%;background:hsl(${hue}, 65%, 45%);color:#fff;font-size:${Math.max(9, Math.round(sz * 0.42))}px;font-weight:600;flex-shrink:0;overflow:hidden;line-height:1;">${letter}<img src="${src}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.remove()"></span>`;
+}
 
 
 // Reintenta peticiones GET fallidas (reinicio del servidor) con backoff.
@@ -274,7 +298,7 @@ async function fetchCloudFiles(path = '', view = 'home') {
         const data = await _cloudJson(res);
         CLOUD_FILES = data.files || [];
 
-        renderCloudBreadcrumbs(path, view === 'home' ? null : (view === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (view === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
+        renderCloudBreadcrumbs(path, view === 'home' ? null : (view === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (view === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : (view === 'ai' ? window.t_cloud('nav_ai', 'IA') : null))));
 
         const query = document.getElementById('cloud-search')?.value.toLowerCase() || '';
         const closeBtn = document.getElementById('btn-close-mobile-search');
@@ -705,7 +729,7 @@ function renderCloudFiles(files, isRecent = false) {
             statusBadge = `<span style="color: #818cf8; display: inline-flex; align-items: center; margin-left: 6px;" title="Compartido"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>`;
         }
 
-        const sharedBadge = (!isMine) ? `<span class="cloud-card-shared-badge" title="${esc(ownerDisplay || '')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>${esc(ownerDisplay || '')}</span>` : '';
+        const sharedBadge = (!isMine) ? `<div class="cloud-card-shared-badge" title="${esc(ownerDisplay || '')}">${cloudAvatarHtml(f.owner_id, ownerDisplay)}<span class="cloud-badge-name">${esc(ownerDisplay || '')}</span></div>` : '';
 
         const safeClickAction = clickAction.replace(/`/g, "\\`").replace(/'/g, "\\'");
         const safeName = jsStr(f.name);
@@ -715,7 +739,7 @@ function renderCloudFiles(files, isRecent = false) {
         const sharedWithName = f.shared_with_name || '';
 
         const checkboxHtml = (currentCloudView !== 'home')
-            ? `<input type="checkbox" class="cloud-file-checkbox" onclick="event.stopPropagation(); toggleCloudFileSelection(this, \`${safeName}\`, \`${safePath}\`, ${f.is_dir}, '${f.owner_id || ''}')">`
+            ? `<label class="cloud-checkbox-hit" onclick="event.stopPropagation()"><input type="checkbox" class="cloud-file-checkbox" onclick="event.stopPropagation(); toggleCloudFileSelection(this, \`${safeName}\`, \`${safePath}\`, ${f.is_dir}, '${f.owner_id || ''}')"></label>`
             : '';
 
         const isImg = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(f.ext);
@@ -808,7 +832,7 @@ function renderCloudFiles(files, isRecent = false) {
                          onclick="${suggestedClick}">
                         <div class="card-preview">
                             ${previewContent}
-                            ${f.view === 'shared' ? `<span class="cloud-card-shared-badge" title="${esc(f.owner || '')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>${esc(f.owner || '')}</span>` : ''}
+                            ${f.view === 'shared' ? `<div class="cloud-card-shared-badge" title="${esc(f.owner || '')}">${cloudAvatarHtml(f.owner_id, f.owner)}<span class="cloud-badge-name">${esc(f.owner || '')}</span></div>` : ''}
                         </div>
                         <div class="card-info">
                             <span class="card-name">${highlightMatch(f.name, window._cloudSearchQuery)}</span>
@@ -909,6 +933,10 @@ function renderCloudFiles(files, isRecent = false) {
             const name = row.getAttribute('data-name');
             const isDir = row.getAttribute('data-is-dir') === 'true';
             const path = row.getAttribute('data-path');
+
+            // En móvil el drag&drop no aplica y puede interferir con el
+            // long-press de selección: se desactiva por completo.
+            if (_cloudIsMobile()) return;
 
             row.setAttribute('draggable', 'true');
 
@@ -1147,6 +1175,8 @@ function handleCloudNavClick(el, section) {
         fetchCloudFiles('', 'backups');
     } else if (section === 'business') {
         fetchCloudFiles('', 'business');
+    } else if (section === 'ai') {
+        fetchCloudFiles('', 'ai');
     } else if (section === 'starred') {
         fetchCloudFiles('', 'starred');
     } else if (section === 'trash') {
@@ -1160,11 +1190,18 @@ function handleCloudNavClick(el, section) {
     }
 }
 
-function showCloudNewMenu(e) {
+function showCloudNewMenu(e, anchor) {
     e.stopPropagation();
     const menu = document.getElementById('cloud-new-menu');
-    const btn = e.currentTarget;
+    const btn = anchor || e.currentTarget;
+    const fab = document.getElementById('cloud-fab');
     const rect = btn.getBoundingClientRect();
+
+    if (menu.style.display === 'block') {
+        menu.style.display = 'none';
+        if (fab) fab.classList.remove('open');
+        return;
+    }
 
     if (currentCloudView === 'computers' && currentCloudPath === '') {
         menu.innerHTML = `
@@ -1187,12 +1224,23 @@ function showCloudNewMenu(e) {
     }
 
     menu.style.display = 'block';
-    menu.style.left = rect.left + 'px';
-    menu.style.top = (rect.bottom + 8) + 'px';
+    menu.style.visibility = 'hidden';
+    const menuHeight = menu.offsetHeight;
+    menu.style.visibility = 'visible';
+    if (anchor) {
+        // FAB: el menú se despliega hacia arriba, anclado a la derecha
+        menu.style.left = Math.max(12, Math.min(rect.right - 200, window.innerWidth - 212)) + 'px';
+        menu.style.top = Math.max(12, rect.top - menuHeight - 14) + 'px';
+    } else {
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 8) + 'px';
+    }
+    if (fab) fab.classList.add('open');
 
     const closeMenu = () => {
         menu.style.display = 'none';
         window.removeEventListener('click', closeMenu);
+        if (fab) fab.classList.remove('open');
     };
     setTimeout(() => window.addEventListener('click', closeMenu), 10);
 }
@@ -1855,8 +1903,89 @@ async function emptyCloudTrash() {
     } catch (err) { }
 }
 
-async function toggleCloudProtect(name, path, fileView = null) {
-    try {
+// Protege/desprotege TODOS los elementos seleccionados: si toda la selección
+// está protegida, los desprotege; en caso contrario, protege los que no lo
+// están (los ya protegidos se mantienen).
+async function protectSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+    const allProtected = SELECTED_CLOUD_ITEMS.every(it => it.row && it.row.getAttribute('data-protected') === 'true');
+    const unprotecting = allProtected;
+    const items = SELECTED_CLOUD_ITEMS.filter(it => {
+        const isProt = !!(it.row && it.row.getAttribute('data-protected') === 'true');
+        return unprotecting ? isProt : !isProt;
+    });
+    if (items.length === 0) {
+        clearCloudSelection();
+        return;
+    }
+
+    showCloudProgressToast(window.currentLang === 'en'
+        ? (unprotecting ? 'Unprotecting selected items...' : 'Protecting selected items...')
+        : (unprotecting ? 'Desprotegiendo elementos seleccionados...' : 'Protegiendo elementos seleccionados...'));
+
+    let ancestorBlocked = false;
+    for (const it of items) {
+        try {
+            const res = await fetch('/api/cloud/toggle_protect', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({ name: it.name, path: it.path || '', view: currentCloudView })
+            });
+            if (res.ok) continue;
+            const data = await _cloudJson(res);
+            if (data && data.error === 'protected_ancestor') {
+                ancestorBlocked = true;
+            }
+        } catch (err) { }
+    }
+    hideCloudProgressToast();
+
+    if (ancestorBlocked) {
+        await NV_Alert(window.t_cloud('cloud_protect_ancestor', window.currentLang === 'en'
+            ? 'Some items are inside a protected folder. Unprotect that folder first.'
+            : 'Algunos elementos están dentro de una carpeta protegida. Desprotege primero esa carpeta.'));
+    }
+
+    clearCloudSelection();
+    fetchCloudFiles(currentCloudPath, currentCloudView);
+}
+
+// Destaca/quita de destacados TODOS los elementos seleccionados: si toda la
+// selección está destacada, los quita; en caso contrario, destaca los que no
+// lo están (los ya destacados se mantienen).
+async function starSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+    const allStarred = SELECTED_CLOUD_ITEMS.every(it => it.row && it.row.getAttribute('data-starred') === 'true');
+    const unstarring = allStarred;
+    const items = SELECTED_CLOUD_ITEMS.filter(it => {
+        const isStar = !!(it.row && it.row.getAttribute('data-starred') === 'true');
+        return unstarring ? isStar : !isStar;
+    });
+    if (items.length === 0) {
+        clearCloudSelection();
+        return;
+    }
+
+    for (const it of items) {
+        try {
+            await fetch('/api/cloud/toggle_star', {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({
+                    name: it.name,
+                    path: it.path || '',
+                    view: currentCloudView,
+                    owner_id: it.ownerId || null
+                })
+            });
+        } catch (err) { }
+    }
+
+    clearCloudSelection();
+    fetchCloudFiles(currentCloudPath, currentCloudView);
+}
+
+async function toggleCloudProtect(name, path, fileView = null) {    try {
         const view = fileView || currentCloudView;
         const res = await fetch('/api/cloud/toggle_protect', {
             method: 'POST',
@@ -1996,6 +2125,10 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
                 closeCloudPreview();
                 await NV_Alert(window.t_cloud('access_revoked', 'Te han quitado el acceso a este archivo.'));
                 loadCloudFiles();
+            } else if (data.error === 'shared_file_gone') {
+                closeCloudPreview();
+                await NV_Alert(window.t_cloud('shared_file_gone', 'El dueño se ha deshecho del archivo.'));
+                loadCloudFiles();
             } else {
                 await NV_Alert(data.error || window.t_cloud('err_token', 'Error al generar token de acceso.'));
             }
@@ -2008,7 +2141,10 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
             openCloudPreview(name, url, path, ownerId, fileView, ownerName, isShared);
         } else {
             const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const downloadUrl = url + (forceDownload ? '&dl=1' : '');
+            // En WebView/Android la navegación directa a un binario inline falla
+            // (intenta renderizarlo). Forzar Content-Disposition: attachment
+            // para que el download listener de la app lo capture.
+            const downloadUrl = url + (forceDownload || isMobile ? '&dl=1' : '');
             if (isMobile) {
                 window.location.href = downloadUrl;
             } else {
@@ -2125,6 +2261,8 @@ window.openCloudMultiPreview = async function () {
             if (!data.t) {
                 if (data.error === 'access_revoked') {
                     await NV_Alert(window.t_cloud('access_revoked', 'Te han quitado el acceso a un archivo.'));
+                } else if (data.error === 'shared_file_gone') {
+                    await NV_Alert(window.t_cloud('shared_file_gone', 'El dueño se ha deshecho del archivo.'));
                 }
                 continue;
             }
@@ -2382,6 +2520,20 @@ function setCloudDeleteVisible(visible) {
     if (sep) sep.style.display = visible ? 'block' : 'none';
 }
 
+// Estado de selección múltiple para el menú contextual: indica si el
+// elemento pulsado forma parte de una selección activa y si toda la
+// selección está destacada/protegida.
+function _ctxMultiSelectionState() {
+    const inMulti = SELECTED_CLOUD_ITEMS.length > 1
+        && !!currentCloudContextItem
+        && SELECTED_CLOUD_ITEMS.some(it => it.name === currentCloudContextItem.name && (it.path || '') === (currentCloudContextItem.path || ''));
+    const allStarred = inMulti
+        && SELECTED_CLOUD_ITEMS.every(it => it.row && it.row.getAttribute('data-starred') === 'true');
+    const allProtected = inMulti
+        && SELECTED_CLOUD_ITEMS.every(it => it.row && it.row.getAttribute('data-protected') === 'true');
+    return { inMulti, allStarred, allProtected };
+}
+
 function handleCloudAction(e, name, isDir, overridePath = null) {
     e.stopPropagation();
     e.preventDefault();
@@ -2505,26 +2657,41 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
         const unshareBtn = document.getElementById('ctx-unshare-btn');
         if (unshareBtn) unshareBtn.style.display = 'none';
 
+        // Selección múltiple: si el elemento pulsado forma parte de una
+        // selección activa, las etiquetas de Destacar/Proteger reflejan el
+        // estado de TODA la selección (y la acción se aplica a todos).
+        const _multi = _ctxMultiSelectionState();
+        const isStarredFinal = _multi.inMulti ? _multi.allStarred : isStarred;
+
         // Destacados dinámicos
         document.getElementById('ctx-star-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
         const starText = document.getElementById('ctx-star-text');
         if (starText) {
-            starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
-            starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+            starText.setAttribute('data-i18n', isStarredFinal ? 'ctx_unstar' : 'ctx_star');
+            starText.innerText = isStarredFinal ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
         }
 
         // Protección dinámicos
         document.getElementById('ctx-protect-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash') ? 'none' : 'block';
         const protectText = document.getElementById('ctx-protect-text');
         const protectIcon = document.getElementById('ctx-protect-icon');
+        const isProtectedFinal = _multi.inMulti ? _multi.allProtected : isProtected;
         if (protectText) {
-            protectText.setAttribute('data-i18n', isProtected ? 'ctx_unprotect' : 'ctx_protect');
-            protectText.innerText = isProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
+            protectText.setAttribute('data-i18n', isProtectedFinal ? 'ctx_unprotect' : 'ctx_protect');
+            protectText.innerText = isProtectedFinal ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
         }
-        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!isProtected);
+        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!isProtectedFinal);
 
         // Movimientos
         document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash' || isProtected) ? 'none' : 'block';
+    }
+
+    // Selección múltiple: Info y Renombrar no aplican a varios elementos
+    if (_ctxMultiSelectionState().inMulti) {
+        const _rnBtn = document.getElementById('ctx-rename-btn');
+        const _infoBtn = document.getElementById('ctx-info-btn');
+        if (_rnBtn) _rnBtn.style.display = 'none';
+        if (_infoBtn) _infoBtn.style.display = 'none';
     }
 
     // Despliegue del panel del menú
@@ -2933,6 +3100,16 @@ document.addEventListener('contextmenu', function (e) {
                         return;
                     }
 
+                    // El long-press propio (pointerdown, 340ms) ya gestionó la
+                    // selección: el contextmenu del navegador (~500ms) no debe
+                    // re-alternar el checkbox.
+                    if (_cloudLongPress && _cloudLongPress.lastFiredAt
+                        && (Date.now() - _cloudLongPress.lastFiredAt) < 900
+                        && _cloudLongPress.row === row) {
+                        if (menu) menu.style.display = 'none';
+                        return;
+                    }
+
                     const name = row.getAttribute('data-name');
                     const path = row.getAttribute('data-path');
                     const isDir = row.getAttribute('data-is-dir') === 'true';
@@ -3022,13 +3199,14 @@ document.addEventListener('contextmenu', function (e) {
 
                         document.getElementById('ctx-organize-btn').style.display = 'block';
                         const noMoveViews = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred');
-                        document.getElementById('ctx-move-btn').style.display = (noMoveViews || !isMineRow || itemProtected) ? 'none' : 'block';
-                        document.getElementById('ctx-copy-btn').style.display = 'block';
+                        const noOrganizeAi = currentCloudView === 'ai';
+                        document.getElementById('ctx-move-btn').style.display = (noMoveViews || noOrganizeAi || !isMineRow || itemProtected) ? 'none' : 'block';
+                        document.getElementById('ctx-copy-btn').style.display = noOrganizeAi ? 'none' : 'block';
 
                         const zipBtn = document.getElementById('ctx-zip-btn');
                         const unzipBtn = document.getElementById('ctx-unzip-btn');
-                        if (zipBtn) zipBtn.style.display = (noMoveViews || !isMineRow) ? 'none' : 'flex';
-                        if (unzipBtn) unzipBtn.style.display = (!isMineRow || !name || !name.toLowerCase().endsWith('.zip')) ? 'none' : 'flex';
+                        if (zipBtn) zipBtn.style.display = (noMoveViews || noOrganizeAi || !isMineRow) ? 'none' : 'flex';
+                        if (unzipBtn) unzipBtn.style.display = (noOrganizeAi || !isMineRow || !name || !name.toLowerCase().endsWith('.zip')) ? 'none' : 'flex';
 
                         document.getElementById('ctx-info-btn').style.display = 'block';
 
@@ -3043,19 +3221,23 @@ document.addEventListener('contextmenu', function (e) {
                         currentCloudContextItem = { name, path, isDir, starred: isStarred, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), sharedWith: sharedWith };
                         itemActions.style.display = 'block';
 
+                        const _multi = _ctxMultiSelectionState();
+                        const isStarredFinal = _multi.inMulti ? _multi.allStarred : isStarred;
+                        const isProtectedFinal = _multi.inMulti ? _multi.allProtected : itemProtected;
+
                         const starText = document.getElementById('ctx-star-text');
-                        starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
-                        starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+                        starText.setAttribute('data-i18n', isStarredFinal ? 'ctx_unstar' : 'ctx_star');
+                        starText.innerText = isStarredFinal ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
 
                         setCloudDeleteVisible(!(noMoveViews || !isMineRow || itemProtected));
                         const protectText = document.getElementById('ctx-protect-text');
                         const protectIcon = document.getElementById('ctx-protect-icon');
 
                         if (protectText) {
-                            protectText.setAttribute('data-i18n', itemProtected ? 'ctx_unprotect' : 'ctx_protect');
-                            protectText.innerText = itemProtected ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
+                            protectText.setAttribute('data-i18n', isProtectedFinal ? 'ctx_unprotect' : 'ctx_protect');
+                            protectText.innerText = isProtectedFinal ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
                         }
-                        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!itemProtected);
+                        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!isProtectedFinal);
                     }
                 } else {
                     currentCloudContextItem = null;
@@ -3071,6 +3253,14 @@ document.addEventListener('contextmenu', function (e) {
             if (!isAllowedView && !currentCloudContextItem) {
                 menu.style.display = 'none';
                 return;
+            }
+
+            // Selección múltiple: Info y Renombrar no aplican a varios elementos
+            if (currentCloudContextItem && _ctxMultiSelectionState().inMulti) {
+                const _rnBtn = document.getElementById('ctx-rename-btn');
+                const _infoBtn = document.getElementById('ctx-info-btn');
+                if (_rnBtn) _rnBtn.style.display = 'none';
+                if (_infoBtn) _infoBtn.style.display = 'none';
             }
 
             const creationItems = Array.from(menu.children).filter(child => child.id !== 'ctx-item-actions');
@@ -3118,27 +3308,64 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
 
     const action = btn.id;
     const { name, path, isDir, trashId } = currentCloudContextItem;
+    // Selección múltiple: si el elemento pulsado forma parte de una selección
+    // activa, las acciones de descargar/mover/copiar/compartir se aplican a
+    // TODA la selección.
+    const inMultiSelection = SELECTED_CLOUD_ITEMS.length > 1
+        && SELECTED_CLOUD_ITEMS.some(it => it.name === name && (it.path || '') === (path || ''));
     switch (action) {
         case 'ctx-download-btn':
-            downloadCloudFile(name, path, true, currentCloudContextItem.ownerId || null, currentCloudContextItem.view || null);
+            if (inMultiSelection) {
+                downloadSelectedItems();
+            } else {
+                downloadCloudFile(name, path, true, currentCloudContextItem.ownerId || null, currentCloudContextItem.view || null);
+            }
             break;
         case 'ctx-rename-btn':
+            if (inMultiSelection) break;
             setTimeout(() => renameCloudItem(name, path, currentCloudContextItem.view, isDir), 50);
             break;
         case 'ctx-delete-btn':
-            setTimeout(() => deleteCloudItem(name, path, isDir, trashId, currentCloudContextItem.view || null), 50);
+            if (inMultiSelection) {
+                deleteSelectedItems();
+            } else {
+                setTimeout(() => deleteCloudItem(name, path, isDir, trashId, currentCloudContextItem.view || null), 50);
+            }
             break;
         case 'ctx-restore-btn':
             restoreCloudItem(trashId);
             break;
-        case 'ctx-star-btn':
-            toggleCloudStar(name, path, currentCloudContextItem.view || null, currentCloudContextItem.ownerId || null);
+        case 'ctx-star-btn': {
+            // Si el elemento pulsado forma parte de una selección múltiple,
+            // destacar/quitar se aplica a TODA la selección.
+            const inMultiSelection = SELECTED_CLOUD_ITEMS.length > 1
+                && SELECTED_CLOUD_ITEMS.some(it => it.name === name && (it.path || '') === (path || ''));
+            if (inMultiSelection) {
+                starSelectedItems();
+            } else {
+                toggleCloudStar(name, path, currentCloudContextItem.view || null, currentCloudContextItem.ownerId || null);
+            }
             break;
-        case 'ctx-protect-btn':
-            toggleCloudProtect(name, path, currentCloudContextItem.view || null);
+        }
+        case 'ctx-protect-btn': {
+            // Si el elemento pulsado forma parte de una selección múltiple,
+            // proteger/desproteger se aplica a TODA la selección (igual que
+            // el botón de la barra de selección múltiple).
+            const inMultiSelection = SELECTED_CLOUD_ITEMS.length > 1
+                && SELECTED_CLOUD_ITEMS.some(it => it.name === name && (it.path || '') === (path || ''));
+            if (inMultiSelection) {
+                protectSelectedItems();
+            } else {
+                toggleCloudProtect(name, path, currentCloudContextItem.view || null);
+            }
             break;
+        }
         case 'ctx-share-btn':
-            openCloudShare(name, path);
+            if (inMultiSelection) {
+                shareSelectedItems();
+            } else {
+                openCloudShare(name, path);
+            }
             break;
         case 'ctx-unshare-btn':
             handleUnshareItem(currentCloudContextItem);
@@ -3147,6 +3374,10 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
             showCloudInfo(name, path, trashId, currentCloudContextItem?.ownerId || null);
             break;
         case 'ctx-move-btn':
+            if (inMultiSelection) {
+                moveSelectedItems();
+                break;
+            }
             if (currentCloudContextItem.protected === true) {
                 await NV_Alert(window.t_cloud('cloud_move_protected_all', window.currentLang === 'en' ? 'Protected items cannot be moved. Unprotect them first.' : 'No puedes mover los elementos protegidos. Desprotégelos primero para poder moverlos.'), window.t_cloud('confirm_action_title', 'Confirmar acción'));
                 return;
@@ -3154,6 +3385,10 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
             setTimeout(() => openCloudMove(name, path, isDir, false), 50);
             break;
         case 'ctx-copy-btn':
+            if (inMultiSelection) {
+                copySelectedItems();
+                break;
+            }
             setTimeout(() => openCloudMove(name, path, isDir, true), 50);
             break;
     }
@@ -3393,6 +3628,39 @@ function renderFolderNode(node, depth = 0) {
 }
 
 async function confirmCloudMove() {
+    if (!isMoveAction && isMultiMove) {
+        let copiedCount = 0;
+        for (const item of multiMoveItems) {
+            if (moveTargetNewPath === item.path) continue;
+            try {
+                const res = await fetch('/api/cloud/copy', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({
+                        name: item.name,
+                        new_name: item.name,
+                        old_path: item.path || '',
+                        new_path: moveTargetNewPath,
+                        view: currentCloudView,
+                        owner_id: item.ownerId || null
+                    })
+                });
+                if (res.ok) copiedCount++;
+            } catch (err) {
+                console.error("Error al copiar item en lote:", err);
+            }
+        }
+        if (copiedCount > 0) {
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            clearCloudSelection();
+            await NV_Alert(window.currentLang === "en"
+                ? `${copiedCount} item(s) copied.`
+                : `${copiedCount} elemento(s) copiados.`);
+        }
+        closeCloudMoveModal();
+        return;
+    }
+
     if (!isMoveAction) {
         if (currentCloudView !== 'shared' && moveTargetNewPath === moveTargetOldPath) {
             await NV_Alert(window.t_cloud('err_same_dest', "La carpeta de destino es igual a la carpeta actual."));
@@ -3511,6 +3779,7 @@ async function openCloudShare(name, path) {
         await NV_Alert(window.currentLang === "en" ? "Cannot share files that were shared with you." : "No puedes compartir archivos que han sido compartidos contigo.", window.currentLang === "en" ? "Restriction" : "Restricción");
         return;
     }
+    window._multiShareItems = null;
     const modal = document.getElementById('cloud-share-modal');
     document.getElementById('share-filename').innerText = name;
     document.getElementById('share-user-search').value = '';
@@ -3734,6 +4003,26 @@ function renderSelectedUsers() {
     `).join('');
 }
 
+// Comparte TODOS los elementos seleccionados: abre el modal con el primero
+// y, al confirmar, reparte los usuarios elegidos a todos los seleccionados.
+async function shareSelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+    if (currentCloudView === 'shared') {
+        await NV_Alert(window.currentLang === "en" ? "Cannot share files that were shared with you." : "No puedes compartir archivos que han sido compartidos contigo.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+    window._multiShareItems = SELECTED_CLOUD_ITEMS.slice();
+    const first = SELECTED_CLOUD_ITEMS[0];
+    openCloudShare(first.name, first.path || '');
+    const nameEl = document.getElementById('share-filename');
+    if (nameEl) {
+        const count = SELECTED_CLOUD_ITEMS.length;
+        nameEl.innerText = `${count} ` + (count === 1
+            ? window.t_cloud('selected_single', 'seleccionado')
+            : window.t_cloud('selected_plural', 'seleccionados'));
+    }
+}
+
 async function confirmCloudShare() {
     if (selectedUsersToShare.length === 0 || !currentCloudContextItem) return;
     if (currentCloudView === 'shared' || currentCloudContextItem.view === 'shared') {
@@ -3742,6 +4031,36 @@ async function confirmCloudShare() {
 
     const { name, path } = currentCloudContextItem;
     const uids = selectedUsersToShare.map(u => u.uid);
+
+    const multiItems = window._multiShareItems || null;
+    if (multiItems && multiItems.length > 1) {
+        window._multiShareItems = null;
+        let sharedCount = 0;
+        for (const it of multiItems) {
+            try {
+                const res = await fetch('/api/cloud/share', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({
+                        name: it.name,
+                        path: it.path || '',
+                        view: currentCloudView,
+                        shared_with: uids
+                    })
+                });
+                if (res.ok) sharedCount++;
+            } catch (err) { }
+        }
+        if (sharedCount > 0) {
+            closeCloudShareModal();
+            clearCloudSelection();
+            fetchCloudFiles(currentCloudPath, currentCloudView);
+            await NV_Alert(window.currentLang === "en"
+                ? `${sharedCount} item(s) shared with ${selectedUsersToShare.length} user(s).`
+                : `${sharedCount} elemento(s) compartidos con ${selectedUsersToShare.length} usuario(s).`);
+        }
+        return;
+    }
 
     try {
         const res = await fetch('/api/cloud/share', {
@@ -4013,6 +4332,100 @@ let SELECTED_CLOUD_ITEMS = [];
 let isMultiMove = false;
 let multiMoveItems = [];
 
+let _cloudLongPress = null;
+const CLOUD_LONG_PRESS_MS = 340;
+
+function _cloudIsMobile() {
+    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+function _cloudRowFrom(el) {
+    if (!el) return null;
+    return el.closest('.cloud-file-row') || el.closest('.cloud-folder-row') || el.closest('.cloud-file-card') || el.closest('.cloud-suggested-card');
+}
+
+function _cloudLongPressCancel() {
+    if (_cloudLongPress) {
+        if (_cloudLongPress.timer) {
+            clearTimeout(_cloudLongPress.timer);
+            _cloudLongPress.timer = null;
+        }
+        if (_cloudLongPress.row) _cloudLongPress.row.classList.remove('cloud-row-pressed');
+    }
+}
+
+function _cloudLongPressFired(p) {
+    p.suppressClick = true;
+    p.lastFiredAt = Date.now();
+    const row = p.row;
+    row.classList.remove('cloud-row-pressed');
+    const name = row.getAttribute('data-name');
+    const path = row.getAttribute('data-path');
+    const isDir = row.getAttribute('data-is-dir') === 'true';
+    const ownerId = row.getAttribute('data-owner-id');
+    const checkbox = row.querySelector('.cloud-file-checkbox');
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        toggleCloudFileSelection(checkbox, name, path, isDir, ownerId);
+    } else {
+        // Vistas sin checkbox (home/sugeridos): selección directa
+        const exists = SELECTED_CLOUD_ITEMS.some(it => it.name === name && (it.path || '') === (path || ''));
+        if (exists) {
+            row.classList.remove('selected');
+            SELECTED_CLOUD_ITEMS = SELECTED_CLOUD_ITEMS.filter(it => !(it.name === name && (it.path || '') === (path || '')));
+        } else {
+            row.classList.add('selected');
+            SELECTED_CLOUD_ITEMS.push({ name, path, isDir, ownerId, row });
+        }
+        updateCloudMultiSelectBar();
+    }
+    if (navigator.vibrate) {
+        try { navigator.vibrate(15); } catch (e) { }
+    }
+    setTimeout(() => {
+        if (_cloudLongPress && _cloudLongPress === p) p.suppressClick = false;
+    }, 800);
+}
+
+function initCloudMobileSelection() {
+    const list = document.getElementById('cloud-file-list');
+    if (!list) return;
+
+    list.addEventListener('pointerdown', (e) => {
+        if (!_cloudIsMobile()) return;
+        if (e.pointerType !== 'touch') return;
+        if (e.target.closest('button, input, label, .cloud-file-actions')) return;
+        const row = _cloudRowFrom(e.target);
+        if (!row) return;
+        _cloudLongPress = {
+            timer: null, row, suppressClick: false, lastFiredAt: 0,
+            startX: e.clientX, startY: e.clientY
+        };
+        row.classList.add('cloud-row-pressed');
+        const p = _cloudLongPress;
+        p.timer = setTimeout(() => _cloudLongPressFired(p), CLOUD_LONG_PRESS_MS);
+    });
+
+    list.addEventListener('pointermove', (e) => {
+        if (!_cloudLongPress || !_cloudLongPress.timer) return;
+        const dx = Math.abs(e.clientX - _cloudLongPress.startX);
+        const dy = Math.abs(e.clientY - _cloudLongPress.startY);
+        if (dx > 10 || dy > 10) _cloudLongPressCancel();
+    });
+
+    list.addEventListener('pointerup', _cloudLongPressCancel);
+    list.addEventListener('pointercancel', _cloudLongPressCancel);
+
+    // El click posterior al long-press no debe abrir/descargar el archivo
+    list.addEventListener('click', (e) => {
+        if (_cloudLongPress && _cloudLongPress.suppressClick && (Date.now() - _cloudLongPress.lastFiredAt) < 800) {
+            e.preventDefault();
+            e.stopPropagation();
+            _cloudLongPress.suppressClick = false;
+        }
+    }, true);
+}
+
 function toggleCloudFileSelection(checkbox, name, path, isDir, ownerId) {
     const row = checkbox ? (checkbox.closest('.cloud-file-row') || checkbox.closest('.cloud-folder-row') || checkbox.closest('.cloud-file-card')) : null;
 
@@ -4082,6 +4495,25 @@ function updateCloudMultiSelectBar() {
         const btnRestore = document.getElementById('btn-cloud-multi-restore');
         const btnPreview = document.getElementById('btn-cloud-multi-preview');
         const btnPreviewText = document.getElementById('btn-cloud-multi-preview-text');
+        const btnProtect = document.getElementById('btn-cloud-multi-protect');
+        const btnProtectText = document.getElementById('btn-cloud-multi-protect-text');
+
+        // Proteger solo tiene sentido con elementos propios y en vistas
+        // editables (igual que el menú contextual). Si TODA la selección
+        // está protegida, el botón pasa a "Desproteger".
+        const canProtect = !['trash', 'shared', 'shared_by_me', 'starred', 'recent'].includes(currentCloudView)
+            && !(currentCloudView === 'computers' && currentCloudPath === '')
+            && SELECTED_CLOUD_ITEMS.every(it => !it.row || it.row.getAttribute('data-is-mine') !== 'false');
+        if (btnProtect) {
+            btnProtect.style.display = canProtect ? 'flex' : 'none';
+            if (btnProtectText) {
+                const allProtected = SELECTED_CLOUD_ITEMS.length > 0
+                    && SELECTED_CLOUD_ITEMS.every(it => it.row && it.row.getAttribute('data-protected') === 'true');
+                btnProtectText.textContent = allProtected
+                    ? window.t_cloud('ctx_unprotect', 'Desproteger')
+                    : window.t_cloud('ctx_protect', 'Proteger');
+            }
+        }
 
         // Previsualizar solo tiene sentido si TODA la selección son archivos
         // previsualizables (PDF, imágenes, texto, vídeo). Si hay cualquier
@@ -4106,7 +4538,7 @@ function updateCloudMultiSelectBar() {
             if (btnDownload) btnDownload.style.display = 'none';
             if (btnZip) btnZip.style.display = 'none';
             if (btnMove) btnMove.style.display = 'none';
-            if (btnRestore) btnRestore.style.display = 'block';
+            if (btnRestore) btnRestore.style.display = 'flex';
             if (btnDeleteText) btnDeleteText.innerText = window.t_cloud('ctx_delete_perm', 'Eliminar definitivamente');
             if (btnDelete) {
                 btnDelete.style.background = 'rgba(248,113,113,0.1)';
@@ -4125,8 +4557,8 @@ function updateCloudMultiSelectBar() {
                 btnDelete.style.color = '#f87171';
             }
         } else if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred') {
-            if (btnDownload) btnDownload.style.display = 'block';
-            if (btnZip) btnZip.style.display = 'block';
+            if (btnDownload) btnDownload.style.display = 'flex';
+            if (btnZip) btnZip.style.display = 'flex';
             if (btnMove) btnMove.style.display = 'none';
             if (btnRestore) btnRestore.style.display = 'none';
             if (btnDeleteText) btnDeleteText.innerText = currentCloudView === 'shared_by_me' ? window.t_cloud('ctx_unshare', 'Dejar de compartir') : window.t_cloud('btn_delete', 'Eliminar');
@@ -4134,16 +4566,16 @@ function updateCloudMultiSelectBar() {
                 if (currentCloudView === 'shared' || currentCloudView === 'starred') {
                     btnDelete.style.display = 'none';
                 } else {
-                    btnDelete.style.display = 'block';
+                    btnDelete.style.display = 'flex';
                     btnDelete.style.background = 'rgba(248,113,113,0.1)';
                     btnDelete.style.borderColor = 'rgba(248,113,113,0.3)';
                     btnDelete.style.color = '#f87171';
                 }
             }
         } else {
-            if (btnDownload) btnDownload.style.display = 'block';
-            if (btnZip) btnZip.style.display = 'block';
-            if (btnMove) btnMove.style.display = 'block';
+            if (btnDownload) btnDownload.style.display = 'flex';
+            if (btnZip) btnZip.style.display = 'flex';
+            if (btnMove) btnMove.style.display = 'flex';
             if (btnRestore) btnRestore.style.display = 'none';
             if (btnDeleteText) btnDeleteText.innerText = window.t_cloud('btn_delete', 'Eliminar');
             if (btnDelete) {
@@ -4155,12 +4587,34 @@ function updateCloudMultiSelectBar() {
     } else {
         bar.style.display = 'none';
     }
+
+    _syncCloudFabVisibility();
+}
+
+function _syncCloudFabVisibility() {
+    const fab = document.getElementById('cloud-fab');
+    if (!fab) return;
+    const modalOpen = ['cloud-preview-modal', 'cloud-share-modal', 'cloud-move-modal', 'admin-quota-modal'].some(id => {
+        const el = document.getElementById(id);
+        return el && el.style.display === 'flex';
+    });
+    fab.classList.toggle('hidden', modalOpen || SELECTED_CLOUD_ITEMS.length > 0);
+}
+
+function initCloudFabVisibilitySync() {
+    const ids = ['cloud-preview-modal', 'cloud-share-modal', 'cloud-move-modal', 'admin-quota-modal'];
+    const obs = new MutationObserver(() => _syncCloudFabVisibility());
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) obs.observe(el, { attributes: true, attributeFilter: ['style'] });
+    });
 }
 
 function handleCloudRowClick(event, name, path, isDir, ownerId, isTrash, defaultActionString) {
 
     if (event.target.classList.contains('cloud-file-checkbox')) return;
     if (event.target.closest('.cloud-file-checkbox')) return;
+    if (event.target.closest('.cloud-checkbox-hit')) return;
     if (event.target.tagName === 'BUTTON' || event.target.closest('button') || event.target.closest('.cloud-file-actions')) return;
     if (event.target.tagName === 'INPUT') return;
 
@@ -4377,6 +4831,50 @@ async function moveSelectedItems() {
 
     const btnConfirm = document.getElementById('btn-confirm-move');
     if (btnConfirm) btnConfirm.innerText = window.t_cloud('btn_move_here', 'Mover aquí');
+
+    const nameEl = document.getElementById('move-filename');
+    if (nameEl) {
+        const count = multiMoveItems.length;
+        const itemsStr = count === 1 ? window.t_cloud('selected_single', 'seleccionado') : window.t_cloud('selected_plural', 'seleccionados');
+        const elementStr = count === 1 ? window.t_cloud('item_single', 'elemento') : window.t_cloud('item_plural', 'elementos');
+        nameEl.innerText = `${count} ${elementStr} ${itemsStr}`;
+    }
+
+    const displayEl = document.getElementById('move-selected-path-display');
+    if (displayEl) displayEl.innerText = '/ (' + window.t_cloud('nav_drive', 'Mi unidad') + ')';
+
+    modal.style.display = 'flex';
+    await loadCloudFoldersTree();
+}
+
+// Copia TODOS los elementos seleccionados usando el modal de mover/copiar
+// en modo copia (lote).
+async function copySelectedItems() {
+    if (SELECTED_CLOUD_ITEMS.length === 0) return;
+    if (_currentCloudUsedBytes >= _currentCloudLimitBytes) {
+        await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
+        return;
+    }
+    if (currentCloudView === 'shared' || (currentCloudContextItem && currentCloudContextItem.view === 'shared')) {
+        await NV_Alert(window.currentLang === "en" ? "Cannot move or copy shared files." : "No se puede mover ni copiar archivos compartidos.", window.currentLang === "en" ? "Restriction" : "Restricción");
+        return;
+    }
+
+    isMoveAction = false;
+    isMultiMove = true;
+    multiMoveItems = SELECTED_CLOUD_ITEMS.slice();
+    moveTargetNewPath = '';
+
+    const modal = document.getElementById('cloud-move-modal');
+    if (!modal) {
+        await NV_Alert("Error: El modal de mover/copiar no se encuentra.");
+        return;
+    }
+
+    const titleActionEl = document.getElementById('move-modal-title-action');
+    if (titleActionEl) titleActionEl.innerText = window.t_cloud('ctx_copy_title', 'Copiar');
+    const btnConfirm = document.getElementById('btn-confirm-move');
+    if (btnConfirm) btnConfirm.innerText = window.t_cloud('btn_copy_here', 'Copiar aquí');
 
     const nameEl = document.getElementById('move-filename');
     if (nameEl) {
@@ -4858,6 +5356,34 @@ function initClipboardPaste() {
 async function handleZipItem() {
     if (!currentCloudContextItem) return;
     const item = currentCloudContextItem;
+
+    // Selección múltiple: comprimir cada elemento seleccionado en su propio
+    // .ZIP (nombre por defecto), con toast de progreso.
+    const inMultiSelection = SELECTED_CLOUD_ITEMS.length > 1
+        && SELECTED_CLOUD_ITEMS.some(it => it.name === currentCloudContextItem.name && (it.path || '') === (currentCloudContextItem.path || ''));
+    if (inMultiSelection) {
+        showCloudProgressToast(`Comprimiendo ${SELECTED_CLOUD_ITEMS.length} elementos...`);
+        for (const it of SELECTED_CLOUD_ITEMS) {
+            try {
+                const base = it.isDir ? it.name : (it.name.substring(0, it.name.lastIndexOf('.')) || it.name);
+                await fetch('/api/cloud/zip', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({
+                        view: currentCloudView,
+                        name: it.name,
+                        path: it.path || currentCloudPath,
+                        zip_name: base + '.zip'
+                    }),
+                    credentials: 'include'
+                });
+            } catch (e) { }
+        }
+        hideCloudProgressToast();
+        clearCloudSelection();
+        fetchCloudFiles(currentCloudPath, currentCloudView);
+        return;
+    }
     const defaultZipName = (item.isDir ? item.name : item.name.substring(0, item.name.lastIndexOf('.')) || item.name) + '.zip';
 
     const zipName = await NV_Prompt(
@@ -4992,6 +5518,8 @@ function initCloud() {
     initCloudLayout();
     initDragAndDropUpload();
     initClipboardPaste();
+    initCloudMobileSelection();
+    initCloudFabVisibilitySync();
 
     // Navegación por teclado dentro del visor múltiple (←/→ cambian de
     // documento, Esc cierra).
@@ -5022,6 +5550,8 @@ function initCloud() {
         }
     });
 
+    // removed handleCloudBack from here
+
     Object.assign(window, {
         fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud,
         handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs,
@@ -5034,7 +5564,7 @@ function initCloud() {
         confirmCloudMove, closeCloudPreview,
         openCloudMultiPreview,
         downloadSelectedAsZip, deleteSelectedItems, moveSelectedItems,
-        restoreSelectedItems, closeCloudInfoPanel, handleGenerateLinkToken,
+        restoreSelectedItems, protectSelectedItems, closeCloudInfoPanel, handleGenerateLinkToken,
         loadCloudFoldersTree, openCloudMove,
         openCloudPreview, openCloudShare, executeNewItemAction,
         renderListRow, renderFolderNode,
@@ -5345,3 +5875,17 @@ async function handleGenerateLinkToken() {
 }
 
 export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud, handleZipItem, handleUnzipItem };
+
+window.handleCloudBack = function() {
+    if (window.currentCloudView !== 'drive' && window.currentCloudView !== 'computers') {
+        if (typeof window.nvGoBack === 'function') window.nvGoBack();
+        return;
+    }
+    if (window.currentCloudPath && window.currentCloudPath.trim() !== '') {
+        let parts = window.currentCloudPath.split('/').filter(p => p.trim() !== '');
+        parts.pop();
+        window.navigateCloud(parts.join('/'), window.currentCloudView);
+    } else {
+        if (typeof window.nvGoBack === 'function') window.nvGoBack();
+    }
+};

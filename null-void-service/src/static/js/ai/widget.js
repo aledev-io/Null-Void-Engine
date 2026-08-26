@@ -22,6 +22,10 @@ let widgetReasoningMode = (localStorage.getItem('ai_reasoning_mode') === 'true')
 const WIDGET_MODE_AGENDA_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"></rect><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="13" y2="14"></line></svg>';
 const WIDGET_MODE_CHAT_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"></path></svg>';
 
+function isMobileDevice() {
+    return window.innerWidth <= 768 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+}
+
 function wEsc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -75,6 +79,28 @@ let widgetModelsLoaded = false;
 let widgetModelRetries = 0;
 let widgetHbTimer = null;
 let widgetSessions = [];
+// Nivel de privacidad del widget: 'strict' (full) | 'moderate' | 'free'.
+// Un único selector de 3 estados; se envía como options.privacy_mode.
+let widgetPrivacyMode = (localStorage.getItem('ai_widget_privacy_mode') || 'strict');
+if (!['strict', 'moderate', 'free'].includes(widgetPrivacyMode)) widgetPrivacyMode = 'strict';
+
+const WIDGET_PRIVACY_STATES = {
+    strict: {
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/></svg>',
+        color: '#a8a6a1',
+        title: 'Modo Estricto: todos los filtros y restricciones activados',
+    },
+    moderate: {
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>',
+        color: '#e68800',
+        title: 'Modo Moderado: la IA no se ve limitada por nombres/empresas, pero los datos críticos siguen protegidos',
+    },
+    free: {
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+        color: '#22c55e',
+        title: 'Modo Libre: respuesta sin restricciones, pero DNI, tarjetas y cuentas siguen siempre enmascarados',
+    },
+};
 
 function widgetToast(message, type = 'info') {
     // En la página del panel IA existe window.showToast; en el dashboard
@@ -261,7 +287,7 @@ async function widgetOpenSession(sessionId) {
         }
         if (box) box.scrollTop = box.scrollHeight;
         const input = widgetEl('ai-widget-input');
-        if (input) input.focus();
+        if (input && !isMobileDevice()) input.focus();
         widgetLoadSessions();
         return true;
     } catch (e) {
@@ -368,7 +394,7 @@ function widgetNewChat() {
     widgetWelcome();
     widgetLoadSessions();
     const input = widgetEl('ai-widget-input');
-    if (input) input.focus();
+    if (input && !isMobileDevice()) input.focus();
 }
 
 async function loadAIModels() {
@@ -443,7 +469,7 @@ function appendWidgetMessage(role, text, index, timeIso) {
     widgetMaybeCollapse(bubble, text);
     row.appendChild(el);
     if (Number.isInteger(index) && index >= 0) {
-        addCodeCopyButtons(bubble);
+        addCodeCopyButtons(bubble, true);
         addWidgetActions(row, role);
     }
     const t = document.createElement('span');
@@ -637,7 +663,7 @@ function widgetRestoreRow(idx) {
     widgetHighlight(bubble);
     el.appendChild(bubble);
     widgetMaybeCollapse(bubble, msg.content);
-    addCodeCopyButtons(bubble);
+    addCodeCopyButtons(bubble, true);
     widgetToast(WIDGET_T('Mensaje cancelado', 'Message cancelled'), 'info');
 }
 
@@ -858,11 +884,12 @@ async function widgetStreamCore() {
                 reasoning_mode: widgetReasoningMode === true,
                 stream: true,
                 options: {
-                    num_ctx: parseInt(localStorage.getItem('model_num_ctx')) || 4096,
-                    num_predict: parseInt(localStorage.getItem('model_num_predict')) || 1024,
+                    num_ctx: parseInt(localStorage.getItem('model_num_ctx')) || 262144,
+                    num_predict: parseInt(localStorage.getItem('model_num_predict')) || 65536,
                     temperature: parseFloat(localStorage.getItem('model_temperature')) || 0.2,
                     top_p: 0.9,
-                    repeat_penalty: 1.1
+                    repeat_penalty: 1.1,
+                    privacy_mode: widgetPrivacyMode
                 },
             }),
         });
@@ -1000,7 +1027,7 @@ async function widgetStreamCore() {
                 stream.row.dataset.idx = String(idx);
                 stream.row.appendChild(t);
                 widgetMaybeCollapse(stream.bubble, full);
-                addCodeCopyButtons(stream.bubble);
+                addCodeCopyButtons(stream.bubble, true);
                 addWidgetActions(stream.row, 'assistant');
             } else {
                 appendWidgetMessage('assistant', full, idx, widgetMessages[idx].created_at);
@@ -1082,7 +1109,7 @@ function toggleAIWidget(forceOpen) {
         widgetCheckActiveGeneration();
         widgetRequestNotifyPermission();
         const input = widgetEl('ai-widget-input');
-        if (input) input.focus();
+        if (input && !isMobileDevice()) input.focus();
     } else if (widgetHbTimer) {
         clearInterval(widgetHbTimer);
         widgetHbTimer = null;
@@ -1116,6 +1143,10 @@ function initAIWidget() {
     if (newBtn) {
         newBtn.addEventListener('click', widgetNewChat);
     }
+    const privacyBtn = widgetEl('ai-widget-privacy-btn');
+    if (privacyBtn) {
+        privacyBtn.addEventListener('click', widgetTogglePrivacyMode);
+    }
     if (input) {
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1139,23 +1170,11 @@ function initAIWidget() {
         });
     }
     _widgetBindModeBtn();
-
-    const modelBtn = null; // el selector de modelos es el comando /models
+    widgetUpdatePrivacyBtn();
 
     initSlashCommands({
         input: widgetEl('ai-widget-input'),
-        models: () => widgetModels || [],
-        current: () => widgetModel || '',
-        onSelectModel: (name) => {
-            widgetSelectModel(name);
-            if (name.startsWith('API:')) {
-                widgetToast('Modelo externo (API): tus mensajes y datos se envían a un proveedor de terceros. Evita datos sensibles.', 'warning');
-            } else {
-                widgetToast(WIDGET_T('Modelo: ', 'Model: ') + name);
-            }
-        },
         commands: [
-            { name: '/models', description: WIDGET_T('Cambiar de modelo — /models gratis - tools - nombre', 'Switch model — /models free - tools - name'), run: () => { } },
             { name: '/nuevo', description: WIDGET_T('Nueva conversación', 'New conversation'), run: () => { widgetNewChat(); } },
             { name: '/agenda', description: WIDGET_T('Activar / desactivar modo agenda', 'Toggle agenda mode'), run: () => { widgetToggleMode(); } },
             { name: '/normal', description: WIDGET_T('Activar modo normal', 'Enable normal mode'), run: () => { widgetToggleMode('normal'); } },
@@ -1205,17 +1224,42 @@ function widgetUpdateModeBtn() {
     if (!btn) return;
     const isAgenda = widgetChatMode === 'agenda';
     btn.classList.toggle('active', isAgenda);
-    // Estado visible garantizado (inline, inmune a la cascada), igual que el
-    // del panel IA: fondo morado sólido + icono blanco cuando está activo.
-    btn.style.background = isAgenda ? 'linear-gradient(135deg, #6d28d9, #7c3aed)' : 'none';
-    btn.style.color = isAgenda ? '#ffffff' : '';
-    btn.style.border = isAgenda ? '1px solid rgba(167, 139, 250, 0.5)' : 'none';
-    btn.style.boxShadow = isAgenda ? '0 0 10px rgba(124, 58, 237, 0.5)' : 'none';
+    btn.style.background = isAgenda ? 'rgba(124, 58, 237, 0.22)' : '';
+    btn.style.color = isAgenda ? '#a78bfa' : '';
+    btn.style.border = isAgenda ? '1px solid rgba(167, 139, 250, 0.4)' : '';
+    btn.style.boxShadow = isAgenda ? '0 0 8px rgba(124, 58, 237, 0.25)' : '';
     btn.title = isAgenda
         ? 'Modo Agenda: responde con tus datos reales del calendario. Pulsa para modo Normal (sin agenda ni búsqueda web).'
         : 'Modo Normal: sin agenda ni búsqueda web. Pulsa para modo Agenda.';
     btn.setAttribute('aria-label', btn.title);
     btn.innerHTML = isAgenda ? WIDGET_MODE_AGENDA_ICON : WIDGET_MODE_CHAT_ICON;
+}
+
+
+
+function widgetUpdatePrivacyBtn() {
+    const btn = widgetEl('ai-widget-privacy-btn');
+    if (!btn) return;
+    const state = WIDGET_PRIVACY_STATES[widgetPrivacyMode] || WIDGET_PRIVACY_STATES.strict;
+    btn.classList.toggle('active', widgetPrivacyMode !== 'strict');
+    btn.style.background = widgetPrivacyMode !== 'strict' ? 'rgba(0, 0, 0, 0.15)' : '';
+    btn.style.color = state.color;
+    btn.title = state.title;
+    btn.setAttribute('aria-label', state.title);
+    btn.innerHTML = state.icon;
+}
+
+function widgetTogglePrivacyMode() {
+    if (widgetStreaming) {
+        widgetToast('No puedes cambiar el modo mientras se genera una respuesta');
+        return;
+    }
+    const order = ['strict', 'moderate', 'free'];
+    widgetPrivacyMode = order[(order.indexOf(widgetPrivacyMode) + 1) % order.length];
+    localStorage.setItem('ai_widget_privacy_mode', widgetPrivacyMode);
+    widgetUpdatePrivacyBtn();
+    const labels = { strict: 'Modo Estricto activado', moderate: 'Modo Moderado activado', free: 'Modo Libre activado' };
+    widgetToast(labels[widgetPrivacyMode]);
 }
 
 function widgetToggleMode(target) {
@@ -1261,10 +1305,10 @@ function widgetUpdateReasoningBtn() {
     const btn = widgetEl('ai-widget-reasoning-btn');
     if (!btn) return;
     btn.classList.toggle('active', widgetReasoningMode);
-    btn.style.background = widgetReasoningMode ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'none';
-    btn.style.color = widgetReasoningMode ? '#ffffff' : '';
-    btn.style.border = widgetReasoningMode ? '1px solid rgba(245, 158, 11, 0.5)' : 'none';
-    btn.style.boxShadow = widgetReasoningMode ? '0 0 10px rgba(217, 119, 6, 0.5)' : 'none';
+    btn.style.background = widgetReasoningMode ? 'rgba(245, 158, 11, 0.2)' : '';
+    btn.style.color = widgetReasoningMode ? '#fbbf24' : '';
+    btn.style.border = widgetReasoningMode ? '1px solid rgba(245, 158, 11, 0.4)' : '';
+    btn.style.boxShadow = widgetReasoningMode ? '0 0 8px rgba(245, 158, 11, 0.25)' : '';
 }
 
 function widgetToggleReasoningMode(target) {
@@ -1280,7 +1324,6 @@ function widgetToggleReasoningMode(target) {
 
     // Dispatch event to sync with AI panel if needed
     window.dispatchEvent(new Event('ai-reasoning-mode-changed'));
-
 }
 
 if (document.readyState === 'loading') {
@@ -1301,6 +1344,9 @@ window.addEventListener('storage', (e) => {
     } else if (e.key === 'ai_reasoning_mode') {
         widgetReasoningMode = e.newValue === 'true';
         widgetUpdateReasoningBtn();
+    } else if (e.key === 'ai_widget_privacy_mode') {
+        widgetPrivacyMode = e.newValue || 'strict';
+        widgetUpdatePrivacyBtn();
     }
 }
 );

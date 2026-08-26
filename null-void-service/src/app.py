@@ -27,13 +27,8 @@ import os
 import sys
 import json
 import socket
-import platform
-import subprocess
 import hashlib
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, send_from_directory, make_response, g, Response
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory, make_response, g, Response
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _parent_dir = os.path.dirname(_current_dir)
@@ -116,6 +111,7 @@ def create_app():
     from modules.api.friends import friends_bp
     from modules.api.mail import mail_bp
     from modules.api.ai import ai_bp
+    from modules.api.ai.workspaces import workspaces_bp
     from modules.api.scraper.routes import scraper_bp
     from modules.api.vault import vault_bp
     from core.telemetry.collector import record_request
@@ -129,7 +125,7 @@ def create_app():
     blueprints = [
         auth_bp, events_bp, invoices_bp, spreadsheet_bp, transactions_bp,
         metrics_bp, backup_bp, system_bp, cloud_bp, settings_bp, chat_bp, 
-        friends_bp, mail_bp, ai_bp, scraper_bp, vault_bp
+        friends_bp, mail_bp, ai_bp, workspaces_bp, scraper_bp, vault_bp
     ]
     for bp in blueprints:
         app.register_blueprint(bp)
@@ -332,11 +328,18 @@ def create_app():
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
 
-        # Prevent browser caching for JS, CSS and HTML to ensure fresh content
+        # Caché de estáticos: el navegador usa la copia cacheada AL INSTANTE para
+        # pintar (nunca bloquea el primer paint esperando al servidor) y la
+        # revalida en segundo plano (stale-while-revalidate). La ventana de
+        # 10 min hace que los cambios de CSS/JS lleguen solos al recargar.
         content_type = response.content_type or ''
-        if any(ct in content_type for ct in ['javascript', 'text/css', 'text/html']):
+        if 'text/html' in content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+        elif any(ct in content_type for ct in ['javascript', 'text/css']):
+            response.headers['Cache-Control'] = 'public, max-age=600, stale-while-revalidate=600'
+            response.headers.pop('Pragma', None)
             response.headers['Expires'] = '0'
 
         return response

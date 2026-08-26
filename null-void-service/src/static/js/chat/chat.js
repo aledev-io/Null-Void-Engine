@@ -2632,8 +2632,8 @@ function updateActiveChatHeader() {
         const renderGroupHeader = (membersText) => {
             if (!header) return;
             header.innerHTML = `
-                <button class="mobile-back-btn" onclick="document.getElementById('view-chat').classList.remove('mobile-chat-active')" style="display: none;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <button class="app-back-btn mobile-back-btn" onclick="document.getElementById('view-chat').classList.remove('mobile-chat-active')" title="Volver" data-i18n-title="back" aria-label="Volver" style="display: none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 </button>
                 <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1; min-width:0; overflow:hidden;" onclick="openChatInfoSidebar()">
                     <div class="avatar" style="width: 40px; height: 40px; font-size: 14px;">${avatarHtml}</div>
@@ -2680,8 +2680,8 @@ function updateActiveChatHeader() {
 
         const status = getStatusFromActivity(currentChatContact.last_activity);
         header.innerHTML = `
-            <button class="mobile-back-btn" onclick="document.getElementById('view-chat').classList.remove('mobile-chat-active')" style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            <button class="app-back-btn mobile-back-btn" onclick="document.getElementById('view-chat').classList.remove('mobile-chat-active')" title="Volver" data-i18n-title="back" aria-label="Volver" style="display: none;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
             <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1; min-width:0; overflow:hidden;" onclick="openChatInfoSidebar()">
                 <div class="avatar" style="width: 40px; height: 40px; font-size: 14px;">${avatarHtml}</div>

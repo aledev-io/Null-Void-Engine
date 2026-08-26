@@ -27,14 +27,25 @@ CERT_FILE="/app/certs/cert.pem"  # ruta del certificado (dentro del contenedor)
 KEY_FILE="/app/certs/key.pem"    # ruta de la clave privada (dentro del contenedor)
 
 # ===== Almacenamiento =====
-# Por defecto todo se guarda en la carpeta data/ del proyecto.
-# Para usar otros discos o carpetas, descomenta y pon tu ruta:
-#DATA_HOST_DIR=./data            # datos de la app (bases de datos, Cloud, etc.)
-#SCRAPER_HOST_DIR=./data/scraper # datos del scraper (base de datos, imágenes, logs)
-#SECRETS_HOST_DIR=./.secrets     # secretos/credenciales (por defecto ./.secrets)
-DATA_DIR=data/app                # subcarpeta de datos de la app
-SCRAPER_DIR=data/scraper         # subcarpeta de datos del scraper
-#DB_PATH=                        # ruta de la base de datos (por defecto data/app/manager.db)
+# Puedes configurar rutas absolutas o independientes para cada servicio:
+#
+# Ejemplo 1: Mismo disco en la carpeta personal de un usuario:
+#DATA_HOST_DIR=/home/usuario/Null-Void-Data/app          # datos de la app (manager.db, Cloud, vaults, etc.)
+#SCRAPER_HOST_DIR=/home/usuario/Null-Void-Data/scraper   # datos del scraper (scraper.db, imágenes, logs)
+#CERTS_HOST_DIR=/home/usuario/Null-Void-Data/certs       # certificados TLS
+#SECRETS_HOST_DIR=/home/usuario/Null-Void-Data/.secrets  # credenciales y claves privadas
+#
+# Ejemplo 2: Discos o particiones independientes (SSD para app y HDD para scraper):
+#DATA_HOST_DIR=/mnt/disco_ssd/app
+#SCRAPER_HOST_DIR=/mnt/disco_hdd/scraper
+#
+# Ejemplo 3: Por defecto en la propia carpeta del proyecto (./data):
+#DATA_HOST_DIR=./data/app
+#SCRAPER_HOST_DIR=./data/scraper
+#SECRETS_HOST_DIR=./.secrets
+DATA_DIR=data/app                      # ruta de datos de la app (para modo local sin Docker)
+SCRAPER_DIR=data/scraper               # ruta de datos del scraper (para modo local sin Docker)
+#DB_PATH=                              # ruta personalizada de la base de datos
 
 # ===== Microservicio scraper (extracción web) =====
 # El scraper es un servicio aparte que se inicia y se detiene manualmente.

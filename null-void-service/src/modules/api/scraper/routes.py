@@ -475,7 +475,8 @@ from core.limiter import limiter
 def scraper_image(sku):
     from flask import send_file
     import os
-    path = os.path.join(PROJECT_ROOT, "data", "scraper", "images", f"{sku}.jpg")
+    from modules.api.scraper.scraper_db import SCRAPER_DIR
+    path = os.path.join(SCRAPER_DIR, "images", f"{sku}.jpg")
     if os.path.exists(path):
         return send_file(path, mimetype='image/jpeg')
     fallback_path = os.path.join(PROJECT_ROOT, "src", "static", "img", "favicon.png")

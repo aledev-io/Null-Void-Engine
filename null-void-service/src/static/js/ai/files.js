@@ -52,7 +52,7 @@ export function renderAttachSelectorItems(items) {
 
         if (currentAttachType === 'cloud') {
             if (item.is_dir) {
-                iconHtml = '📁';
+                iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
                 meta = 'Carpeta';
                 itemDiv.onclick = () => {
                     selectModalCloudPath = selectModalCloudPath ? `${selectModalCloudPath}/${item.name}` : item.name;
@@ -60,21 +60,26 @@ export function renderAttachSelectorItems(items) {
                 };
             } else {
                 const ext = (item.ext || '').toLowerCase();
-                if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) iconHtml = '🖼️';
-                else if (ext === '.pdf') iconHtml = '📄';
-                else if (['.mp3', '.wav', '.ogg', '.webm'].includes(ext)) iconHtml = '🎵';
-                else iconHtml = '📝';
+                if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) {
+                    iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+                } else if (ext === '.pdf') {
+                    iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><text x="7" y="17" font-size="7" font-weight="bold" fill="#f87171" stroke="none">PDF</text></svg>`;
+                } else if (['.mp3', '.wav', '.ogg', '.webm'].includes(ext)) {
+                    iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
+                } else {
+                    iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`;
+                }
 
                 const sizeStr = (item.size / 1024).toFixed(1) + ' KB';
                 meta = `Archivo • ${sizeStr}`;
                 itemDiv.onclick = () => selectCloudFileForAttach(item);
             }
         } else if (currentAttachType === 'notes') {
-            iconHtml = '📝';
+            iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`;
             meta = `Nota • ${new Date(item.updatedAt).toLocaleDateString()}`;
             itemDiv.onclick = () => selectNoteForAttach(item);
         } else if (currentAttachType === 'knowledge') {
-            iconHtml = '💡';
+            iconHtml = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>`;
             meta = item.description || 'Artículo de conocimiento';
             itemDiv.onclick = () => selectKnowledgeForAttach(item);
         }
@@ -136,7 +141,7 @@ export async function selectCloudFileForAttach(file) {
 
         const reader = new FileReader();
         reader.onload = (e) => {
-            window.attachedFiles.push({
+            const entry = {
                 id: Date.now() + Math.random(),
                 name: file.name,
                 type: blob.type,
@@ -146,7 +151,9 @@ export async function selectCloudFileForAttach(file) {
                 isPdf: isPdf,
                 isText: isText,
                 isAudio: isAudio
-            });
+            };
+            window.attachedFiles.push(entry);
+            fireAndForgetPersist(entry);
             renderAttachedFiles();
             document.getElementById('attach-selector-overlay').classList.remove('show');
         };
@@ -163,7 +170,7 @@ export async function selectCloudFileForAttach(file) {
 }
 
 export function selectNoteForAttach(note) {
-    window.attachedFiles.push({
+    const entry = {
         id: Date.now() + Math.random(),
         name: `${note.name}.txt`,
         type: 'text/plain',
@@ -173,13 +180,15 @@ export function selectNoteForAttach(note) {
         isPdf: false,
         isText: true,
         isAudio: false
-    });
+    };
+    window.attachedFiles.push(entry);
+    fireAndForgetPersist(entry);
     renderAttachedFiles();
     document.getElementById('attach-selector-overlay').classList.remove('show');
 }
 
 export function selectKnowledgeForAttach(item) {
-    window.attachedFiles.push({
+    const entry = {
         id: Date.now() + Math.random(),
         name: item.name,
         type: 'text/markdown',
@@ -189,9 +198,73 @@ export function selectKnowledgeForAttach(item) {
         isPdf: false,
         isText: true,
         isAudio: false
-    });
+    };
+    window.attachedFiles.push(entry);
+    fireAndForgetPersist(entry);
     renderAttachedFiles();
     document.getElementById('attach-selector-overlay').classList.remove('show');
+}
+
+export function dataURLtoBlob(dataUrl) {
+    const parts = dataUrl.split(',');
+    const meta = (parts[0].match(/data:([^;]+)/) || [])[1] || 'application/octet-stream';
+    const bin = atob(parts.slice(1).join(','));
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: meta });
+}
+
+export function attachmentServerUrl(att) {
+    if (att.fileId) return '/api/ai/attachments/' + encodeURIComponent(att.fileId);
+    if (att.id && !att.data && typeof att.id === 'string') return '/api/ai/attachments/' + encodeURIComponent(att.id);
+    return null;
+}
+
+export async function persistAttachment(att, blob = null) {
+    try {
+        let payload = blob;
+        if (!payload) {
+            if (att.data && att.data.startsWith('data:')) {
+                payload = dataURLtoBlob(att.data);
+            } else if (att.data) {
+                payload = new Blob([att.data], { type: att.type || 'text/plain' });
+            } else {
+                return att;
+            }
+        }
+        const fd = new FormData();
+        fd.append('file', payload, att.name || 'archivo');
+        const res = await fetch('/api/ai/attachments/upload', { method: 'POST', body: fd });
+        if (!res.ok) return att;
+        const ref = await res.json();
+        if (!ref || !ref.id) return att;
+        return {
+            ...att,
+            fileId: ref.id,
+            name: ref.name,
+            size: ref.sizeLabel,
+            type: ref.type,
+            isImage: ref.isImage,
+            isText: ref.isText,
+            isAudio: ref.isAudio,
+            uploaded: true,
+            data: att.data
+        };
+    } catch (err) {
+        return att;
+    }
+}
+
+export function fireAndForgetPersist(entry, blob = null) {
+    persistAttachment(entry, blob).then(r => {
+        if (r && r.uploaded) {
+            const origData = entry.data;
+            const origIsText = entry.isText;
+            Object.assign(entry, r);
+            if (origData) entry.data = origData;
+            if (origIsText) entry.isText = origIsText;
+        }
+    });
 }
 
 export function toggleAttachMenu(e) {
@@ -230,7 +303,7 @@ export async function toggleMicRecording(source = 'main') {
                 const fileReader = new FileReader();
                 fileReader.onload = (event) => {
                     const dateStr = new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '_');
-                    window.attachedFiles.push({
+                    const entry = {
                         id: Date.now() + Math.random(),
                         name: `Nota_de_voz_${dateStr}.webm`,
                         type: 'audio/webm',
@@ -240,7 +313,9 @@ export async function toggleMicRecording(source = 'main') {
                         isPdf: false,
                         isText: false,
                         isAudio: true
-                    });
+                    };
+                    window.attachedFiles.push(entry);
+                    fireAndForgetPersist(entry, audioBlob);
                     renderAttachedFiles();
 
                     // If recording was from the workspace panel, auto-navigate to chat
@@ -301,7 +376,8 @@ export async function toggleMicRecording(source = 'main') {
         if (chatInput) {
             chatInput.placeholder = window._oldPlaceholder || 'Escribe un mensaje...';
             chatInput.disabled = false;
-            chatInput.focus();
+            const isMobile = window.innerWidth <= 768 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+            if (!isMobile) chatInput.focus();
         }
 
         micBtn.style.color = 'var(--text-dim)';
@@ -349,40 +425,31 @@ export async function extractTextFromPdf(dataUrl) {
 export function processFiles(files, targetArray = window.attachedFiles, callback = renderAttachedFiles) {
     Array.from(files).forEach(file => {
         const reader = new FileReader();
-        const isImage = file.type.startsWith('image/');
+        const isImage = (file.type && (file.type.startsWith('image/') || file.type.includes('image'))) ||
+            /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(file.name || '');
         const isPdf = file.type.includes('pdf') || file.name.endsWith('.pdf');
         const isAudio = file.type.startsWith('audio/') ||
             file.name.endsWith('.mp3') ||
             file.name.endsWith('.wav') ||
             file.name.endsWith('.ogg') ||
             file.name.endsWith('.webm');
-        const isText = file.type.startsWith('text/') ||
-            file.name.endsWith('.js') ||
-            file.name.endsWith('.ts') ||
-            file.name.endsWith('.py') ||
-            file.name.endsWith('.c') ||
-            file.name.endsWith('.cpp') ||
-            file.name.endsWith('.h') ||
-            file.name.endsWith('.java') ||
-            file.name.endsWith('.html') ||
-            file.name.endsWith('.css') ||
-            file.name.endsWith('.json') ||
-            file.name.endsWith('.md') ||
-            file.name.endsWith('.sql') ||
-            file.name.endsWith('.sh');
+        const isText = (file.type && (file.type.startsWith('text/') || file.type === 'application/json' || file.type === 'application/javascript' || file.type === 'application/xml' || file.type === 'application/x-yaml')) ||
+            /\.(txt|md|markdown|js|jsx|ts|tsx|py|pyw|c|cpp|cc|cxx|h|hpp|hh|hxx|cs|java|go|rs|php|rb|swift|kt|kts|html|htm|css|scss|sass|less|json|jsonc|xml|yaml|yml|sql|sh|bash|zsh|bat|cmd|ps1|csv|tsv|env|ini|cfg|conf|toml|log|dockerfile|makefile|r|m|dart|scala|lua)$/i.test(file.name || '');
 
         reader.onload = async (e) => {
             let fileData = e.target.result;
             let fileIsText = isText;
+            let persistBlob = null;
 
             if (isPdf) {
                 // Extract text automatically so the AI can read it
                 const extractedText = await extractTextFromPdf(fileData);
                 fileData = extractedText;
                 fileIsText = true; // Treat it as text now so sendMessage injects it correctly
+                persistBlob = file; // Pero el archivo real que se guarda es el PDF original
             }
 
-            targetArray.push({
+            const entry = {
                 id: Date.now() + Math.random(),
                 name: file.name,
                 type: file.type,
@@ -392,7 +459,9 @@ export function processFiles(files, targetArray = window.attachedFiles, callback
                 isPdf: isPdf,
                 isText: fileIsText,
                 isAudio: isAudio
-            });
+            };
+            targetArray.push(entry);
+            fireAndForgetPersist(entry, persistBlob);
             if (callback) callback();
         };
 
@@ -401,7 +470,7 @@ export function processFiles(files, targetArray = window.attachedFiles, callback
         } else if (isText) {
             reader.readAsText(file);
         } else {
-            window.attachedFiles.push({
+            const entry = {
                 id: Date.now() + Math.random(),
                 name: file.name,
                 type: file.type,
@@ -411,7 +480,9 @@ export function processFiles(files, targetArray = window.attachedFiles, callback
                 isPdf: false,
                 isText: false,
                 isAudio: false
-            });
+            };
+            window.attachedFiles.push(entry);
+            fireAndForgetPersist(entry, file);
             renderAttachedFiles();
         }
     });
@@ -447,6 +518,7 @@ export function renderAttachedFiles() {
         container.style.display = 'flex';
     } else {
         container.style.display = 'none';
+        if (window.updateSendButtonState) window.updateSendButtonState();
         return;
     }
 
@@ -455,8 +527,9 @@ export function renderAttachedFiles() {
         chip.className = 'attachment-chip';
 
         let thumbHTML = '';
-        if (attr.isImage && attr.data) {
-            thumbHTML = `<img src="${attr.data}" class="attachment-thumb" />`;
+        const isImg = attr.isImage || attr.type?.startsWith('image/') || attr.data?.startsWith('data:image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(attr.name || '');
+        if (isImg && (attr.data || attr.fileId)) {
+            thumbHTML = `<img src="${attr.data || attachmentServerUrl(attr)}" class="attachment-thumb" style="width:40px;height:40px;object-fit:cover;border-radius:8px;" />`;
         } else {
             let iconSVG = `
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -509,6 +582,7 @@ export function renderAttachedFiles() {
                 `;
         container.appendChild(chip);
     });
+    if (window.updateSendButtonState) window.updateSendButtonState();
 }
 
 export function openFilePreview(id) {
@@ -524,7 +598,9 @@ export function openAttachmentPreview(att) {
     titleEl.textContent = att.name || 'Visualización de archivo';
     bodyEl.innerHTML = '';
 
-    const isImage = att.isImage || att.type?.startsWith('image/');
+    const serverUrl = attachmentServerUrl(att);
+
+    const isImage = att.isImage || att.type?.startsWith('image/') || att.data?.startsWith('data:image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.name || '');
     const isPdf = att.isPdf || att.type?.includes('pdf') || att.name?.endsWith('.pdf');
     const isText = att.isText || att.type?.startsWith('text/') ||
         (att.name && (
@@ -545,7 +621,7 @@ export function openAttachmentPreview(att) {
 
     const isAudio = att.isAudio || att.type?.startsWith('audio/') || att.name?.endsWith('.webm');
 
-    if (isAudio && att.data) {
+    if (isAudio && (att.data || serverUrl)) {
         const audioContainer = document.createElement('div');
         audioContainer.style.display = 'flex';
         audioContainer.style.flexDirection = 'column';
@@ -566,7 +642,7 @@ export function openAttachmentPreview(att) {
                 `;
 
         const audioEl = document.createElement('audio');
-        audioEl.src = att.data;
+        audioEl.src = att.data || serverUrl;
         audioEl.controls = true;
         audioEl.style.width = '100%';
         audioEl.style.maxWidth = '400px';
@@ -581,18 +657,18 @@ export function openAttachmentPreview(att) {
         audioContainer.appendChild(nameInfo);
         audioContainer.appendChild(audioEl);
         bodyEl.appendChild(audioContainer);
-    } else if (isImage && att.data) {
+    } else if (isImage && (att.data || serverUrl)) {
         const img = document.createElement('img');
-        img.src = att.data;
+        img.src = att.data || serverUrl;
         img.style.maxWidth = '100%';
         img.style.maxHeight = '60vh';
         img.style.objectFit = 'contain';
         img.style.borderRadius = '8px';
         img.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
         bodyEl.appendChild(img);
-    } else if (isPdf && att.data) {
+    } else if (isPdf && (att.data || serverUrl)) {
         const iframe = document.createElement('iframe');
-        iframe.src = att.data;
+        iframe.src = att.data || serverUrl;
         iframe.style.width = '100%';
         iframe.style.height = '60vh';
         iframe.style.border = 'none';
@@ -622,17 +698,68 @@ export function openAttachmentPreview(att) {
         if (window.hljs) {
             hljs.highlightElement(code);
         }
-    } else {
+    } else if (isText && serverUrl) {
+        const pre = document.createElement('pre');
+        pre.style.width = '100%';
+        pre.style.maxHeight = '60vh';
+        pre.style.margin = '0';
+        pre.style.padding = '15px';
+        pre.style.background = '#0d1117';
+        pre.style.color = '#c9d1d9';
+        pre.style.borderRadius = '8px';
+        pre.style.overflow = 'auto';
+        pre.style.textAlign = 'left';
+        pre.style.fontFamily = 'monospace';
+        pre.style.fontSize = '0.85rem';
+        pre.style.border = '1px solid var(--border)';
+
+        const code = document.createElement('code');
+        code.className = 'hljs';
+        pre.appendChild(code);
+        bodyEl.appendChild(pre);
+
+        fetch(serverUrl)
+            .then(r => {
+                if (!r.ok) throw new Error();
+                return r.text();
+            })
+            .then(t => {
+                code.textContent = t;
+                if (window.hljs) hljs.highlightElement(code);
+            })
+            .catch(() => {
+                code.textContent = '(No se pudo cargar el contenido del archivo)';
+            });
+    } else if (isImage) {
         bodyEl.innerHTML = `
-                    <div style="text-align:center;color:var(--text-dim);display:flex;flex-direction:column;align-items:center;gap:15px;">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2">
-                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                            <polyline points="13 2 13 9 20 9"></polyline>
-                        </svg>
-                        <div>No hay vista previa disponible para este tipo de archivo</div>
-                        <div style="font-size:0.8rem;">${att.name || 'Archivo'} (${att.size || 'Desconocido'})</div>
-                    </div>
-                `;
+            <div style="text-align:center;color:var(--text-dim);display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px 20px;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <div style="font-weight:600;color:var(--text-main);font-size:1.05rem;">${att.name || 'Captura de pantalla'}</div>
+                <div style="font-size:0.82rem;color:var(--primary);font-weight:500;">Imagen adjunta en la conversación</div>
+                <div style="font-size:0.75rem;color:var(--text-dim);max-width:340px;line-height:1.4;margin-top:4px;">
+                    La imagen fue procesada por la IA durante la consulta. La vista previa binaria Base64 no se conserva en el historial de texto para optimizar el almacenamiento.
+                </div>
+            </div>
+        `;
+    } else {
+        const fileIconSVG = isPdf
+            ? `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><text x="7" y="17" font-size="7" font-weight="bold" fill="#f87171" stroke="none">PDF</text></svg>`
+            : isAudio
+            ? `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`
+            : isText
+            ? `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`
+            : `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="1.8"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
+        bodyEl.innerHTML = `
+            <div style="text-align:center;color:var(--text-dim);display:flex;flex-direction:column;align-items:center;gap:12px;padding:30px 20px;">
+                ${fileIconSVG}
+                <div style="font-weight:600;color:var(--text-main);font-size:1.05rem;">${att.name || 'Archivo adjunto'}</div>
+                <div style="font-size:0.82rem;color:var(--text-dim);">Archivo de contexto (${att.size || 'Historial'})</div>
+            </div>
+        `;
     }
 
     document.getElementById('file-preview-overlay').classList.add('show');
@@ -646,5 +773,156 @@ export function closeFilePreviewModal(e) {
 export function removeAttachment(id) {
     window.attachedFiles = window.attachedFiles.filter(a => a.id !== id);
     renderAttachedFiles();
+}
+
+export function detectSnippetExtension(text) {
+    if (!text || typeof text !== 'string') return 'txt';
+    const trimmed = text.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+            JSON.parse(trimmed);
+            return 'json';
+        } catch (e) {}
+    }
+    if (/^<!DOCTYPE html|<html[\s>]|<div[\s>]|<head[\s>]|<body[\s>]/i.test(trimmed)) return 'html';
+    if (/(def\s+[a-zA-Z_]|import\s+[a-zA-Z_]|from\s+[a-zA-Z_]|class\s+[a-zA-Z_].*:|elif\s+|if\s+__name__\s*==)/.test(text)) return 'py';
+    if (/(function\s+[a-zA-Z_]|const\s+[a-zA-Z_]|let\s+[a-zA-Z_]|console\.log|export\s+default|export\s+function|import\s+.*\s+from)/.test(text)) return 'js';
+    if (/(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+TABLE|UPDATE\s+.*\s+SET|ALTER\s+TABLE)/i.test(text)) return 'sql';
+    if (/(#include\s+<|int\s+main\(|std::cout|std::vector|nullptr)/.test(text)) return 'cpp';
+    if (/[a-zA-Z0-9_\-\.#]+\s*\{\s*[\w\-]+:/i.test(text)) return 'css';
+    if (trimmed.startsWith('# ') || trimmed.startsWith('## ') || /\[.*\]\(http.*\)/.test(text) || /```[\s\S]*```/.test(text)) return 'md';
+    return 'txt';
+}
+
+export function isCodeOrLargeSnippet(text) {
+    if (!text || typeof text !== 'string') return false;
+    const len = text.length;
+    const lines = text.split('\n').length;
+    // Umbral de texto largo tipo Claude: >= 800 caracteres, o >= 12 líneas y >= 300 caracteres, o código detectado >= 350 caracteres
+    if (len >= 800) return true;
+    if (lines >= 12 && len >= 300) return true;
+    const ext = detectSnippetExtension(text);
+    if (ext !== 'txt' && (len >= 350 || lines >= 8)) return true;
+    return false;
+}
+
+export function attachPastedText(text, targetArray = window.attachedFiles, callback = renderAttachedFiles) {
+    const ext = detectSnippetExtension(text);
+    const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_');
+    let prefix = 'texto_pegado';
+    if (ext === 'py') prefix = 'script';
+    else if (ext === 'js') prefix = 'codigo';
+    else if (ext === 'json') prefix = 'datos';
+    else if (ext === 'html') prefix = 'documento';
+    else if (ext === 'sql') prefix = 'consulta';
+    else if (ext === 'css') prefix = 'estilos';
+
+    const fileName = `${prefix}_${dateStr}.${ext}`;
+    const sizeKb = (new Blob([text]).size / 1024).toFixed(1) + ' KB';
+
+    const entry = {
+        id: Date.now() + Math.random(),
+        name: fileName,
+        type: ext === 'json' ? 'application/json' : (ext === 'html' ? 'text/html' : 'text/plain'),
+        size: sizeKb,
+        data: text,
+        isImage: false,
+        isPdf: false,
+        isText: true,
+        isAudio: false
+    };
+
+    targetArray.push(entry);
+    fireAndForgetPersist(entry);
+    if (callback) callback();
+
+    if (window.showToast) {
+        window.showToast(`Texto largo (${sizeKb}) convertido en archivo adjunto: ${fileName}`, 'info');
+    }
+}
+
+export function handleSmartPaste(e, targetArray = window.attachedFiles, callback = renderAttachedFiles) {
+    if (!e || !e.clipboardData) return;
+
+    // 1. Imágenes pegadas desde el portapapeles (screenshots)
+    if (e.clipboardData.items) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    const name = `Captura_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.png`;
+                    const fileType = file.type || 'image/png';
+                    const renamedFile = new File([file], name, { type: fileType });
+                    processFiles([renamedFile], targetArray, callback);
+                    if (window.showToast) {
+                        window.showToast('Imagen del portapapeles adjuntada', 'info');
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    // 2. Texto largo o código pegado (tipo Claude)
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText && isCodeOrLargeSnippet(pastedText)) {
+        e.preventDefault();
+        attachPastedText(pastedText, targetArray, callback);
+    }
+}
+
+export function initDragAndDropHandlers() {
+    const dropZones = [
+        document.querySelector('.input-area'),
+        document.querySelector('.input-wrapper'),
+        document.getElementById('chat-area'),
+        document.querySelector('.workspace-input-wrapper')
+    ].filter(Boolean);
+
+    dropZones.forEach(zone => {
+        if (zone._dropHandlerBound) return;
+        zone._dropHandlerBound = true;
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            zone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.add('drag-over-active');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            zone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove('drag-over-active');
+            }, false);
+        });
+
+        zone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            if (dt && dt.files && dt.files.length > 0) {
+                processFiles(dt.files);
+            }
+        }, false);
+    });
+}
+
+export function initPasteHandlers() {
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput && !chatInput._pasteHandlerBound) {
+        chatInput.addEventListener('paste', (e) => handleSmartPaste(e, window.attachedFiles, renderAttachedFiles));
+        chatInput._pasteHandlerBound = true;
+    }
+
+    const wsInput = document.getElementById('workspace-chat-input');
+    if (wsInput && !wsInput._pasteHandlerBound) {
+        wsInput.addEventListener('paste', (e) => handleSmartPaste(e, window.attachedFiles, renderAttachedFiles));
+        wsInput._pasteHandlerBound = true;
+    }
+
+    initDragAndDropHandlers();
 }
 

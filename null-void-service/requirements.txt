@@ -27,3 +27,4 @@ cryptography
 firebase-admin
 dateparser
 rapidfuzz
+spacy>=3.7,<4.0

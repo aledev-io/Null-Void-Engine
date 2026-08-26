@@ -4,8 +4,8 @@ services:
     container_name: nullvoid-engine
     network_mode: "host"
     volumes:
-      - ${DATA_HOST_DIR:-./data}:/app/data
-      - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/data/scraper
+      - ${DATA_HOST_DIR:-./data/app}:/app/data
+      - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/scraper_data
       - ./null-void-service/src:/app/src
       - ./client_agent:/app/client_agent
       - ${SECRETS_HOST_DIR:-./.secrets}:/app/.secrets:ro
@@ -27,8 +27,8 @@ services:
       - HOST=0.0.0.0
       - OLLAMA_HOST=http://127.0.0.1:11434
       - GUNICORN_VERSION=true
-      - DATA_DIR=/app/data/app
-      - SCRAPER_DIR=/app/data/scraper
+      - DATA_DIR=/app/data
+      - SCRAPER_DIR=/app/scraper_data
       # Caché de vídeo transcodificado (LRU): límite máximo y calidad que se
       # genera automáticamente al abrir un vídeo (el resto, bajo demanda).
       - VIDEO_CACHE_MAX_MB=5120
@@ -37,12 +37,12 @@ services:
     command: >
       /bin/sh -c "
       if [ \"$$USE_HTTPS\" = 'true' ] && [ -f /app/certs/key.pem ] && [ -f /app/certs/cert.pem ]; then
-        gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:5000 --workers 1 --reload --keyfile /app/certs/key.pem --certfile /app/certs/cert.pem --chdir src app:app;
+        gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:5000 --workers 1 --keyfile /app/certs/key.pem --certfile /app/certs/cert.pem --chdir src app:app;
       else
         if [ \"$$USE_HTTPS\" = 'true' ]; then
           echo 'AVISO: USE_HTTPS=true pero faltan /app/certs/key.pem o /app/certs/cert.pem. Arrancando sin TLS.';
         fi;
-        gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:5000 --workers 1 --reload --chdir src app:app;
+        gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:5000 --workers 1 --chdir src app:app;
       fi"
     security_opt:
       - no-new-privileges:true  
@@ -64,12 +64,13 @@ services:
     network_mode: "host"
     container_name: nullvoid-scraper
     volumes:
-      - ${DATA_HOST_DIR:-./data}:/app/data
-      - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/data/scraper
+      - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/scraper_data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
+    environment:
+      - SCRAPER_DIR=/app/scraper_data
     security_opt:
       - no-new-privileges:true
     read_only: false

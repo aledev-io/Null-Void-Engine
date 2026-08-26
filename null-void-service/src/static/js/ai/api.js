@@ -1,9 +1,15 @@
 export async function fetchModels() {
+    // Timeout: una petición colgada nunca debe bloquear el arranque del chat
+    // (el spinner de "Cargando conversación..." se quedaría para siempre).
+    // 6s: el backend reintenta Ollama como mucho ~3s; si no responde, la UI
+    // pasa al flujo "Sin modelos" en vez de esperar a que el navegador cierre.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     try {
-        const r = await fetch('/api/ai/models');
+        const r = await fetch('/api/ai/models', { signal: ctrl.signal });
         const data = await r.json();
         return data.models || [];
-    } catch (e) { return []; }
+    } catch (e) { return []; } finally { clearTimeout(timer); }
 }
 
 export async function loadCloudItemsForAttach() {
@@ -97,8 +103,45 @@ export async function searchHuggingFace() {
     resultsContainer.style.display = 'block';
     resultsContainer.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-dim);font-size:0.8rem;">Buscando en Hugging Face...</div>';
 
-    resultsContainer.innerHTML = '<div style="padding:10px;text-align:center;color:#f87171;font-size:0.85rem;font-weight:bold;">Búsqueda en la nube desactivada por privacidad (Modo Local Estricto).<br><span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">Usa el comando manual si necesitas un modelo.</span></div>';
+    try {
+        const response = await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(query)}+gguf&limit=10&full=false`);
+        if (!response.ok) throw new Error('Error en la API de Hugging Face');
+        const models = await response.json();
 
+        if (!models || models.length === 0) {
+            resultsContainer.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-dim);font-size:0.8rem;">No se encontraron modelos GGUF para esa búsqueda.</div>';
+            return;
+        }
+
+        const safeModels = models.filter(m => m && m.id && typeof m.id === 'string' && /^[a-zA-Z0-9_\-\.\/]+$/.test(m.id));
+
+        if (safeModels.length === 0) {
+            resultsContainer.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-dim);font-size:0.8rem;">No hay modelos validados de manera segura para esta consulta.</div>';
+            return;
+        }
+
+        resultsContainer.innerHTML = '';
+        safeModels.forEach(m => {
+            const repoId = m.id;
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; border-radius:4px; transition:background 0.15s;';
+            item.onmouseover = () => item.style.background = 'rgba(255,255,255,0.05)';
+            item.onmouseout = () => item.style.background = 'transparent';
+            item.onclick = () => {
+                const hfTag = `hf.co/${repoId}`;
+                document.getElementById('command-dialog-field').value = hfTag;
+                if (window.showToast) window.showToast(`Copiado: ${hfTag}`);
+            };
+
+            item.innerHTML = `
+                <span style="color:var(--text-main); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px;">${repoId}</span>
+                <span style="color:var(--primary); font-size:0.7rem; font-weight:600; background:rgba(99,102,241,0.12); padding:1px 6px; border-radius:4px;">Usar</span>
+            `;
+            resultsContainer.appendChild(item);
+        });
+    } catch (e) {
+        resultsContainer.innerHTML = `<div style="padding:10px;text-align:center;color:#f87171;font-size:0.78rem;">Error conectando a Hugging Face (${e.message}).<br><span style="color:var(--text-dim);font-size:0.72rem;">Usa el nombre directo (Tag / HF URL).</span></div>`;
+    }
 }
 
 export async function fetchAPIKeys() {

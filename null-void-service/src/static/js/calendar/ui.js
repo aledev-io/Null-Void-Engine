@@ -542,7 +542,6 @@ export const UI = {
     for (let d = 1; d <= daysInMonth; d++) {
       const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       let cls = 'mini-day';
-      if (ds === today) cls += ' is-today';
       if (ds === selectedDate) cls += ' selected';
       if (evDates.has(ds)) cls += ' has-events';
       html += `<div class="${cls}" data-date="${ds}">${d}</div>`;

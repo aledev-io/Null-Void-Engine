@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="darkreader-lock" />
     <title>Null-Void Engine</title>
@@ -13,7 +13,7 @@
             try {
                 let theme = localStorage.getItem('theme');
                 if (!theme) {
-                    theme = 'light';
+                    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
                 }
                 document.documentElement.setAttribute('data-theme', theme);
             } catch (e) {
@@ -21,6 +21,8 @@
             }
         })();
     </script>
+    <!-- Compat Legacy: detección síncrona ANTES del primer paint -->
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <script src="{{ url_for('static', filename='js/mobile-drag-drop.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/mobile-drag-drop.css') }}">
     <script>
@@ -35,6 +37,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/responsive.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/dashboard_notes.css') }}" />
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
     <style>
         :root {
             /* ── Backgrounds (dark-to-light: bg-primary → surface-hi) ── */
@@ -456,8 +460,7 @@
                                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                             </svg>
-                            <span id="notif-badge-count"
-                                style="display: none; position: absolute; top: -3px; right: -3px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: bold; min-width: 16px; height: 16px; border-radius: 10px; padding: 0 3px; align-items: center; justify-content: center; border: 2px solid var(--bg-secondary, #111827); box-sizing: border-box; z-index: 2;"></span>
+                            <span id="notif-badge-count"></span>
                         </button>
                     </div>
                 </div>
@@ -596,15 +599,6 @@
                                     style="display:flex;flex-direction:column;height:100%;width:100%;">
                                     <div class="notes-topbar">
                                         <div style="display:flex;align-items:center;gap:10px;">
-                                            <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()"
-                                                title="Abrir Menú" style="display:none; padding:4px;">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                                    stroke="currentColor" stroke-width="2">
-                                                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                                                </svg>
-                                            </button>
                                             <h2 data-i18n="note_notes">Notas</h2>
                                         </div>
                                         <button class="btn-primary" onclick="createNewNote()"
@@ -1158,21 +1152,61 @@
                 outline-offset: 3px;
             }
 
+            /* Badges de conteo: gradiente sutil, anillo y entrada con "pop"
+               (estilo profesional de apps de escritorio). */
+            @keyframes nv-badge-pop {
+                0% {
+                    transform: scale(0.4);
+                    opacity: 0;
+                }
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+
             .ai-widget-badge {
                 position: absolute;
-                top: -4px;
-                right: -4px;
+                top: -5px;
+                right: -5px;
                 min-width: 20px;
                 height: 20px;
                 padding: 0 5px;
-                border-radius: 10px;
-                background: #ef4444;
+                border-radius: 999px;
+                background: linear-gradient(135deg, #f87171 0%, #dc2626 60%, #b91c1c 100%);
                 color: #fff;
                 font-size: 11px;
-                font-weight: 700;
-                line-height: 20px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                line-height: 17px;
                 text-align: center;
-                box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+                border: 1.5px solid var(--bg-secondary, #111827);
+                box-sizing: border-box;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+                animation: nv-badge-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+
+            #notif-badge-count {
+                position: absolute;
+                top: -4px;
+                right: -4px;
+                min-width: 17px;
+                height: 17px;
+                padding: 0 4px;
+                border-radius: 999px;
+                background: linear-gradient(135deg, #f87171 0%, #dc2626 60%, #b91c1c 100%);
+                color: #fff;
+                font-size: 0.6rem;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                line-height: 14px;
+                align-items: center;
+                justify-content: center;
+                border: 1.5px solid var(--bg-secondary, #111827);
+                box-sizing: border-box;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+                z-index: 2;
+                animation: nv-badge-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
             }
 
             /* ---------- Panel de chat (Claude-style) ---------- */
@@ -1216,16 +1250,33 @@
             .chat-header {
                 display: flex;
                 align-items: center;
-                gap: 10px;
-                padding: 14px 16px 12px;
-                background: transparent;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                justify-content: space-between;
+                gap: 8px;
+                padding: 10px 14px;
+                background: rgba(18, 19, 32, 0.6);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                backdrop-filter: blur(12px);
+                flex-shrink: 0;
+            }
+
+            .chat-header-left {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-width: 0;
+                flex: 1;
+            }
+
+            .chat-header-actions {
+                display: flex;
+                align-items: center;
+                gap: 3px;
                 flex-shrink: 0;
             }
 
             .chat-avatar {
-                width: 32px;
-                height: 32px;
+                width: 28px;
+                height: 28px;
                 border-radius: 50%;
                 background: linear-gradient(135deg, #7c3aed, #4f46e5);
                 display: flex;
@@ -1236,8 +1287,8 @@
             }
 
             .chat-avatar svg {
-                width: 16px;
-                height: 16px;
+                width: 14px;
+                height: 14px;
             }
 
             .chat-header-info {
@@ -1281,67 +1332,39 @@
                 color: var(--nv-text);
             }
 
-            .chat-close {
-                background: none;
-                border: none;
-                color: rgba(255, 255, 255, 0.35);
+            .widget-icon-btn, .chat-close {
+                background: transparent;
+                border: 1px solid transparent;
+                color: rgba(255, 255, 255, 0.45);
                 cursor: pointer;
                 width: 28px;
                 height: 28px;
+                padding: 0;
                 border-radius: 6px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 16px;
-                line-height: 1;
-                flex-shrink: 0;
-                transition: color 0.15s ease, background 0.15s ease;
-            }
-
-            .chat-close:hover {
-                background: rgba(255, 255, 255, 0.07);
-                color: rgba(255, 255, 255, 0.8);
-            }
-
-            .widget-icon-btn {
-                background: none;
-                border: none;
-                color: rgba(255, 255, 255, 0.35);
-                cursor: pointer;
-                width: 28px;
-                height: 28px;
-                border-radius: 6px;
-                display: flex;
+                display: inline-flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
-                transition: color 0.15s ease, background 0.15s ease;
+                transition: all 0.15s ease;
             }
 
-            .widget-icon-btn:hover {
-                background: rgba(255, 255, 255, 0.07);
-                color: rgba(255, 255, 255, 0.8);
+            .widget-icon-btn:hover, .chat-close:hover {
+                background: rgba(255, 255, 255, 0.09);
+                color: rgba(255, 255, 255, 0.9);
+                border-color: rgba(255, 255, 255, 0.1);
             }
 
             .widget-icon-btn.active {
-                background: linear-gradient(135deg, #6d28d9, #7c3aed) !important;
-                color: #fff !important;
-                border: 1px solid rgba(167, 139, 250, 0.5) !important;
-                box-shadow: 0 0 10px rgba(124, 58, 237, 0.5) !important;
+                background: rgba(124, 58, 237, 0.22) !important;
+                color: #a78bfa !important;
+                border: 1px solid rgba(167, 139, 250, 0.4) !important;
+                box-shadow: 0 0 8px rgba(124, 58, 237, 0.25) !important;
             }
 
-            .widget-icon-btn svg {
-                width: 14px;
-                height: 14px;
-            }
-
-            #ai-widget-mode-btn {
-                width: 30px;
-                height: 30px;
-            }
-            #ai-widget-mode-btn svg {
-                width: 16px;
-                height: 16px;
+            .widget-icon-btn svg, .chat-close svg {
+                width: 15px;
+                height: 15px;
+                display: block;
             }
 
             /* ---------- Panel de historial ---------- */
@@ -2230,59 +2253,74 @@
         <div id="ai-agent-widget">
             <div id="ai-widget-modal" class="chat-panel" role="dialog" aria-label="Nexus AI">
                 <div class="chat-header">
-                    <div class="chat-avatar">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
-                            <path
-                                d="M12 2.4 Q13.56 13.56 21.6 12 Q10.44 13.56 12 21.6 Q10.44 10.44 2.4 12 Q13.56 10.44 12 2.4 Z" />
-                            <circle cx="5.6" cy="16.2" r="1.1" />
-                        </svg>
-                    </div>
+                    <div class="chat-header-left">
+                        <div class="chat-avatar">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
+                                <path
+                                    d="M12 2.4 Q13.56 13.56 21.6 12 Q10.44 13.56 12 21.6 Q10.44 10.44 2.4 12 Q13.56 10.44 12 2.4 Z" />
+                                <circle cx="5.6" cy="16.2" r="1.1" />
+                            </svg>
+                        </div>
 
-                    <span id="ai-widget-model-chip"
-                        title="Modelo actual. Cambia de modelo escribiendo /models en el chat"
-                        style="flex-shrink:0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.62rem;font-weight:600;color:rgba(255,255,255,0.55);background:rgba(124,58,237,0.18);border:1px solid rgba(167,139,250,0.35);border-radius:8px;padding:3px 7px;cursor:help;user-select:none;">…</span>
-                    <button id="ai-widget-newchat" class="widget-icon-btn" data-i18n-title="wg_new_chat"
-                        title="Nueva conversación" aria-label="Nueva conversación">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
-                    </button>
-                    <button id="ai-widget-history" class="widget-icon-btn" data-i18n-title="wg_history"
-                        title="Historial" aria-label="Historial">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                        </svg>
-                    </button>
-                    <button id="ai-widget-settings-btn" class="widget-icon-btn" onclick="openWidgetModelSettingsDialog()"
-                        title="Configuración del Modelo" aria-label="Configuración del Modelo">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                        </svg>
-                    </button>
-                    <button id="ai-widget-reasoning-btn" class="widget-icon-btn"
-                        title="Modo Razonamiento (Pensamiento Profundo)" aria-label="Modo Razonamiento">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 18h6"/>
-                            <path d="M10 22h4"/>
-                            <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>
-                        </svg>
-                    </button>
-                    <button id="ai-widget-mode-btn" class="widget-icon-btn"
-                        title="Modo Agenda: respuestas con datos reales del calendario" aria-label="Modo Agenda">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <rect x="4" y="4" width="16" height="16" rx="3"></rect>
-                            <line x1="8" y1="10" x2="16" y2="10"></line>
-                            <line x1="8" y1="14" x2="13" y2="14"></line>
-                        </svg>
-                    </button>
-                    <button id="ai-widget-close" class="chat-close" data-i18n-title="wg_close" aria-label="Cerrar"
-                        title="Cerrar">✕</button>
+                        <span id="ai-widget-model-chip"
+                            title="Modelo actual. Cambia de modelo escribiendo /models en el chat"
+                            style="flex-shrink:1;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.65rem;font-weight:600;color:rgba(255,255,255,0.7);background:rgba(124,58,237,0.18);border:1px solid rgba(167,139,250,0.35);border-radius:6px;padding:2px 7px;cursor:help;user-select:none;">…</span>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button id="ai-widget-newchat" class="widget-icon-btn" data-i18n-title="wg_new_chat"
+                            title="Nueva conversación" aria-label="Nueva conversación">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                        </button>
+                        <button id="ai-widget-history" class="widget-icon-btn" data-i18n-title="wg_history"
+                            title="Historial" aria-label="Historial">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                        </button>
+                        <button id="ai-widget-settings-btn" class="widget-icon-btn" onclick="openWidgetModelSettingsDialog()"
+                            title="Configuración del Modelo" aria-label="Configuración del Modelo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </button>
+                        <button id="ai-widget-reasoning-btn" class="widget-icon-btn"
+                            title="Modo Razonamiento (Pensamiento Profundo)" aria-label="Modo Razonamiento">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18h6"/>
+                                <path d="M10 22h4"/>
+                                <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>
+                            </svg>
+                        </button>
+                        <button id="ai-widget-mode-btn" class="widget-icon-btn"
+                            title="Modo Agenda: respuestas con datos reales del calendario" aria-label="Modo Agenda">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+                                <line x1="8" y1="10" x2="16" y2="10"></line>
+                                <line x1="8" y1="14" x2="13" y2="14"></line>
+                            </svg>
+                        </button>
+                        <button id="ai-widget-privacy-btn" class="widget-icon-btn"
+                            title="Modo Estricto: todos los filtros y restricciones activados" aria-label="Modo de privacidad">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="6" x2="12" y2="18"></line>
+                                <line x1="6" y1="12" x2="18" y2="12"></line>
+                            </svg>
+                        </button>
+                        <button id="ai-widget-close" class="widget-icon-btn chat-close" data-i18n-title="wg_close" aria-label="Cerrar"                            title="Cerrar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div id="ai-widget-messages" class="chat-messages" aria-live="polite"></div>
                 <div id="ai-widget-history-panel" class="chat-history">
@@ -2325,6 +2363,13 @@
             [data-theme="light"] .nv-model-picker {
                 background: #ffffff;
                 border-color: rgba(0, 0, 0, 0.12);
+            }
+
+            @media (max-width: 800px) {
+                .nv-model-picker {
+                    left: 8px !important;
+                    width: calc(100vw - 16px) !important;
+                }
             }
         </style>
         <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/katex.min.css') }}">

@@ -2,10 +2,11 @@ package com.nullvoid.app
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -17,6 +18,7 @@ import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.os.Environment
 import android.view.Menu
 import android.view.MenuItem
@@ -29,14 +31,21 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.core.view.*
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.google.firebase.messaging.FirebaseMessaging
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
+import javax.net.ssl.*
+import java.security.cert.X509Certificate
 
 class MainActivity : AppCompatActivity() {
 
@@ -48,6 +57,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: Toolbar
     private lateinit var loadingBar: android.widget.ProgressBar
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    // Reintentos ante fallos transitorios de conexión (keep-alive/cierre de socket)
+    private var connectionRetryCount = 0
 
     // Petición web (cámara/micrófono) esperando a que el usuario acepte el permiso nativo
     private var pendingPermissionRequest: PermissionRequest? = null
@@ -107,7 +119,16 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Edge-to-edge: en Android 10+ funciona bien; en Android 9 (Redmi 8, API 28)
+        // el manejo de insets es más problemático con el teclado virtual.
+        // Solo activamos edge-to-edge completo en API 30+ donde el IME inset es fiable.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+        } else {
+            // API <30 (Redmi 8): dejar que Android gestione el teclado de forma tradicional.
+            // adjustResize funcionará correctamente sin edge-to-edge.
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+        }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -119,16 +140,29 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         val rootLayout = findViewById<View>(R.id.rootLayout)
-        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, windowInsets ->
-            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
-            view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
-            WindowInsetsCompat.CONSUMED
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // API 30+: edge-to-edge activo, manejar insets manualmente.
+            // Solo aplicamos insets de system bars (NO del IME) al rootLayout;
+            // el IME se maneja aparte en el WebView para que adjustResize funcione.
+            ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, windowInsets ->
+                val bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+                view.setPadding(bars.left, bars.top, bars.right, 0)
+                windowInsets
+            }
         }
+        // En API <30 no necesitamos listener: el sistema maneja todo
+        // automáticamente con adjustResize + decor fits system windows = true
 
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
 
         loadingBar = findViewById(R.id.loadingBar)
+
+        // Pantalla completa: ocultar los 3 botones de Android (navegación) y la
+        // barra de estado desde el primer frame. El usuario puede recuperarlos
+        // temporalmente con un swipe desde el borde (transient bars).
+        setFullScreenMode(true)
 
         // Back moderno: gestiona la pila de navegación de la web y cierra la app desde el shell local.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -212,8 +246,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Alertas del Motor"
-            val descriptionText = "Notificaciones privadas de Null-Void"
+            val name = getString(R.string.notification_channel_name)
+            val descriptionText = getString(R.string.notification_channel_desc)
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel("null_void_alerts", name, importance).apply {
                 description = descriptionText
@@ -264,6 +298,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Si el usuario hace swipe para ver las barras (modo transient), o Android
+    // las muestra al abrir diálogos/teclado, volvemos a ocultarlas en cuanto
+    // la ventana recupera el foco. Solo se omiten cuando el teclado virtual
+    // está abierto, para no pelear con el IME.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) return
+        val imeVisible = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.decorView.rootWindowInsets
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        } else false
+        if (!imeVisible) setFullScreenMode(true)
+    }
+
     @Suppress("SetJavaScriptEnabled")
     private fun setupWebView() {
         // User-Agent real del WebView + marca propia (sin suplantar otro dispositivo).
@@ -308,7 +356,8 @@ class MainActivity : AppCompatActivity() {
                 val isLocal = url != null && url.startsWith("file:///android_asset/")
                 if (isLocal) {
                     toolbar.visibility = View.GONE
-                    setFullScreenMode(false)
+                    // Pantalla completa también en el shell local de la app.
+                    setFullScreenMode(true)
                 } else {
                     toolbar.visibility = View.VISIBLE
                     val uri = url?.toUri()
@@ -316,6 +365,7 @@ class MainActivity : AppCompatActivity() {
                     if (netName != null) {
                         supportActionBar?.title = netName
                     }
+                    // Pantalla completa al entrar en una instancia.
                     setFullScreenMode(true)
                 }
             }
@@ -340,7 +390,7 @@ class MainActivity : AppCompatActivity() {
                     handler?.cancel()
                     Toast.makeText(
                         this@MainActivity,
-                        "Conexión no segura ($host). Revisa el certificado SSL del servidor.",
+                        getString(R.string.ssl_error_warning, host ?: getString(R.string.unknown_host)),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -348,6 +398,28 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 if (request?.isForMainFrame == true) {
+                    val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
+                    } else WebViewClient.ERROR_UNKNOWN
+
+                    // Fallos transitorios (socket keep-alive cerrado en mitad de la
+                    // navegación, p. ej. al salir de un módulo con peticiones en vuelo):
+                    // se reintenta una vez antes de mostrar la página de error.
+                    val transient = code == WebViewClient.ERROR_CONNECT ||
+                            code == WebViewClient.ERROR_IO ||
+                            code == WebViewClient.ERROR_TIMEOUT
+                    if (transient && connectionRetryCount < 1) {
+                        connectionRetryCount++
+                        view?.postDelayed({
+                            if (view != null) {
+                                if (view.canGoBack() && !view.url.isNullOrEmpty()) view.goBack()
+                                else view.reload()
+                            }
+                        }, 800)
+                        return
+                    }
+                    connectionRetryCount = 0
+
                     val errorMsg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         error?.description?.toString() ?: "Error"
                     } else "Error"
@@ -362,7 +434,7 @@ class MainActivity : AppCompatActivity() {
             override fun onPermissionRequest(request: PermissionRequest?) {
                 runOnUiThread {
                     if (request == null) return@runOnUiThread
-                    val host = request.origin?.host ?: "sitio web"
+                    val host = request.origin?.host ?: getString(R.string.website)
 
                     // Si la web pide micro/cámara, primero hay que tener el permiso
                     // nativo de la app (lo pide el sistema una única vez).
@@ -423,30 +495,101 @@ class MainActivity : AppCompatActivity() {
 
         webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
             try {
-                val request = DownloadManager.Request(Uri.parse(url))
-                request.setMimeType(mimetype)
-                
-                val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
-                
-                request.addRequestHeader("User-Agent", userAgent)
                 val cookies = CookieManager.getInstance().getCookie(url)
-                request.addRequestHeader("Cookie", cookies)
-                
-                request.setTitle(fileName)
-                request.setDescription("Descargando archivo...")
-                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-                
-                val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                dm.enqueue(request)
-                
-                Toast.makeText(this, "Iniciando descarga...", Toast.LENGTH_SHORT).show()
+                val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+
+                Toast.makeText(this, getString(R.string.starting_download), Toast.LENGTH_SHORT).show()
+
+                Thread {
+                    try {
+                        val urlConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+                            if (this is HttpsURLConnection) {
+                                sslSocketFactory = getUnsafeSslSocketFactory()
+                                hostnameVerifier = HostnameVerifier { _, _ -> true }
+                            }
+                            if (!cookies.isNullOrBlank()) setRequestProperty("Cookie", cookies)
+                            setRequestProperty("User-Agent", userAgent)
+                            connectTimeout = 10000
+                            readTimeout = 10000
+                        }
+
+                        if (urlConnection.responseCode == HttpURLConnection.HTTP_OK) {
+                            val bytes = urlConnection.inputStream.use { it.readBytes() }
+                            // Scoped storage (Android 10+): guardar vía MediaStore.Downloads
+                            // sin permisos; en versiones antiguas, ruta directa en Descargas.
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                val values = ContentValues().apply {
+                                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                                    put(MediaStore.Downloads.MIME_TYPE, mimetype ?: "application/octet-stream")
+                                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Null-Void")
+                                }
+                                val resolver = contentResolver
+                                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                                    ?: throw IllegalStateException("No se pudo crear el archivo en Descargas")
+                                resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                                    ?: throw IllegalStateException("No se pudo abrir el archivo")
+                            } else {
+                                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                val dir = File(downloadsDir, "Null-Void").apply { mkdirs() }
+                                val file = File(dir, fileName)
+                                file.writeBytes(bytes)
+                                Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).also { mediaScanIntent ->
+                                    mediaScanIntent.data = Uri.fromFile(file)
+                                    sendBroadcast(mediaScanIntent)
+                                }
+                            }
+
+                            runOnUiThread {
+                                Toast.makeText(this, getString(R.string.download_saved), Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            runOnUiThread {
+                                Toast.makeText(this, "Error: ${urlConnection.responseCode}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Download error: ${e.message}")
+                        runOnUiThread {
+                            Toast.makeText(this, "Error: No se pudo completar la descarga", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }.start()
             } catch (e: Exception) {
                 val intent = Intent(Intent.ACTION_VIEW)
                 intent.data = Uri.parse(url)
                 startActivity(intent)
             }
         }
+    }
+
+    private fun showDownloadFinishedNotification(fileName: String, file: File) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            val uri = FileProvider.getUriForFile(
+                this@MainActivity,
+                "${packageName}.fileprovider",
+                file
+            )
+            val extension = file.extension
+            val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(this, "null_void_alerts")
+            .setSmallIcon(R.drawable.ic_refresh)
+            .setContentTitle(fileName)
+            .setContentText(getString(R.string.download_complete))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify((System.currentTimeMillis() % 10000).toInt(), builder.build())
     }
 
     /** Restringe el puente JS al shell local de la app */
@@ -493,9 +636,9 @@ class MainActivity : AppCompatActivity() {
         val labels = request.resources
             .map { r ->
                 when (r) {
-                    PermissionRequest.RESOURCE_VIDEO_CAPTURE -> "cámara"
-                    PermissionRequest.RESOURCE_AUDIO_CAPTURE -> "micrófono"
-                    PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID -> "medios protegidos"
+                    PermissionRequest.RESOURCE_VIDEO_CAPTURE -> getString(R.string.camera)
+                    PermissionRequest.RESOURCE_AUDIO_CAPTURE -> getString(R.string.microphone)
+                    PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID -> getString(R.string.protected_media)
                     else -> r
                 }
             }
@@ -503,13 +646,13 @@ class MainActivity : AppCompatActivity() {
             .joinToString(", ")
 
         android.app.AlertDialog.Builder(this)
-            .setTitle("Permiso de la web")
-            .setMessage("\"$host\" quiere acceder a: $labels.")
-            .setPositiveButton("Permitir") { _, _ ->
+            .setTitle(getString(R.string.web_permission_title))
+            .setMessage(getString(R.string.web_permission_msg, host, labels))
+            .setPositiveButton(getString(R.string.allow)) { _, _ ->
                 webPermissionPrefs.edit().putString("host:$host", "yes").apply()
                 request.grant(request.resources)
             }
-            .setNegativeButton("Denegar") { _, _ ->
+            .setNegativeButton(getString(R.string.deny)) { _, _ ->
                 webPermissionPrefs.edit().putString("host:$host", "no").apply()
                 request.deny()
             }
@@ -531,7 +674,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_refresh -> {
-                Toast.makeText(this, "Recargando...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_reloading), Toast.LENGTH_SHORT).show()
                 webView.reload()
                 true
             }
@@ -585,5 +728,17 @@ class MainActivity : AppCompatActivity() {
         super.onConfigurationChanged(newConfig)
         updateWebViewTheme()
         webView.invalidate()
+    }
+
+    // Genera una factoría SSL que ignora certificados no válidos (solo para desarrollo/red local)
+    private fun getUnsafeSslSocketFactory(): SSLSocketFactory {
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("SSL")
+        sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+        return sslContext.socketFactory
     }
 }

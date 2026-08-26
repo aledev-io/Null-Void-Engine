@@ -1,5 +1,6 @@
 import io
 import json
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -18,7 +19,7 @@ import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from flask import request, send_file, jsonify, after_this_request, Response
+from flask import request, send_file, jsonify, Response
 from modules.session import session as sess
 from config.config import CONFIG
 from . import repository
@@ -28,7 +29,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NullVoidCloud")
 
 BASE_CLOUD_ROOT = os.path.join(CONFIG.DATA_DIR, 'Cloud')
-CONFIG_PATH = os.path.join(CONFIG.DATA_DIR, 'cloud_config.json')
 os.makedirs(BASE_CLOUD_ROOT, exist_ok=True)
 
 MAX_FILE_SIZE_PREVIEW = 100 * 1024 * 1024
@@ -224,6 +224,9 @@ def resolve_shared_path(current_uid, owner_id, name, subpath):
             base = owner_root
             if exact.get('view') == 'computers':
                 base = os.path.realpath(os.path.join(owner_root, '.computers'))
+            elif exact.get('view') == 'ai':
+                # Los archivos de IA viven en <DATA_DIR>/ai/<owner>/, no en el Cloud
+                base = ai_root_for_uid(owner_id)
             return safe_join(base, exact_path, exact['file_name'])
 
     # 2) Recurso compartido = la carpeta (primer segmento de la ruta): el
@@ -232,6 +235,8 @@ def resolve_shared_path(current_uid, owner_id, name, subpath):
     if not shared_item:
         logger.warning(f"[SECURITY][WARN] IDOR Interceptado: Usuario {current_uid} intentó acceder a recurso de {owner_id}")
         raise PermissionError("Acceso denegado a este recurso")
+    if shared_item.get('view') == 'ai':
+        owner_root = ai_root_for_uid(owner_id)
 
     if shared_item['view'] == 'computers':
         owner_root = os.path.realpath(os.path.join(owner_root, '.computers'))
@@ -283,16 +288,321 @@ def _is_safe_path(base_root, target_path) -> bool:
         return False
 
 
-def get_user_root(token=None):
-    if token is None:
-        token = get_token()
-    uid = sess.get_user_id(token) if token else None
+def user_root_for_uid(uid):
     if not uid:
         return None
     safe_uid = "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
     if not safe_uid:
         safe_uid = "unknown"
     return safe_join(BASE_CLOUD_ROOT, safe_uid)
+
+
+def get_user_root(token=None):
+    if token is None:
+        token = get_token()
+    uid = sess.get_user_id(token) if token else None
+    return user_root_for_uid(uid)
+
+
+# ── Adjuntos del módulo de IA ────────────────────────────────────
+# Los archivos adjuntos de la IA se guardan físicamente en
+# <DATA_DIR>/ai/<uid>/ y su metadata vive en la tabla de Cloud
+# ai_attachment_files (id uuid = FK usada por ai_messages.attachments).
+
+AI_BASE_ROOT = os.path.join(CONFIG.DATA_DIR, 'ai')
+os.makedirs(AI_BASE_ROOT, exist_ok=True)
+
+
+def get_ai_root(token=None):
+    if token is None:
+        token = get_token()
+    uid = sess.get_user_id(token) if token else None
+    if not uid:
+        return None
+    return ai_root_for_uid(uid)
+
+
+def ai_root_for_uid(uid):
+    if not uid:
+        return None
+    safe_uid = "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+    if not safe_uid:
+        safe_uid = "unknown"
+    return safe_join(AI_BASE_ROOT, safe_uid)
+
+
+def _ai_ref_from_row(row):
+    size = int(row['size'] or 0)
+    return {
+        "id": row['id'],
+        "name": row['filename'],
+        "size": size,
+        "sizeLabel": f"{size/1024:.1f} KB",
+        "type": row['mime'] or mimetypes.guess_type(row['filename'])[0] or "application/octet-stream",
+        "isImage": bool(row['is_image']),
+        "isText": bool(row['is_text']),
+        "isAudio": bool(row['is_audio']),
+    }
+
+
+def _ai_ext_flags(filename):
+    ext = os.path.splitext(filename)[1].lower()
+    return {
+        "mime": mimetypes.guess_type(filename)[0] or "application/octet-stream",
+        "is_image": ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'),
+        "is_text": ext in ('.txt', '.js', '.py', '.json', '.md', '.html', '.css', '.c', '.cpp', '.h', '.sh', '.sql', '.csv', '.ts', '.tsx', '.jsx', '.xml', '.yaml', '.yml', '.toml', '.ini'),
+        "is_audio": ext in ('.mp3', '.wav', '.ogg', '.webm', '.m4a', '.flac', '.aac'),
+    }
+
+
+def ai_save_file_uid(uid, filename, data: bytes, username=None, check_quota=True):
+    """Guarda un adjunto de IA bajo <DATA_DIR>/ai/<uid>/ con dedup de nombres,
+    registra su metadata en ai_attachment_files y devuelve el ref {id, ...}
+    (id = uuid, la FK que se persiste en ai_messages)."""
+    root = ai_root_for_uid(uid)
+    if not root:
+        return {"error": "Usuario inválido"}
+    base = os.path.basename(str(filename).replace('\\', '/')).strip() or 'archivo'
+    if not base or base in ('.', '..'):
+        return {"error": "Nombre de archivo no válido"}
+    stem, ext = os.path.splitext(base)
+    if len(stem) > 120:
+        base = stem[:120] + ext
+    candidate = base
+    counter = 1
+    while True:
+        try:
+            path = safe_join(root, candidate)
+        except ValueError:
+            return {"error": "Nombre de archivo no válido"}
+        if not os.path.exists(path):
+            break
+        stem, ext = os.path.splitext(base)
+        candidate = f"{stem} ({counter}){ext}"
+        counter += 1
+    file_size = len(data)
+    if check_quota:
+        # Uso derivado mantenido por triggers (ai_storage_usage): evita el
+        # escaneo de directorio on-demand que hacía get_dir_size.
+        limit_bytes = repository.get_user_quota_by_uid(uid) * 1024 * 1024 * 1024
+        if repository.get_ai_storage_usage(uid) + file_size > limit_bytes:
+            return {"error": "Espacio insuficiente en Null-Void Cloud"}
+    os.makedirs(root, exist_ok=True)
+    tmp_path = path + '.part'
+    with open(tmp_path, 'wb') as f:
+        f.write(data)
+    os.replace(tmp_path, path)
+    flags = _ai_ext_flags(candidate)
+    file_id = uuid.uuid4().hex
+    repository.add_ai_attachment(uid, file_id, candidate, file_size, flags["mime"],
+                                 flags["is_image"], flags["is_text"], flags["is_audio"])
+    if username and uid:
+        add_activity(username, uid, "Adjuntaste en IA", candidate, "")
+    row = repository.get_ai_attachment(uid, file_id)
+    return _ai_ref_from_row(row) if row else {"error": "No se pudo registrar el archivo"}
+
+
+def ai_save_file(token, filename, data: bytes, username=None, user_id=None):
+    """Versión con token: resuelve el uid de la sesión y delega."""
+    uid = user_id or (sess.get_user_id(token) if token else None)
+    if not uid:
+        return {"error": "No autorizado"}
+    return ai_save_file_uid(uid, filename, data, username, check_quota=True)
+
+
+def ai_download_file_by_uid(uid, file_id):
+    row = repository.get_ai_attachment(uid, file_id)
+    if row:
+        try:
+            path = safe_join(ai_root_for_uid(uid), row['filename'])
+        except ValueError:
+            return None
+        return path if os.path.isfile(path) else None
+    # Respaldo: tratar el id como nombre de archivo (datos legacy sin metadata)
+    root = ai_root_for_uid(uid)
+    if not root:
+        return None
+    try:
+        path = safe_join(root, os.path.basename(str(file_id)))
+    except ValueError:
+        return None
+    return path if os.path.isfile(path) else None
+
+
+def ai_download_file(token, file_id):
+    uid = sess.get_user_id(token) if token else None
+    if not uid:
+        return None
+    return ai_download_file_by_uid(uid, file_id)
+
+
+def ai_list_files(token):
+    uid = sess.get_user_id(token) if token else None
+    if not uid:
+        return []
+    return [_ai_ref_from_row(row) for row in repository.list_ai_attachments(uid)]
+
+
+def ai_get_refs_by_uid(uid, ids):
+    if not uid or not ids:
+        return []
+    rows = repository.get_ai_attachments_by_ids(uid, [i for i in ids if i])
+    return [_ai_ref_from_row(row) for row in rows]
+
+
+def ai_get_refs(token, ids):
+    uid = sess.get_user_id(token) if token else None
+    return ai_get_refs_by_uid(uid, ids)
+
+
+def ai_delete_file(token, file_id):
+    uid = sess.get_user_id(token) if token else None
+    if not uid:
+        return False
+    return ai_delete_files_by_uid(uid, [file_id]) > 0
+
+
+def ai_delete_files_by_uid(uid, ids):
+    """Elimina metadata + archivo físico de los adjuntos indicados."""
+    if not uid or not ids:
+        return 0
+    rows = repository.get_ai_attachments_by_ids(uid, ids)
+    root = ai_root_for_uid(uid)
+    deleted = 0
+    for row in rows:
+        if root:
+            try:
+                path = safe_join(root, row['filename'])
+            except ValueError:
+                path = None
+            if path and os.path.isfile(path):
+                os.remove(path)
+                deleted += 1
+    deleted += repository.delete_ai_attachments_by_ids(uid, ids)
+    return deleted
+
+
+def ai_trash_files_by_uid(uid, ids):
+    """Mueve los archivos adjuntos de IA a la papelera del usuario con origen 'Módulo de IA'."""
+    if not uid or not ids:
+        return 0
+    rows = repository.get_ai_attachments_by_ids(uid, ids)
+    if not rows:
+        return 0
+
+    base_root = user_root_for_uid(uid)
+    if not base_root:
+        return 0
+    os.makedirs(base_root, exist_ok=True)
+
+    trash_base = os.path.join(base_root, '.trash')
+    os.makedirs(trash_base, exist_ok=True)
+    ai_root = ai_root_for_uid(uid)
+
+    trashed_count = 0
+    new_entries = []
+
+    for row in rows:
+        filename = row['filename']
+        # Soft delete en base de datos
+        repository.trash_ai_attachment_by_filename(uid, filename)
+
+        if ai_root:
+            try:
+                src_path = safe_join(ai_root, filename)
+            except ValueError:
+                src_path = None
+            if src_path and os.path.isfile(src_path):
+                new_trash_id = str(uuid.uuid4())
+                dst_path = os.path.join(trash_base, new_trash_id)
+                try:
+                    shutil.move(src_path, dst_path)
+                    trash_entry = {
+                        "id": new_trash_id,
+                        "name": filename,
+                        "original_path": "",
+                        "view": "ai",
+                        "origin": "Módulo de IA",
+                        "deleted_at": time.time(),
+                    }
+                    new_entries.append(trash_entry)
+                    trashed_count += 1
+                except Exception as e:
+                    logger.warning(f"[OPERATIONAL][WARN] Error al mover adjunto IA {filename} a papelera: {e}")
+
+    if new_entries:
+        _update_json(base_root, '.trash.json', lambda d: list(d) + new_entries)
+        invalidate_user_index(uid)
+
+    return trashed_count
+
+
+def ai_cleanup_attachments(uid, ids):
+    """Mueve los adjuntos huérfanos a la papelera al eliminar sesiones de chat."""
+    return ai_trash_files_by_uid(uid, ids)
+
+
+def ai_read_file_by_uid(uid, file_id):
+    """Devuelve el contenido (bytes) de un archivo de IA del usuario, o None."""
+    row = repository.get_ai_attachment(uid, file_id)
+    if not row:
+        return None
+    root = ai_root_for_uid(uid)
+    if not root:
+        return None
+    try:
+        path = safe_join(root, row['filename'])
+    except ValueError:
+        return None
+    if not os.path.isfile(path):
+        return None
+    with open(path, 'rb') as f:
+        return f.read()
+
+
+def ai_read_file(token, file_id):
+    uid = sess.get_user_id(token) if token else None
+    if not uid:
+        return None
+    return ai_read_file_by_uid(uid, file_id)
+
+
+def ai_update_file_by_uid(uid, file_id, data: bytes, check_quota=True):
+    """Sobrescribe el contenido de un archivo de IA preservando nombre y
+    metadata (usado por notas y archivos generados). Devuelve el ref o None."""
+    row = repository.get_ai_attachment(uid, file_id)
+    if not row:
+        return None
+    root = ai_root_for_uid(uid)
+    if not root:
+        return None
+    try:
+        path = safe_join(root, row['filename'])
+    except ValueError:
+        return None
+    if check_quota:
+        # Uso derivado mantenido por triggers (ai_storage_usage)
+        limit_bytes = repository.get_user_quota_by_uid(uid) * 1024 * 1024 * 1024
+        if repository.get_ai_storage_usage(uid) + len(data) - int(row['size'] or 0) > limit_bytes:
+            return {"error": "Espacio insuficiente en Null-Void Cloud"}
+    os.makedirs(root, exist_ok=True)
+    tmp_path = path + '.part'
+    with open(tmp_path, 'wb') as f:
+        f.write(data)
+    os.replace(tmp_path, path)
+    repository.update_ai_attachment_size(uid, file_id, len(data))
+    # Si la fila estaba en la papelera del Cloud, se reactiva (el archivo
+    # vuelve a estar gestionado tras una edición).
+    repository.restore_ai_attachment_by_filename(uid, row['filename'])
+    updated = repository.get_ai_attachment(uid, file_id)
+    return _ai_ref_from_row(updated) if updated else None
+
+
+def ai_update_file(token, file_id, data: bytes, check_quota=True):
+    uid = sess.get_user_id(token) if token else None
+    if not uid:
+        return None
+    return ai_update_file_by_uid(uid, file_id, data, check_quota)
 
 
 def find_protected_ancestor(protected_data, view, subpath, name):
@@ -337,6 +647,10 @@ def get_view_root(view='drive', token=None):
     base_root = get_user_root(token)
     if not base_root:
         return None
+    if view == 'ai':
+        # Los archivos de IA viven en <DATA_DIR>/ai/<uid>/ (misma metadata
+        # ai_attachment_files que usan los adjuntos del chat).
+        return ai_root_for_uid(sess.get_user_id(token) if token else None)
     if view in ('computers', 'backups', 'business', 'trash'):
         return safe_join(base_root, f'.{view}')
     return base_root
@@ -512,6 +826,75 @@ def _update_json(user_root, filename, update_fn, default=None):
                 except OSError:
                     pass
         return new_data
+
+
+def _clean_starred_entry(base_root, name, subpath):
+    """Elimina la entrada de destacados cuando un archivo o carpeta se elimina."""
+    if not base_root or not name:
+        return
+    subpath = (subpath or '').strip('/')
+    target_prefix = f"{subpath}/{name}" if subpath else name
+
+    def _remove(starred_data):
+        new_list = []
+        for item in starred_data:
+            item_name = item.get('name')
+            item_path = (item.get('path') or '').strip('/')
+            if item_name == name and item_path == subpath:
+                continue
+            if item_path == target_prefix or item_path.startswith(target_prefix + '/'):
+                continue
+            new_list.append(item)
+        return new_list
+
+    _update_json(base_root, '.starred.json', _remove)
+
+
+def _rename_starred_entry(base_root, old_name, new_name, subpath):
+    """Actualiza la entrada de destacados al renombrar un archivo o carpeta."""
+    if not base_root or not old_name or not new_name:
+        return
+    subpath = (subpath or '').strip('/')
+    old_prefix = f"{subpath}/{old_name}" if subpath else old_name
+    new_prefix = f"{subpath}/{new_name}" if subpath else new_name
+
+    def _update(starred_data):
+        for item in starred_data:
+            item_name = item.get('name')
+            item_path = (item.get('path') or '').strip('/')
+            if item_name == old_name and item_path == subpath:
+                item['name'] = new_name
+            elif item_path == old_prefix:
+                item['path'] = new_prefix
+            elif item_path.startswith(old_prefix + '/'):
+                item['path'] = new_prefix + item_path[len(old_prefix):]
+        return starred_data
+
+    _update_json(base_root, '.starred.json', _update)
+
+
+def _move_starred_entry(base_root, name, old_subpath, new_subpath):
+    """Actualiza la entrada de destacados al mover un archivo o carpeta."""
+    if not base_root or not name:
+        return
+    old_subpath = (old_subpath or '').strip('/')
+    new_subpath = (new_subpath or '').strip('/')
+    old_prefix = f"{old_subpath}/{name}" if old_subpath else name
+    new_prefix = f"{new_subpath}/{name}" if new_subpath else name
+
+    def _update(starred_data):
+        for item in starred_data:
+            item_name = item.get('name')
+            item_path = (item.get('path') or '').strip('/')
+            if item_name == name and item_path == old_subpath:
+                item['path'] = new_subpath
+            elif item_path == old_prefix:
+                item['path'] = new_prefix
+            elif item_path.startswith(old_prefix + '/'):
+                item['path'] = new_prefix + item_path[len(old_prefix):]
+        return starred_data
+
+    _update_json(base_root, '.starred.json', _update)
 
 
 def add_activity(user, user_id, action, name, path="", owner_id=None):
@@ -744,6 +1127,8 @@ def list_trash(token, user_root):
                 origin = item.get('origin', '')
                 if not origin and item.get('view') == 'computers' and not item.get('original_path'):
                     origin = item['name'].replace(' 💻', '')
+                if not origin and item.get('view') == 'ai':
+                    origin = 'Módulo de IA'
                 files.append({
                     "id": item['id'], "name": item['name'],
                     "original_path": item['original_path'],
@@ -827,6 +1212,10 @@ def _finalize_upload(token, user_root, view, subpath, safe_filename, temp_path, 
             pass
 
     os.link(pool_file_path, final_file_path)
+
+    # Si es una subida nueva (no sobrescritura intencional), limpiar cualquier residuo en .starred.json
+    if not overwrite_existing:
+        _clean_starred_entry(user_root, final_filename, subpath)
 
     # Refrescar el caché: la próxima subida ya ve el espacio consumido.
     user_id = os.path.basename(user_root)
@@ -1365,7 +1754,21 @@ def delete_item(view, name, subpath, trash_id, token):
         return None
 
     if current_uid:
-        repository.remove_shares_by_file(current_uid, name, subpath, view)
+        recipients = repository.remove_shares_by_file(current_uid, name, subpath, view)
+        # Tiempo real: los usuarios con los que estaba compartido pierden el
+        # acceso al instante (su vista "Compartidos conmigo" se actualiza).
+        if recipients:
+            try:
+                for uid in recipients:
+                    socketio.emit('share_removed', {'name': name, 'by': current_uid, 'reason': 'deleted'}, room=f"user_{uid}")
+            except Exception:
+                pass
+
+    if view == 'ai':
+        # Los archivos de IA llevan su metadata en ai_attachment_files:
+        # al moverlos a la papelera se hace soft-delete de la fila (trashed_at)
+        # para poder reactivarla al restaurar.
+        repository.trash_ai_attachment_by_filename(current_uid, name)
 
     new_trash_id = str(uuid.uuid4())
     trash_base = os.path.join(base_root, '.trash')
@@ -1373,8 +1776,10 @@ def delete_item(view, name, subpath, trash_id, token):
     
     shutil.move(target_path, os.path.join(trash_base, new_trash_id))
 
-    trash_entry = {"id": new_trash_id, "name": name, "original_path": subpath, "view": view, "deleted_at": time.time()}
+    trash_origin = "Módulo de IA" if view == 'ai' else (subpath.strip('/') if subpath else view)
+    trash_entry = {"id": new_trash_id, "name": name, "original_path": subpath, "view": view, "origin": trash_origin, "deleted_at": time.time()}
     _update_json(base_root, '.trash.json', lambda d: list(d) + [trash_entry])
+    _clean_starred_entry(base_root, name, subpath)
     invalidate_user_index(current_uid)
     return True
 
@@ -1436,10 +1841,45 @@ def delete_permanent(trash_id, token):
         freed = 0
     bump_size_cache(current_uid, -freed)
 
+    # Borrado en firme de un archivo de IA: eliminar también su metadata
+    try:
+        entry = next((i for i in _load_json(base_root, '.trash.json') if i['id'] == trash_id), None)
+    except Exception:
+        entry = None
+
     _update_json(base_root, '.trash.json', lambda d: [i for i in d if i['id'] != trash_id])
+
+    if entry:
+        _clean_starred_entry(base_root, entry.get('name', ''), entry.get('original_path', ''))
+        if entry.get('view') == 'ai':
+            repository.delete_ai_attachment_by_filename(current_uid, entry.get('name', ''))
+
     invalidate_user_index(current_uid)
     clean_pool_async()
     return True
+
+
+def _relink_ai_attachment(uid, filename):
+    """Re-vincula un archivo de IA restaurado sin fila de metadata activa
+    (caso robusto: la fila se borró en firme o nunca existió). Si queda una
+    fila en papelera se reactiva; si no, crea un registro nuevo con un uuid
+    (los refs antiguos al uuid original no resuelven, pero el archivo vuelve
+    a estar gestionado por el módulo)."""
+    row = repository.get_ai_attachment_by_filename(uid, filename)
+    if row:
+        if row['trashed_at']:
+            repository.restore_ai_attachment_by_filename(uid, filename)
+        return row['id']
+    flags = _ai_ext_flags(filename)
+    try:
+        with open(safe_join(ai_root_for_uid(uid), filename), 'rb') as fh:
+            size = len(fh.read())
+    except Exception:
+        size = 0
+    file_id = uuid.uuid4().hex
+    repository.add_ai_attachment(uid, file_id, filename, size, flags["mime"],
+                                 flags["is_image"], flags["is_text"], flags["is_audio"])
+    return file_id
 
 
 def restore_item(trash_id, token):
@@ -1473,6 +1913,18 @@ def restore_item(trash_id, token):
             result["err"] = "Error al restaurar el elemento"
             return data
 
+        if item.get('view') == 'ai' and current_uid:
+            # Re-vincular la metadata de IA: si la fila sobrevive (soft-delete)
+            # se reactiva siguiendo el nombre final del archivo; si no existe,
+            # se crea un registro nuevo para que el archivo vuelva a estar
+            # gestionado por el módulo.
+            final_name = os.path.basename(target_path)
+            if not repository.restore_ai_attachment_by_filename(current_uid, item['name'], final_name):
+                try:
+                    _relink_ai_attachment(current_uid, final_name)
+                except ValueError:
+                    pass
+
         return [i for i in data if i['id'] != trash_id]
 
     _update_json(base_root, '.trash.json', _restore)
@@ -1486,6 +1938,14 @@ def restore_item(trash_id, token):
 def empty_trash(token):
     base_root = get_user_root(token)
     trash_path = os.path.join(base_root, '.trash')
+    current_uid = sess.get_user_id(token)
+    # Limpiar también la metadata de los archivos de IA en la papelera
+    try:
+        for entry in _load_json(base_root, '.trash.json'):
+            if entry.get('view') == 'ai' and current_uid:
+                repository.delete_ai_attachment_by_filename(current_uid, entry.get('name', ''))
+    except Exception:
+        pass
     if os.path.exists(trash_path):
         freed = _path_size(trash_path)
         shutil.rmtree(trash_path)
@@ -1493,7 +1953,6 @@ def empty_trash(token):
         freed = 0
     os.makedirs(trash_path, exist_ok=True)
     _save_json(base_root, '.trash.json', [])
-    current_uid = sess.get_user_id(token)
     bump_size_cache(current_uid, -freed)
     clean_pool_async()
     return True
@@ -1536,6 +1995,13 @@ def rename_item(view, old_name, new_name, subpath, token):
         return "Ya existe un elemento con ese nombre"
 
     os.rename(old_path, new_path)
+    _rename_starred_entry(base_root, old_name, new_name, subpath)
+
+    if view == 'ai':
+        # La metadata de IA sigue al archivo renombrado; si no, las
+        # descargas por uuid dejarían de resolver.
+        repository.update_ai_attachment_filename(sess.get_user_id(token), old_name, new_name)
+
     add_activity(sess.get_user(token), sess.get_user_id(token), "act_renombraste", new_name, subpath)
     invalidate_user_index(sess.get_user_id(token))
     return True
@@ -1544,6 +2010,10 @@ def rename_item(view, old_name, new_name, subpath, token):
 def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=None):
     if not (_check_agent_scope(view, old_subpath, token, name) and _check_agent_scope(view, new_subpath, token)):
         return None
+    if view == 'ai':
+        # Copiar dentro de la carpeta de IA crearía archivos físicos sin
+        # metadata (huérfanos). Copiar fuera rompería el vínculo del original.
+        return "Los archivos de IA no pueden copiarse desde aquí"
     current_uid = sess.get_user_id(token)
     if not current_uid:
         return None
@@ -1598,6 +2068,10 @@ def copy_item(view, name, old_subpath, new_subpath, owner_id, token, new_name=No
 def move_item(view, name, old_subpath, new_subpath, token):
     if not (_check_agent_scope(view, old_subpath, token, name) and _check_agent_scope(view, new_subpath, token)):
         return None
+    if view == 'ai':
+        # Los archivos de IA están vinculados a su metadata (ai_attachment_files):
+        # moverlos fuera de <DATA_DIR>/ai/<uid>/ rompería los refs de los chats.
+        return "Los archivos de IA no pueden moverse fuera de su carpeta"
     user_root = get_view_root(view, token)
     if not user_root:
         return None
@@ -1631,6 +2105,7 @@ def move_item(view, name, old_subpath, new_subpath, token):
         return "Ya existe un archivo o carpeta con ese nombre en el destino"
 
     shutil.move(old_path, new_path)
+    _move_starred_entry(base_root, name, old_subpath, new_subpath)
     invalidate_user_index(sess.get_user_id(token))
     return True
 
@@ -1659,6 +2134,10 @@ def toggle_star(name, subpath, view, owner_id, token):
             result["is_starred"] = False
         else:
             new_item = {"name": name, "path": subpath}
+            # Guardar la vista también para archivos propios no-'drive'
+            # (p. ej. 'ai'): list_starred los resuelve en su raíz correcta.
+            if view != 'drive':
+                new_item["view"] = view
             if owner_id and str(owner_id) != str(current_uid):
                 new_item["owner_id"] = owner_id
                 new_item["view"] = view
@@ -1712,6 +2191,7 @@ def list_starred(token):
     protected_data = _load_json(base_root, '.protected.json')
     current_uid = sess.get_user_id(token)
     files = []
+    valid_starred = []
     for item in starred_data:
         try:
             if 'owner_id' in item and str(item['owner_id']) != str(current_uid):
@@ -1722,9 +2202,12 @@ def list_starred(token):
                 owner_id = item['owner_id']
                 is_shared = True
             else:
-                fp = safe_join(base_root, item['path'], item['name'])
+                item_view = item.get('view', 'drive')
+                if item_view == 'ai':
+                    fp = safe_join(ai_root_for_uid(current_uid), item['path'], item['name'])
+                else:
+                    fp = safe_join(base_root, item['path'], item['name'])
                 is_comp = False
-                item_view = "drive"
                 owner = sess.get_user(token) or "Usuario"
                 owner_id = current_uid
                 is_shared = False
@@ -1745,6 +2228,7 @@ def list_starred(token):
         if not os.path.exists(fp):
             continue
             
+        valid_starred.append(item)
         info = os.stat(fp)
         files.append({
             "name": item['name'], "path": item['path'],
@@ -1756,6 +2240,11 @@ def list_starred(token):
             "view": item_view,
             "is_shared": is_shared
         })
+
+    # Auto-limpieza: si había elementos de archivos borrados, sanear .starred.json
+    if len(valid_starred) != len(starred_data):
+        _save_json(base_root, '.starred.json', valid_starred)
+
     return files
 
 
@@ -2401,7 +2890,21 @@ def get_download_token(view, name, subpath, owner_id, trash_id, token, is_previe
                 if os.path.exists(alt):
                     target_path = alt
     except PermissionError:
-        return None, "access_revoked"
+        # Distinguir el motivo: si el recurso ya no existe (papelera del
+        # dueño o desaparecido), el dueño se deshizo del archivo; si sigue
+        # en su sitio, fue un "dejar de compartir" explícito.
+        try:
+            owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, str(owner_id)))
+            trash_data = _load_json(owner_root, '.trash.json') or []
+            for t in trash_data:
+                if (str(t.get('name')) == name
+                        and (t.get('original_path') or '').strip('/') == subpath.strip('/')):
+                    return None, "shared_file_gone"
+            if os.path.exists(safe_join(owner_root, subpath, name)):
+                return None, "access_revoked"
+            return None, "shared_file_gone"
+        except Exception:
+            return None, "shared_file_gone"
     except ValueError:
         return None, None
 
@@ -2943,9 +3446,12 @@ def list_shared_with_me(token):
 
     for s in rows:
         try:
-            owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, s['owner_id']))
-            if s['view'] == 'computers':
-                owner_root = os.path.realpath(os.path.join(owner_root, '.computers'))
+            if s['view'] == 'ai':
+                owner_root = ai_root_for_uid(s['owner_id'])
+            else:
+                owner_root = os.path.realpath(os.path.join(BASE_CLOUD_ROOT, s['owner_id']))
+                if s['view'] == 'computers':
+                    owner_root = os.path.realpath(os.path.join(owner_root, '.computers'))
             fp = safe_join(owner_root, s['file_path'], s['file_name'])
             
             if os.path.exists(fp):

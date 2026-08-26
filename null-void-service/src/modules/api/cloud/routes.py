@@ -1,6 +1,5 @@
 import os
 import sys
-import glob
 import logging
 from functools import wraps
 from flask import Blueprint, jsonify, request, send_file

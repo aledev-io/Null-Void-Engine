@@ -13,7 +13,26 @@ export async function initNotes(userId) {
     try {
         const res = await fetch('/api/ai/notes');
         const data = await res.json();
-        notes = data.notes || [];
+        notes = (data.notes || []).map(n => {
+            let u = Number(n.updatedAt ?? n.updated);
+            let c = Number(n.createdAt ?? n.created);
+            if ((!u || isNaN(u) || u <= 0) && (!c || isNaN(c) || c <= 0)) {
+                const nid = Number(n.id);
+                if (!isNaN(nid) && nid > 1e9) {
+                    c = nid > 1e11 ? nid : nid * 1000;
+                    u = c;
+                }
+            }
+            if (!u || isNaN(u) || u <= 0) u = c || 0;
+            if (!c || isNaN(c) || c <= 0) c = u || 0;
+            return {
+                ...n,
+                createdAt: c,
+                created: c,
+                updatedAt: u,
+                updated: u
+            };
+        });
         if (document.getElementById('notes-view').classList.contains('active')) {
             renderNotesList();
         }
@@ -107,15 +126,46 @@ export function saveNotes() {
 }
 
 export function formatNoteDate(ts) {
-            const d = new Date(ts);
+            if (!ts) return 'Fecha desconocida';
+            let num = Number(ts);
+            if (isNaN(num) || num <= 0) return 'Fecha desconocida';
+            if (num < 1e11) num *= 1000;
+            const d = new Date(num);
+            if (isNaN(d.getTime())) return 'Fecha desconocida';
             const now = new Date();
-            const diffMin = Math.floor((now - d) / 60000);
+            const diffMs = now.getTime() - d.getTime();
+            if (diffMs < 0) return 'hace un momento';
+            const diffMin = Math.floor(diffMs / 60000);
             if (diffMin < 1) return 'hace un momento';
-            if (diffMin < 60) return `hace ${diffMin} minutos`;
+            if (diffMin < 60) return `hace ${diffMin} ${diffMin === 1 ? 'minuto' : 'minutos'}`;
             const diffH = Math.floor(diffMin / 60);
-            if (diffH < 24) return `hace ${diffH} horas`;
-            return d.toLocaleDateString('es-ES');
+            if (diffH < 24) return `hace ${diffH} ${diffH === 1 ? 'hora' : 'horas'}`;
+            const diffDays = Math.floor(diffH / 24);
+            if (diffDays === 1) return 'ayer';
+            if (diffDays < 7) return `hace ${diffDays} días`;
+            if (diffDays < 30) {
+                const weeks = Math.floor(diffDays / 7);
+                return `hace ${weeks} ${weeks === 1 ? 'semana' : 'semanas'}`;
+            }
+            return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
         }
+
+function getNoteGroup(ts) {
+    let num = Number(ts);
+    if (isNaN(num) || num <= 0) return 'Anteriores';
+    if (num < 1e11) num *= 1000;
+    const d = new Date(num);
+    if (isNaN(d.getTime())) return 'Anteriores';
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfYesterday = startOfToday - 86400000;
+    const startOfWeek = startOfToday - 6 * 86400000;
+    const itemTime = d.getTime();
+    if (itemTime >= startOfToday) return 'Hoy';
+    if (itemTime >= startOfYesterday) return 'Ayer';
+    if (itemTime >= startOfWeek) return 'Esta semana';
+    return 'Anteriores';
+}
 
 export function renderNotesList(filterQuery = '') {
             const container = document.getElementById('notes-list-container');
@@ -136,57 +186,78 @@ export function renderNotesList(filterQuery = '') {
                 return;
             }
 
-            if (notesViewMode === 'lista') {
-                container.innerHTML = '';
-                const groupLabel = document.createElement('div');
-                groupLabel.className = 'notes-group-label'; groupLabel.textContent = 'Hoy';
-                const list = document.createElement('div');
+            filtered.sort((a, b) => {
+                const timeA = Number(a.updatedAt || a.updated || a.createdAt || a.created || 0);
+                const timeB = Number(b.updatedAt || b.updated || b.createdAt || b.created || 0);
+                return timeB - timeA;
+            });
 
-                filtered.forEach(note => {
-                    const row = document.createElement('div');
-                    row.className = 'note-row';
-                    const authorName = note.author === 'Usuario' ? (document.getElementById('user-name-display')?.textContent.trim() || 'Usuario') : (note.author || 'Usuario');
-                    row.innerHTML = `
-                <svg class="note-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
-                    <span class="note-row-title" style="margin-bottom: 2px;">${note.title || 'Nota sin título'}</span>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <span class="note-row-meta">${formatNoteDate(note.updatedAt || note.updated || Date.now())}</span>
-                        <span class="note-row-author" style="font-size: 0.75rem; color: var(--text-dim);">Por ${authorName}</span>
+            const groups = {};
+            filtered.forEach(note => {
+                const grp = getNoteGroup(note.updatedAt || note.updated || note.createdAt || note.created);
+                if (!groups[grp]) groups[grp] = [];
+                groups[grp].push(note);
+            });
+
+            const groupOrder = ['Hoy', 'Ayer', 'Esta semana', 'Anteriores'];
+            container.innerHTML = '';
+
+            groupOrder.forEach(grpName => {
+                const groupNotes = groups[grpName];
+                if (!groupNotes || !groupNotes.length) return;
+
+                const groupLabel = document.createElement('div');
+                groupLabel.className = 'notes-group-label';
+                groupLabel.textContent = grpName;
+                container.appendChild(groupLabel);
+
+                if (notesViewMode === 'lista') {
+                    const list = document.createElement('div');
+                    groupNotes.forEach(note => {
+                        const row = document.createElement('div');
+                        row.className = 'note-row';
+                        const authorName = note.author === 'Usuario' ? (document.getElementById('user-name-display')?.textContent.trim() || 'Usuario') : (note.author || 'Usuario');
+                        const noteTs = note.updatedAt || note.updated || note.createdAt || note.created;
+                        row.innerHTML = `
+                    <svg class="note-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                        <span class="note-row-title" style="margin-bottom: 2px;">${note.title || 'Nota sin título'}</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span class="note-row-meta">${formatNoteDate(noteTs)}</span>
+                            <span class="note-row-author" style="font-size: 0.75rem; color: var(--text-dim);">Por ${authorName}</span>
+                        </div>
                     </div>
-                </div>
-                <button class="note-dots" onclick="event.stopPropagation();openNoteMenu(event,'${note.id}')">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-                </button>`;
-                    row.onclick = (e) => { if (e.target.closest('.note-dots')) return; openNoteEditor(note.id); };
-                    list.appendChild(row);
-                });
-
-                container.appendChild(groupLabel); container.appendChild(list);
-            } else {
-                container.innerHTML = '';
-                const groupLabel = document.createElement('div');
-                groupLabel.className = 'notes-group-label'; groupLabel.textContent = 'Hoy';
-                const grid = document.createElement('div'); grid.className = 'notes-grid';
-
-                filtered.forEach(note => {
-                    const card = document.createElement('div'); card.className = 'note-card';
-                    const authorName = note.author === 'Usuario' ? (document.getElementById('user-name-display')?.textContent.trim() || 'Usuario') : (note.author || 'Usuario');
-                    card.innerHTML = `<div class="note-card-title">${note.title || 'Nota sin título'}</div><div class="note-card-preview">${note.content || 'Sin contenido'}</div><div class="note-card-meta">${formatNoteDate(note.updatedAt || note.updated || Date.now())} · Por ${authorName}</div>`;
-                    card.onclick = () => openNoteEditor(note.id);
-                    grid.appendChild(card);
-                });
-
-                container.appendChild(groupLabel); container.appendChild(grid);
-            }
+                    <button class="note-dots" onclick="event.stopPropagation();openNoteMenu(event,'${note.id}')">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                    </button>`;
+                        row.onclick = (e) => { if (e.target.closest('.note-dots')) return; openNoteEditor(note.id); };
+                        list.appendChild(row);
+                    });
+                    container.appendChild(list);
+                } else {
+                    const grid = document.createElement('div');
+                    grid.className = 'notes-grid';
+                    groupNotes.forEach(note => {
+                        const card = document.createElement('div');
+                        card.className = 'note-card';
+                        const authorName = note.author === 'Usuario' ? (document.getElementById('user-name-display')?.textContent.trim() || 'Usuario') : (note.author || 'Usuario');
+                        const noteTs = note.updatedAt || note.updated || note.createdAt || note.created;
+                        card.innerHTML = `<div class="note-card-title">${note.title || 'Nota sin título'}</div><div class="note-card-preview">${note.content || 'Sin contenido'}</div><div class="note-card-meta">${formatNoteDate(noteTs)} · Por ${authorName}</div>`;
+                        card.onclick = () => openNoteEditor(note.id);
+                        grid.appendChild(card);
+                    });
+                    container.appendChild(grid);
+                }
+            });
         }
 
 export function createNewNote() {
             const userNameEl = document.getElementById('user-name-display');
             const username = userNameEl ? userNameEl.textContent.trim() : 'Usuario';
+            const now = Date.now();
             const note = {
-                id: Date.now(), title: '', content: '',
-                author: username, createdAt: Date.now(), updatedAt: Date.now()
+                id: now, title: '', content: '',
+                author: username, createdAt: now, created: now, updatedAt: now, updated: now
             };
             notes.unshift(note); 
             syncNote(note.id);
@@ -200,15 +271,18 @@ export function openNoteEditor(noteId) {
 
             document.getElementById('notes-list-view').style.display = 'none';
             document.getElementById('note-editor').classList.add('active');
-            document.getElementById('note-title-input').value = note.title;
-            document.getElementById('note-content-input').value = note.content;
+            document.getElementById('note-title-input').value = note.title || '';
+            document.getElementById('note-content-input').value = note.content || '';
 
             noteHistory = [];
             noteHistoryIdx = -1;
             saveToNoteHistory();
 
-            window.updateEditorMeta();
-            document.getElementById('note-content-input').focus();
+            window.updateEditorMeta(false);
+            const isMobile = window.innerWidth <= 768 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+            if (!isMobile) {
+                document.getElementById('note-content-input')?.focus();
+            }
             
             // Join active collaborators room
             if (window.socket && note.is_shared) {
@@ -223,11 +297,14 @@ export function saveCurrentNote() {
 
             const newTitle = document.getElementById('note-title-input').value;
             const newContent = document.getElementById('note-content-input').value;
+            const oldTitle = note.title || '';
+            const oldContent = note.content || '';
 
-            if (note.title !== newTitle || note.content !== newContent) {
+            if (oldTitle !== newTitle || oldContent !== newContent) {
                 note.title = newTitle;
                 note.content = newContent;
                 note.updatedAt = Date.now();
+                note.updated = note.updatedAt;
                 syncNote(currentNoteId);
             }
         }
@@ -303,18 +380,37 @@ export function downloadCurrentNote() {
             saveCurrentNote();
             const note = notes.find(n => n.id === currentNoteId);
             if (!note) return;
-            const content = `# ${note.title || 'Sin título'}\n\n${note.content}`;
-            const blob = new Blob([content], { type: 'text/markdown' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = (note.title || 'nota') + '.md';
-            a.click(); URL.revokeObjectURL(a.href);
+            // La exportación se guarda en <DATA_DIR>/ai/<uid>/ gestionada por Cloud.
+            // El sync normal va con debounce de 1s: se fuerza primero para que la
+            // exportación use el contenido más reciente.
+            fetch('/api/ai/notes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(note)
+            }).then(() => fetch('/api/ai/exports/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ note_id: note.id })
+            })).then(async (r) => {
+                if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error al exportar');
+                const ref = await r.json();
+                if (window.openAttachmentPreview) {
+                    window.openAttachmentPreview(ref);
+                } else {
+                    const a = document.createElement('a');
+                    a.href = `/api/ai/attachments/${encodeURIComponent(ref.id)}`;
+                    a.download = ref.name;
+                    a.click();
+                }
+            }).catch((e) => {
+                if (window.showToast) window.showToast(e.message || 'Error al exportar', 'error');
+            });
         }
 
 export function shareCurrentNote() {
-            window.showInputDialog('Compartir nota', 'Enlace para compartir', window.location.href + '#nota-' + currentNoteId, 'Copiar enlace', (val) => {
-                navigator.clipboard.writeText(val).catch(() => { });
-            });
+            if (currentNoteId) {
+                window.openShareDialog(currentNoteId, 'note');
+            }
         }
 
 export function pinCurrentNote() {
@@ -328,19 +424,6 @@ export function deleteCurrentNote() {
                 notes = notes.filter(n => n.id !== currentNoteId); deleteNoteOnServer(currentNoteId);
                 closeEditor(); renderNotesList();
             });
-        }
-
-export function handleSharedNote(sharedNote) {
-            const existingIdx = notes.findIndex(n => n.id == sharedNote.id);
-            if (existingIdx !== -1) {
-                 notes[existingIdx] = sharedNote;
-            } else {
-                 notes.unshift(sharedNote);
-            }
-            syncNote(sharedNote.id);
-            if (document.getElementById('notes-view').classList.contains('active')) {
-                renderNotesList();
-            }
         }
 
 export function handleNoteUpdate(data) {
@@ -448,12 +531,4 @@ export function toggleShareNote(id, friendId, friendName) {
     }
     syncNote(id);
     return isNowShared;
-}
-
-export function deleteSharedNote(id) {
-    notes = notes.filter(n => n.id != id);
-    // Note is deleted locally; no syncNote needed here because backend handles deletion or unshare in routes.
-    if (document.getElementById('notes-view').classList.contains('active')) {
-        renderNotesList();
-    }
 }

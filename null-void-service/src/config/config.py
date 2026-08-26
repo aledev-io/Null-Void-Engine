@@ -33,7 +33,7 @@ def _secret_persist_path() -> str:
     try:
         raw = os.environ.get("DATA_DIR") or os.path.join(PROJECT_ROOT, "data", "app")
         if os.path.exists("/app/data") and raw.startswith("/home/"):
-            raw = "/app/data/app"
+            raw = "/app/data"
         data_dir = raw if os.path.isabs(raw) else os.path.join(PROJECT_ROOT, raw)
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "secret_key")
@@ -116,7 +116,7 @@ class CONFIG:
 
     _raw_data_dir = os.environ.get("DATA_DIR", os.path.join(PROJECT_ROOT, "data", "app"))
     if os.path.exists("/app/data") and _raw_data_dir.startswith("/home/"):
-        _raw_data_dir = "/app/data/app"
+        _raw_data_dir = "/app/data"
     DATA_DIR = _raw_data_dir if os.path.isabs(_raw_data_dir) else os.path.join(PROJECT_ROOT, _raw_data_dir)
     DB_PATH  = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "manager.db"))
     

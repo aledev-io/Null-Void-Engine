@@ -226,19 +226,6 @@ def _read_rps() -> float:
     return _current_rps
 
 
-def get_snapshot() -> dict:
-    return {
-        "cpu": _read_cpu_percent(),
-        "ram": _read_ram_percent(),
-        "temp": _read_temperature(),
-        "power": _read_power_info(),
-        "network": _read_network_io(),
-        "disk": _read_disk_space(),
-        "latency": _read_latency(),
-        "rps": _read_rps()
-    }
-
-
 _MAX_POINTS = 20
 _hist_ticks = 0
 _hist_cpu: list[float] = []

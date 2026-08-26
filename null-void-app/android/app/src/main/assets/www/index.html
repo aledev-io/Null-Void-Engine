@@ -245,7 +245,7 @@
 
 <div id="view-splash" class="view active enter-fade">
     <div class="view-body">
-        <h1>Null-Void Engine</h1>
+        <h1 data-i18n="app-name">Null-Void Engine</h1>
         <button class="main-btn" style="width: auto; min-width: 170px;" onclick="onStartClick()" data-i18n="btn-start">Iniciar</button>
     </div>
 </div>
@@ -257,14 +257,14 @@
     <div class="view-body" style="justify-content: flex-start; padding-top: 16px;">
         <div id="conn-container" class="conn-list"></div>
     </div>
-    <button class="fab" onclick="showForm()" aria-label="Nueva conexión">
+    <button class="fab" onclick="showForm()" data-i18n-aria="aria-new" aria-label="Nueva conexión">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
 </div>
 
 <div id="view-form" class="view">
     <div class="view-header">
-        <button class="back-btn" onclick="showList()" aria-label="Volver">
+        <button class="back-btn" onclick="showList()" data-i18n-aria="aria-back" aria-label="Volver">
             <svg width="22" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
         <h2 data-i18n="form-title" id="form-title-text">Añadir Instancia</h2>
@@ -273,7 +273,7 @@
         <div class="card">
             <div class="form-group">
                 <label for="conn-name" data-i18n="label-name">Nombre de la conexión</label>
-                <input type="text" id="conn-name" maxlength="40" spellcheck="false" oninput="validateAll(false)">
+                <input type="text" id="conn-name" maxlength="40" spellcheck="false" oninput="validateAll(false)" data-i18n-placeholder="placeholder-name">
                 <div class="field-error" id="name-error"></div>
             </div>
             <div class="form-group">
@@ -285,12 +285,12 @@
             </div>
             <div class="form-group">
                 <label for="address" data-i18n="label-address">Dirección IP o Dominio</label>
-                <input type="text" id="address" placeholder="100.x.x.x" autocapitalize="none" spellcheck="false" oninput="validateAll(false)">
+                <input type="text" id="address" placeholder="100.x.x.x" autocapitalize="none" spellcheck="false" oninput="validateAll(false)" data-i18n-placeholder="placeholder-address">
                 <div class="field-error" id="address-error"></div>
             </div>
             <div class="form-group">
                 <label for="port" data-i18n="label-port">Puerto de acceso</label>
-                <input type="number" id="port" placeholder="5000" min="1" max="65535" inputmode="numeric" oninput="validateAll(false)">
+                <input type="number" id="port" placeholder="5000" min="1" max="65535" inputmode="numeric" oninput="validateAll(false)" data-i18n-placeholder="placeholder-port">
                 <div class="field-error" id="port-error"></div>
             </div>
 
@@ -310,22 +310,28 @@
 <script>
     const i18n = {
         es: {
+            "app-name": "Null-Void Engine",
             "btn-start": "Iniciar", "list-title": "Tus Instancias", "form-title": "Añadir Instancia", "form-title-edit": "Editar Instancia",
             "label-name": "Nombre de la conexión", "label-protocol": "Protocolo de red", "label-address": "Dirección IP o Dominio", "label-port": "Puerto de acceso",
-            "placeholder-name": "Servidor Principal", "btn-save": "Guardar", "btn-save-edit": "Guardar Cambios", "btn-test": "Probar",
+            "placeholder-name": "Servidor Principal", "placeholder-address": "100.x.x.x", "placeholder-port": "5000",
+            "btn-save": "Guardar", "btn-save-edit": "Guardar Cambios", "btn-test": "Probar",
             "err-empty": "Campo requerido", "err-address": "Introduce una dirección válida", "err-port": "Puerto entre 1 y 65535", "err-duplicate": "Ya registrada",
             "test-checking": "Comprobando...", "test-ok": "Instancia accesible", "test-fail": "No se pudo alcanzar", "test-timeout": "Timeout (4s)", "test-dns": "Error de red",
             "empty-title": "No hay instancias", "toast-deleted": "Eliminada", "toast-undo": "Deshacer",
-            "err-offline": "La instancia está desconectada"
+            "err-offline": "La instancia está desconectada", "aria-new": "Nueva conexión", "aria-back": "Volver",
+            "aria-edit": "Editar", "aria-delete": "Eliminar", "default-conn-name": "Servidor"
         },
         en: {
+            "app-name": "Null-Void Engine",
             "btn-start": "Enter", "list-title": "Your Instances", "form-title": "Add Instance", "form-title-edit": "Edit Instance",
             "label-name": "Connection name", "label-protocol": "Network protocol", "label-address": "IP or Domain", "label-port": "Access port",
-            "placeholder-name": "Main Server", "btn-save": "Save", "btn-save-edit": "Save Changes", "btn-test": "Test",
+            "placeholder-name": "Main Server", "placeholder-address": "100.x.x.x", "placeholder-port": "5000",
+            "btn-save": "Save", "btn-save-edit": "Save Changes", "btn-test": "Test",
             "err-empty": "Required field", "err-address": "Enter a valid address", "err-port": "Port between 1 and 65535", "err-duplicate": "Already registered",
             "test-checking": "Checking...", "test-ok": "Instance reachable", "test-fail": "Could not reach", "test-timeout": "Timeout (4s)", "test-dns": "Network error",
             "empty-title": "No instances", "toast-deleted": "Deleted", "toast-undo": "Undo",
-            "err-offline": "Instance is offline"
+            "err-offline": "Instance is offline", "aria-new": "New connection", "aria-back": "Back",
+            "aria-edit": "Edit", "aria-delete": "Delete", "default-conn-name": "Server"
         }
     };
 
@@ -338,11 +344,40 @@
     function t(key) { return i18n[currentLang][key] || key; }
 
     function applyI18n() {
+        document.documentElement.lang = currentLang;
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
-            el.innerText = (key === 'btn-save' && editingIndex !== null) ? t('btn-save-edit') : t(key);
+            if (key === 'btn-save') {
+                el.innerText = (editingIndex !== null) ? t('btn-save-edit') : t('btn-save');
+            } else if (key === 'form-title') {
+                el.innerText = (editingIndex !== null) ? t('form-title-edit') : t('form-title');
+            } else {
+                el.innerText = t(key);
+            }
         });
-        document.getElementById('conn-name').placeholder = t('placeholder-name');
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+        });
+        document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+            el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+        });
+    }
+
+    function showToast(msg, options = {}) {
+        const stack = document.getElementById('toast-stack');
+        const toast = document.createElement('div');
+        toast.className = 'toast' + (options.error ? ' error' : '');
+        toast.innerHTML = `<span>${msg}</span>`;
+
+        if (options.actionLabel && options.onAction) {
+            const btn = document.createElement('button');
+            btn.innerText = options.actionLabel;
+            btn.onclick = () => { options.onAction(); toast.remove(); };
+            toast.appendChild(btn);
+        }
+
+        stack.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, options.duration || 3000);
     }
 
     function loadSafeConnections() {
@@ -432,7 +467,7 @@
             const card = document.createElement('div');
             card.className = 'conn-card';
             card.id = `card-${index}`;
-            card.innerHTML = `<div class="conn-info" onclick="connectTo(${index})"><span class="status-dot" id="dot-${index}"></span><div class="conn-text"><h3>${escapeHtml(conn.name || 'Servidor')}</h3><p>${escapeHtml(conn.url.replace(/https?:\/\//i,''))}</p></div></div><div class="conn-actions"><button class="icon-btn-small edit" onclick="event.stopPropagation(); editConn(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="icon-btn-small" onclick="event.stopPropagation(); deleteConn(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button></div>`;
+            card.innerHTML = `<div class="conn-info" onclick="connectTo(${index})"><span class="status-dot" id="dot-${index}"></span><div class="conn-text"><h3>${escapeHtml(conn.name || t('default-conn-name'))}</h3><p>${escapeHtml(conn.url.replace(/https?:\/\//i,''))}</p></div></div><div class="conn-actions"><button class="icon-btn-small edit" onclick="event.stopPropagation(); editConn(${index})" aria-label="${t('aria-edit')}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="icon-btn-small" onclick="event.stopPropagation(); deleteConn(${index})" aria-label="${t('aria-delete')}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button></div>`;
             container.appendChild(card);
             pingServer(conn.url, `dot-${index}`, index);
         });

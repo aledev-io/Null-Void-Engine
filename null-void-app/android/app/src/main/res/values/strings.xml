@@ -4,12 +4,65 @@
     <string name="title_activity_main">NullVoid</string>
     <string name="package_name">com.nullvoid.app</string>
     <string name="custom_url_scheme">com.nullvoid.app</string>
-    <string name="title_activity_settings">Configuración del Servidor</string>
+    <string name="title_activity_settings">Server Configuration</string>
 
-    <!-- Menu Nativo -->
-    <string name="menu_edit">Editar Conexión</string>
-    <string name="menu_new">Nueva Conexión</string>
-    <string name="menu_close">Cerrar Conexión</string>
-    <string name="menu_exit">Salir</string>
-    <string name="menu_refresh">Recargar</string>
+    <!-- Native Menu -->
+    <string name="menu_edit">Edit Connection</string>
+    <string name="menu_new">New Connection</string>
+    <string name="menu_close">Close Connection</string>
+    <string name="menu_exit">Exit</string>
+    <string name="menu_refresh">Refresh</string>
+
+    <!-- Notifications and Messages -->
+    <string name="notification_channel_name">Engine Alerts</string>
+    <string name="notification_channel_desc">Private Null-Void notifications</string>
+
+    <!-- Notification Channels by Module -->
+    <string name="channel_social_name">Messages &amp; Friends</string>
+    <string name="channel_social_desc">Chat messages and friend requests</string>
+    <string name="channel_ai_name">AI &amp; Agent</string>
+    <string name="channel_ai_desc">AI responses and task reminders</string>
+    <string name="channel_scraper_name">Scraper &amp; Automation</string>
+    <string name="channel_scraper_desc">Price alerts and web updates</string>
+    <string name="channel_cloud_name">Cloud &amp; Files</string>
+    <string name="channel_cloud_desc">File uploads and sharing events</string>
+    <string name="channel_calendar_name">Calendar &amp; Events</string>
+    <string name="channel_calendar_desc">Event reminders and schedule alerts</string>
+    <string name="channel_system_name">System &amp; Engine</string>
+    <string name="channel_system_desc">Server status and Docker alerts</string>
+
+    <!-- Notification Summaries -->
+    <string name="summary_social">Friend Messages</string>
+    <string name="summary_ai">AI Responses</string>
+    <string name="summary_scraper">Scraper Alerts</string>
+    <string name="summary_cloud">Cloud Events</string>
+    <string name="summary_calendar">Calendar Alerts</string>
+    <string name="summary_system">Null Void System</string>
+
+    <string name="toast_reloading">Reloading...</string>
+    <string name="ssl_error_warning">Insecure connection (%1$s). Check the server SSL certificate.</string>
+    <string name="file_chooser_title">Select file</string>
+    <string name="downloading_file">Downloading file...</string>
+    <string name="starting_download">Starting download...</string>
+    <string name="download_complete">Download complete</string>
+    <string name="download_saved">File saved to Downloads</string>
+    <string name="default_notification_body">New notification</string>
+    <string name="web_permission_title">Web Permission</string>
+    <string name="web_permission_msg">\"%1$s\" wants to access: %2$s.</string>
+    <string name="allow">Allow</string>
+    <string name="deny">Deny</string>
+    <string name="camera">camera</string>
+    <string name="microphone">microphone</string>
+    <string name="protected_media">protected media</string>
+    <string name="unknown_host">unknown</string>
+    <string name="website">website</string>
+
+    <!-- Settings Activity -->
+    <string name="title_settings">Server Configuration</string>
+    <string name="hint_server_address">Server IP or Domain</string>
+    <string name="hint_port">Port (optional)</string>
+    <string name="label_use_https">Use HTTPS</string>
+    <string name="btn_save_connect">Save and Connect</string>
+    <string name="err_server_required">Server address is required</string>
+    <string name="settings_saved">Configuration saved</string>
 </resources>

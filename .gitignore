@@ -44,7 +44,6 @@ build/
 agent_release.py
 *_release.py
 
-# Android & Gradle
 null-void-app/android/.gradle/
 null-void-app/android/build/
 null-void-app/android/app/build/
@@ -56,3 +55,24 @@ null-void-app/android/app/google-services.json
 
 client_agent/.build.lock
 tests/
+
+.agents
+.ignore
+node_modules/
+**/node_modules/
+*.whl
+*.egg-info/
+*.map
+*.bundle.js
+*.chunk.js
+*.log
+*.jsonl
+*.parquet
+*.avro
+*.pkl
+*.apk
+*.aab
+*.dex
+*.gguf
+.cache/
+**/.cache/

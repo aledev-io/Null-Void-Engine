@@ -6,25 +6,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Correo - Null-Void Engine</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/cloud-theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/mail.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
     <!-- Theme is applied before paint to avoid flash -->
     <script>let __t=localStorage.getItem('theme'); if(!__t){__t=window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';} document.documentElement.setAttribute('data-theme', __t);</script>
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
 </head>
 
 <body>
     <div id="topbar">
         <div class="tb-left">
-            <button id="btn-mobile-menu" class="btn" style="display: none; background: transparent; border: 1px solid var(--border); color: var(--text-main); border-radius: 8px; padding: 6px; cursor: pointer;" onclick="toggleMailSidebar()">
+                <button onclick="nvGoBack()" title="Volver" data-i18n-title="back" aria-label="Volver"
+                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+<button id="btn-mobile-menu" class="btn" style="display: none; background: transparent; border: none; color: var(--text-main); border-radius: 8px; padding: 4px; cursor: pointer;" onclick="toggleMailSidebar()" aria-label="Abrir menú">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="3" y1="12" x2="21" y2="12"></line>
                     <line x1="3" y1="6" x2="21" y2="6"></line>
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <div id="topbar-folder-title" style="font-weight:600;font-size:1.1rem;color:var(--text-main);" data-i18n="mail_folder_inbox">Recibidos</div>
+            <span class="app-back-header-title" id="topbar-folder-title" data-i18n="mail_folder_inbox">Recibidos</span>
         </div>
         <div class="tb-center">
             <div class="search-bar">
@@ -47,17 +54,6 @@
             </div>
         </div>
         <div class="tb-right" style="display:flex;align-items:center;gap:12px;white-space:nowrap;flex-shrink:0;">
-            <button class="btn-theme" id="btn-toggle-lang" onclick="toggleLanguage()" title="Cambiar idioma" data-i18n-title="lang_title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
-            </button>
-            <button class="btn-theme" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema" data-i18n-title="theme_title">
-                <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></svg>
-            </button>
         </div>
     </div>
 
@@ -105,17 +101,6 @@
                     </div>
                     <span id="nav-username">{{ user }}</span>
                     <div class="profile-dropdown" id="user-menu" style="padding: 4px; border-radius: 12px; width: 228px; min-width: auto; background: var(--surface-hi, #1a2847); border: 1px solid var(--border); left: -12px;">
-                        <div class="cloud-nav-item" onclick="window.location.href='/app'"
-                            style="padding:5px 12px;display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:10px;font-size:0.80rem;cursor:pointer;color:var(--text-main); border-radius:8px; transition: background 0.2s; width: 100%; box-sizing: border-box;"
-                            onmouseover="this.style.background='rgba(255,255,255,0.05)'"
-                            onmouseout="this.style.background='transparent'">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                <polyline points="16 17 21 12 16 7"></polyline>
-                                <line x1="21" y1="12" x2="9" y2="12"></line>
-                            </svg>
-                            <span data-i18n="mail_back_menu">Volver al Menú</span>
-                        </div>
                     </div>
                 </div>
             </div>

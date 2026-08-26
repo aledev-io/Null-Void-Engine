@@ -30,7 +30,7 @@ class SettingsActivity : AppCompatActivity() {
         btnSaveConnect.setOnClickListener {
             val server = etServerAddress.text.toString().trim()
             if (server.isEmpty()) {
-                Toast.makeText(this, "La dirección del servidor es obligatoria", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.err_server_required), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -40,7 +40,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putBoolean(KEY_USE_HTTPS, switchHttps.isChecked)
                 .apply()
 
-            Toast.makeText(this, "Configuración guardada", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
 
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK

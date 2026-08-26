@@ -183,6 +183,46 @@ body.lang-loaded {
 }
 
 
+/* Global Back Button (estándar móvil: icono <, 36x36px, translúcido) */
+.app-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.app-back-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-hi);
+    transform: translateX(-2px);
+}
+
+.app-back-btn:active {
+    transform: scale(0.92);
+}
+
+[data-theme="light"] .app-back-btn {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .app-back-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
 /* Global Back Button */
 .btn-back {
     display: inline-flex;

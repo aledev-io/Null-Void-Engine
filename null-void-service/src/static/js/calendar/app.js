@@ -172,6 +172,12 @@ export const App = {
   },
 
   onDayClick(dateStr) {
+    // Si el día ya está seleccionado, se deselecciona
+    if (this.state.selectedDate === dateStr) {
+      this.state.selectedDate = '';
+      this.render();
+      return;
+    }
     this.state.selectedDate = dateStr;
     UI.openQuickPopup({ date: dateStr });
   },
@@ -186,6 +192,12 @@ export const App = {
   },
 
   onMiniDayClick(dateStr) {
+    // Si el día ya está seleccionado, se deselecciona
+    if (this.state.selectedDate === dateStr) {
+      this.state.selectedDate = '';
+      this.render();
+      return;
+    }
     this.state.selectedDate = dateStr;
     this.state.refDate = window.parseDate(dateStr);
     if (this.state.view !== 'week' && this.state.view !== 'day') {

@@ -2,10 +2,12 @@ import sqlite3
 import os
 import time
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DEFAULT_DIR = os.path.join(_PROJECT_ROOT, 'data', 'scraper')
-_raw_scraper_dir = os.environ.get("SCRAPER_DIR", _DEFAULT_DIR)
-SCRAPER_DIR = _raw_scraper_dir if os.path.isabs(_raw_scraper_dir) else os.path.join(_PROJECT_ROOT, _raw_scraper_dir)
+SCRAPER_DIR = os.environ.get("SCRAPER_DIR")
+
+if not SCRAPER_DIR:
+    _BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    SCRAPER_DIR = os.path.join(_BASE_DIR, "data", "scraper")
+
 os.makedirs(SCRAPER_DIR, exist_ok=True)
 SCRAPER_DB_SQLITE = os.path.join(SCRAPER_DIR, 'scraper.db')
 

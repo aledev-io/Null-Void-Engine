@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Null-Void Engine · Telemetría</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
     <script>
@@ -25,6 +25,8 @@
             fetch('/api/client_log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: 'error', message: 'Console Error: ' + args.join(' ') }) }).catch(() => { });
         };
     </script>
+    <!-- Compat Legacy: detección síncrona ANTES del primer paint -->
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <style>
         :root,
         [data-theme="dark"] {
@@ -482,6 +484,8 @@
             .footer-bar { display: none !important; }
         }
     </style>
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
 </head>
 
 <body>
@@ -511,16 +515,12 @@
         </div>
         <div id="main">
             <div id="view-monitor" class="view active">
-                <button class="btn-back" onclick="location.href='/app'">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                    <span data-i18n="btn_back">Volver al Dashboard</span>
-                </button>
                 <div class="monitor-head">
                     <div>
-                        <div class="monitor-title" data-i18n="tel_title">Telemetría · Tiempo Real</div>
+                        <button class="app-back-header" onclick="nvGoBack()" title="Volver" data-i18n-title="back" aria-label="Volver">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            <span class="app-back-header-title" data-i18n="tel_title">Telemetría · Tiempo Real</span>
+                        </button>
                         <div class="monitor-sub" data-i18n="tel_sub">Monitoreo del sistema en vivo</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">

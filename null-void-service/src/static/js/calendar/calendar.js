@@ -43,11 +43,10 @@ export const Calendar = {
 
     const s = window.DAYS_SHORT;
     const DAYS_HEADER = [s[1], s[2], s[3], s[4], s[5], s[6], s[0]];
-    const todayIndex = (new Date().getDay() + 6) % 7;
 
     let html = `<div class="month-view">
       <div class="month-weekdays">
-        ${DAYS_HEADER.map((d, i) => `<div class="month-weekday${i === todayIndex ? ' is-today-col' : ''}">${d}</div>`).join('')}
+        ${DAYS_HEADER.map((d, i) => `<div class="month-weekday">${d}</div>`).join('')}
       </div>
       <div class="month-grid">`;
 
@@ -64,7 +63,6 @@ export const Calendar = {
       const dayEntries = evByDate[dateStr] || [];
 
       let cls = 'month-cell';
-      if (isToday) cls += ' is-today';
       if (isSel) cls += ' selected';
 
       // MAX_SHOW dinámico: en pantallas muy pequeñas (landscape), 1 chip máximo
@@ -144,7 +142,7 @@ export const Calendar = {
     let headerHtml = `<div class="week-time-gutter-top"></div>`;
     days.forEach(d => {
       const ds = window.dateToStr(d);
-      const cls = ds === today ? 'week-day-header is-today' : 'week-day-header';
+      const cls = 'week-day-header';
       headerHtml += `<div class="${cls}" data-date="${ds}">
         <div class="week-day-name">${window.DAYS_SHORT[d.getDay()]}</div>
         <div class="week-day-num">${d.getDate()}</div>
@@ -192,7 +190,7 @@ export const Calendar = {
           const color = Events.color(ev);
           const bg = Events.bgColor(ev);
           const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
-          const timeDisplay = ev.inProgress ? `${ev.startTime}–${window.t('indefinido')}` : `${ev.startTime}–${ev.endTime}`;
+          const timeDisplay = ev.startTime && ev.endTime ? (ev.inProgress ? `${ev.startTime}–${window.t('indefinido')}` : `${ev.startTime}–${ev.endTime}`) : '';
           const w = 100 / totalCols;
           const l = col * w;
           return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
@@ -200,7 +198,7 @@ export const Calendar = {
                        style="top:${top}px;height:${height}px;width:calc(${w}% - 6px);left:calc(${l}% + 3px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
                        title="${ev.title}">
                     <div class="time-event-title">${icon} ${ev.title}</div>
-                    ${height > 36 ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
+                    ${height > 36 && timeDisplay ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
                   </div>`;
         }).join('');
       })();
@@ -224,7 +222,7 @@ export const Calendar = {
       gridLinesHtml += `<div class="week-hour-line" style="top:${top}px"></div>`;
       gridLinesHtml += `<div class="week-half-line" style="top:${topH}px"></div>`;
     }
-    let allDayRowHtml = `<div class="week-time-gutter-top" style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;justify-content:center;">Todo día</div>`;
+    let allDayRowHtml = `<div class="week-time-gutter-top" style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;justify-content:center;">${window.t('all_day') || 'Todo el día'}</div>`;
     days.forEach(d => {
       const ds = window.dateToStr(d);
       const allDayEvs = (weekEvs[ds] || []).filter(e => e.allDay);
@@ -327,7 +325,12 @@ export const Calendar = {
         const color = Events.color(ev);
         const bg = Events.bgColor(ev);
         const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
-        const timeDisplay = ev.inProgress ? `${ev.startTime || ''} – ${window.t('indefinido')}` : `${ev.startTime || ''} – ${ev.endTime || ''}`;
+        let details = [];
+        if (ev.startTime && ev.endTime) {
+          details.push(ev.inProgress ? `${ev.startTime} – ${window.t('indefinido')}` : `${ev.startTime} – ${ev.endTime}`);
+        }
+        if (ev.description) details.push(ev.description.replace(/\s+/g, ' ').slice(0, 40));
+        const timeDisplay = details.join(' · ');
         const w = 100 / totalCols;
         const l = col * w;
         return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
@@ -335,7 +338,7 @@ export const Calendar = {
                      style="top:${top}px;height:${height}px;width:calc(${w}% - 12px);left:calc(${l}% + 6px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
                      title="${ev.title}">
                   <div class="time-event-title" style="font-size:13px;">${icon} ${ev.title}</div>
-                  ${height > 36 ? `<div class="time-event-time">${timeDisplay}${ev.description ? ' · ' + ev.description.replace(/\s+/g, ' ').slice(0, 40) : ''}</div>` : ''}
+                  ${height > 36 && timeDisplay ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
                 </div>`;
       }).join('');
     })();

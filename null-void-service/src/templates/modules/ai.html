@@ -3,20 +3,51 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
     <title>Nexus AI | Native Interface</title>
-    <script src="{{ url_for('static', filename='js/ai/marked.min.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/github-dark.min.css') }}">
-    <script src="{{ url_for('static', filename='js/ai/purify.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ai/highlight.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ai/pdf.min.js') }}"></script>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
 
-    <!-- KaTeX Integration -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/katex.min.css') }}">
-    <script src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ai/katex.min.js') }}"></script>
+    <!-- 1. Detección síncrona inmediata del tema (evita parpadeo de tema) -->
     <script>
-        if (typeof marked !== 'undefined' && typeof katex !== 'undefined') {
+        (function () {
+            try {
+                var theme = localStorage.getItem('theme');
+                if (!theme) {
+                    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+
+    <!-- 2. CSS CRÍTICO DE LAYOUT Y TEMA (Cargado en primer lugar absoluto para evitar FOUC) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/global-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/ai.css') }}">
+
+    <!-- 3. CSS de plugins y librerías externas -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/github-dark.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/katex.min.css') }}">
+
+    <!-- 4. CSS de compatibilidad legacy -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
+
+    <!-- 5. Scripts de librerías con defer (se cargan en paralelo sin bloquear el pintado) -->
+    <script defer src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/ai/marked.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/ai/purify.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/ai/highlight.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/ai/katex.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/ai/pdf.min.js') }}"></script>
+
+    <script>
+        function _setupMarkedKatex() {
+            if (typeof marked === 'undefined' || typeof katex === 'undefined') return;
             const blockMathBrackets = {
                 name: 'blockMathBrackets',
                 level: 'inline',
@@ -84,11 +115,15 @@
                 }
             });
         }
+
+        if (typeof marked !== 'undefined' && typeof katex !== 'undefined') {
+            _setupMarkedKatex();
+        } else {
+            document.addEventListener('DOMContentLoaded', function () {
+                if (typeof marked !== 'undefined' && typeof katex !== 'undefined') _setupMarkedKatex();
+            });
+        }
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/global-theme.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/ai.css') }}">
 </head>
 
 <body>
@@ -97,24 +132,22 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="header-top">
-                    <button class="logo-toggle-btn" onclick="toggleSidebar()" title="Colapsar/Expandir menú">
-                        <div class="logo-box">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
-                                </path>
-                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                            </svg>
-                        </div>
-                        <div class="toggle-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="9" y1="3" x2="9" y2="21"></line>
-                            </svg>
-                        </div>
+                    <button onclick="window.location.href='/app'" title="Volver al Dashboard" data-i18n-title="back"
+                        aria-label="Volver al Dashboard" class="btn-icon" style="flex-shrink:0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="toggleSidebar()" title="Plegar/Desplegar menú"
+                        aria-label="Plegar o desplegar menú">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
                     </button>
                     <span class="logo-text" onclick="showChat(); newChat();">Nexus AI</span>
                 </div>
@@ -176,10 +209,6 @@
                     </div>
                     <div class="user-name" id="user-name-display">{{ user.username }}</div>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    style="opacity:0.5;flex-shrink:0;">
-                    <path d="M18 15l-6-6-6 6"></path>
-                </svg>
             </div>
 
             <div class="user-menu-panel" id="user-menu">
@@ -190,14 +219,6 @@
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                     </svg>
                     Borrar historial
-                </div>
-                <div class="menu-item" onclick="window.location.href='/app'">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    Volver al Menú
                 </div>
 
             </div>
@@ -217,88 +238,163 @@
                 <div style="font-size:0.85rem;color:var(--text-dim);">Soporta imágenes, PDFs, documentos de texto y
                     código</div>
             </div>
+
             <nav class="top-nav">
-                <div class="top-nav-controls" style="display:flex;align-items:center;gap:15px;">
-                    <!-- Mobile Hamburger Menu -->
+                <div class="top-nav-controls">
                     <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()" title="Abrir Menú"
-                        style="display:none; padding:4px;">
+                        aria-label="Abrir menú">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="3" y1="12" x2="21" y2="12"></line>
                             <line x1="3" y1="6" x2="21" y2="6"></line>
                             <line x1="3" y1="18" x2="21" y2="18"></line>
                         </svg>
                     </button>
 
-                    <button class="btn-icon" title="Añadir/Gestionar Modelos" onclick="openCommandDialog()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <!-- Chip interactivo del Modelo Actual (abre el selector de modelos) -->
+                    <button id="top-model-btn" class="top-model-btn" onclick="window.openModelSelectorModal()"
+                        title="Seleccionar modelo de IA">
+                        <span class="top-model-dot"></span>
+                        <span id="top-model-label">Cargando...</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
-                    <!-- Model Settings Button -->
-                    <button class="btn-icon" title="Configuración del Modelo" onclick="openModelSettingsDialog()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                        </svg>
-                    </button>
-                    <!-- External APIs Button — Official DeepSeek logo (hardcoded inline SVG) -->
-                    <button class="btn-icon" title="Configurar APIs Externas" onclick="openApiKeysDialog()"
-                        style="padding:2px;">
-                        <svg width="22" height="22" viewBox="0 0 512 509.64" shape-rendering="geometricPrecision"
-                            text-rendering="geometricPrecision" image-rendering="optimizeQuality" fill-rule="evenodd"
-                            clip-rule="evenodd">
-                            <path fill="#fff"
-                                d="M115.612 0h280.775C459.974 0 512 52.026 512 115.612v278.415c0 63.587-52.026 115.613-115.613 115.613H115.612C52.026 509.64 0 457.614 0 394.027V115.612C0 52.026 52.026 0 115.612 0z" />
-                            <path fill="#4D6BFE" fill-rule="nonzero"
-                                d="M440.898 139.167c-4.001-1.961-5.723 1.776-8.062 3.673-.801.612-1.479 1.407-2.154 2.141-5.848 6.246-12.681 10.349-21.607 9.859-13.048-.734-24.192 3.368-34.04 13.348-2.093-12.307-9.048-19.658-19.635-24.37-5.54-2.449-11.141-4.9-15.02-10.227-2.708-3.795-3.447-8.021-4.801-12.185-.861-2.509-1.725-5.082-4.618-5.512-3.139-.49-4.372 2.142-5.601 4.349-4.925 9.002-6.833 18.921-6.647 28.962.432 22.597 9.972 40.597 28.932 53.397 2.154 1.47 2.707 2.939 2.032 5.082-1.293 4.41-2.832 8.695-4.186 13.105-.862 2.817-2.157 3.429-5.172 2.205-10.402-4.346-19.391-10.778-27.332-18.553-13.481-13.044-25.668-27.434-40.873-38.702a177.614 177.614 0 00-10.834-7.409c-15.512-15.063 2.032-27.434 6.094-28.902 4.247-1.532 1.478-6.797-12.251-6.736-13.727.061-26.285 4.653-42.288 10.777-2.34.92-4.801 1.593-7.326 2.142-14.527-2.756-29.608-3.368-45.367-1.593-29.671 3.305-53.368 17.329-70.788 41.272-20.928 28.785-25.854 61.482-19.821 95.59 6.34 35.943 24.683 65.704 52.876 88.974 29.239 24.123 62.911 35.943 101.32 33.677 23.329-1.346 49.307-4.468 78.607-29.27 7.387 3.673 15.142 5.144 28.008 6.246 9.911.92 19.452-.49 26.839-2.019 11.573-2.449 10.773-13.166 6.586-15.124-33.915-15.797-26.47-9.368-33.24-14.573 17.235-20.39 43.213-41.577 53.369-110.222.8-5.448.121-8.877 0-13.287-.061-2.692.553-3.734 3.632-4.041 8.494-.981 16.742-3.305 24.314-7.471 21.975-12.002 30.84-31.719 32.933-55.355.307-3.612-.061-7.348-3.879-9.245v-.003zM249.4 351.89c-32.872-25.838-48.814-34.352-55.4-33.984-6.155.368-5.048 7.41-3.694 12.002 1.415 4.532 3.264 7.654 5.848 11.634 1.785 2.634 3.017 6.551-1.784 9.493-10.587 6.55-28.993-2.205-29.856-2.635-21.421-12.614-39.334-29.269-51.954-52.047-12.187-21.924-19.267-45.435-20.435-70.542-.308-6.061 1.478-8.207 7.509-9.307 7.94-1.471 16.127-1.778 24.068-.615 33.547 4.9 62.108 19.902 86.054 43.66 13.666 13.531 24.007 29.699 34.658 45.496 11.326 16.778 23.514 32.761 39.026 45.865 5.479 4.592 9.848 8.083 14.035 10.656-12.62 1.407-33.673 1.714-48.075-9.676zm15.899-102.519c.521-2.111 2.421-3.658 4.722-3.658a4.74 4.74 0 011.661.305c.678.246 1.293.614 1.786 1.163.861.859 1.354 2.083 1.354 3.368 0 2.695-2.154 4.837-4.862 4.837a4.748 4.748 0 01-4.738-4.034 5.01 5.01 0 01.077-1.981zm47.208 26.915c-2.606.996-5.2 1.778-7.707 1.88-4.679.244-9.787-1.654-12.556-3.981-4.308-3.612-7.386-5.631-8.679-11.941-.554-2.695-.247-6.858.246-9.246 1.108-5.144-.124-8.451-3.754-11.451-2.954-2.449-6.711-3.122-10.834-3.122-1.539 0-2.954-.673-4.001-1.224-1.724-.856-3.139-3-1.785-5.634.432-.856 2.525-2.939 3.018-3.305 5.6-3.185 12.065-2.144 18.034.244 5.54 2.266 9.727 6.429 15.759 12.307 6.155 7.102 7.263 9.063 10.773 14.39 2.771 4.163 5.294 8.451 7.018 13.348.877 2.561.071 4.74-2.341 6.277-.981.625-2.109 1.044-3.191 1.458z" />
-                        </svg>
-                    </button>
+
+                    <!-- Botones de Acción a la derecha -->
+                    <div class="top-nav-actions">
+                        <button class="btn-icon" title="Añadir/Gestionar Modelos" onclick="openCommandDialog()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                        <!-- Model Settings Button -->
+                        <button class="btn-icon" title="Configuración del Modelo" onclick="openModelSettingsDialog()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
+                            </svg>
+                        </button>
+                        <!-- External APIs Button — Official DeepSeek logo (hardcoded inline SVG) -->
+                        <button class="btn-icon" title="Configurar APIs Externas" onclick="openApiKeysDialog()"
+                            style="padding:2px;">
+                            <svg width="22" height="22" viewBox="0 0 512 509.64" shape-rendering="geometricPrecision"
+                                text-rendering="geometricPrecision" image-rendering="optimizeQuality"
+                                fill-rule="evenodd" clip-rule="evenodd">
+                                <path fill="#fff"
+                                    d="M115.612 0h280.775C459.974 0 512 52.026 512 115.612v278.415c0 63.587-52.026 115.613-115.613 115.613H115.612C52.026 509.64 0 457.614 0 394.027V115.612C0 52.026 52.026 0 115.612 0z" />
+                                <path fill="#4D6BFE" fill-rule="nonzero"
+                                    d="M440.898 139.167c-4.001-1.961-5.723 1.776-8.062 3.673-.801.612-1.479 1.407-2.154 2.141-5.848 6.246-12.681 10.349-21.607 9.859-13.048-.734-24.192 3.368-34.04 13.348-2.093-12.307-9.048-19.658-19.635-24.37-5.54-2.449-11.141-4.9-15.02-10.227-2.708-3.795-3.447-8.021-4.801-12.185-.861-2.509-1.725-5.082-4.618-5.512-3.139-.49-4.372 2.142-5.601 4.349-4.925 9.002-6.833 18.921-6.647 28.962.432 22.597 9.972 40.597 28.932 53.397 2.154 1.47 2.707 2.939 2.032 5.082-1.293 4.41-2.832 8.695-4.186 13.105-.862 2.817-2.157 3.429-5.172 2.205-10.402-4.346-19.391-10.778-27.332-18.553-13.481-13.044-25.668-27.434-40.873-38.702a177.614 177.614 0 00-10.834-7.409c-15.512-15.063 2.032-27.434 6.094-28.902 4.247-1.532 1.478-6.797-12.251-6.736-13.727.061-26.285 4.653-42.288 10.777-2.34.92-4.801 1.593-7.326 2.142-14.527-2.756-29.608-3.368-45.367-1.593-29.671 3.305-53.368 17.329-70.788 41.272-20.928 28.785-25.854 61.482-19.821 95.59 6.34 35.943 24.683 65.704 52.876 88.974 29.239 24.123 62.911 35.943 101.32 33.677 23.329-1.346 49.307-4.468 78.607-29.27 7.387 3.673 15.142 5.144 28.008 6.246 9.911.92 19.452-.49 26.839-2.019 11.573-2.449 10.773-13.166 6.586-15.124-33.915-15.797-26.47-9.368-33.24-14.573 17.235-20.39 43.213-41.577 53.369-110.222.8-5.448.121-8.877 0-13.287-.061-2.692.553-3.734 3.632-4.041 8.494-.981 16.742-3.305 24.314-7.471 21.975-12.002 30.84-31.719 32.933-55.355.307-3.612-.061-7.348-3.879-9.245v-.003zM249.4 351.89c-32.872-25.838-48.814-34.352-55.4-33.984-6.155.368-5.048 7.41-3.694 12.002 1.415 4.532 3.264 7.654 5.848 11.634 1.785 2.634 3.017 6.551-1.784 9.493-10.587 6.55-28.993-2.205-29.856-2.635-21.421-12.614-39.334-29.269-51.954-52.047-12.187-21.924-19.267-45.435-20.435-70.542-.308-6.061 1.478-8.207 7.509-9.307 7.94-1.471 16.127-1.778 24.068-.615 33.547 4.9 62.108 19.902 86.054 43.66 13.666 13.531 24.007 29.699 34.658 45.496 11.326 16.778 23.514 32.761 39.026 45.865 5.479 4.592 9.848 8.083 14.035 10.656-12.62 1.407-33.673 1.714-48.075-9.676zm15.899-102.519c.521-2.111 2.421-3.658 4.722-3.658a4.74 4.74 0 011.661.305c.678.246 1.293.614 1.786 1.163.861.859 1.354 2.083 1.354 3.368 0 2.695-2.154 4.837-4.862 4.837a4.748 4.748 0 01-4.738-4.034 5.01 5.01 0 01.077-1.981zm47.208 26.915c-2.606.996-5.2 1.778-7.707 1.88-4.679.244-9.787-1.654-12.556-3.981-4.308-3.612-7.386-5.631-8.679-11.941-.554-2.695-.247-6.858.246-9.246 1.108-5.144-.124-8.451-3.754-11.451-2.954-2.449-6.711-3.122-10.834-3.122-1.539 0-2.954-.673-4.001-1.224-1.724-.856-3.139-3-1.785-5.634.432-.856 2.525-2.939 3.018-3.305 5.6-3.185 12.065-2.144 18.034.244 5.54 2.266 9.727 6.429 15.759 12.307 6.155 7.102 7.263 9.063 10.773 14.39 2.771 4.163 5.294 8.451 7.018 13.348.877 2.561.071 4.74-2.341 6.277-.981.625-2.109 1.044-3.191 1.458z" />
+                            </svg>
+                        </button>
+                        <!-- Exportar Conversación Dropdown -->
+                        <div style="position:relative;display:inline-block;">
+                            <button id="export-chat-btn" class="btn-icon" title="Exportar conversación"
+                                onclick="toggleExportMenu(event)">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                            </button>
+
+                            <div id="export-menu-dropdown"
+                                style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.4);min-width:210px;z-index:99999;padding:6px;flex-direction:column;gap:2px;"
+                                onclick="event.stopPropagation()">
+                                <button type="button" class="export-menu-item"
+                                    onclick="exportConversation('html'); closeExportMenu();">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                                        <path d="M2 12h20"></path>
+                                    </svg>
+                                    <span>Documento HTML (.html)</span>
+                                </button>
+                                <button type="button" class="export-menu-item"
+                                    onclick="exportConversation('md'); closeExportMenu();">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                    </svg>
+                                    <span>Markdown (.md)</span>
+                                </button>
+                                <button type="button" class="export-menu-item"
+                                    onclick="exportConversation('txt'); closeExportMenu();">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="17" y1="10" x2="3" y2="10"></line>
+                                        <line x1="21" y1="6" x2="3" y2="6"></line>
+                                        <line x1="21" y1="14" x2="3" y2="14"></line>
+                                        <line x1="17" y1="18" x2="3" y2="18"></line>
+                                    </svg>
+                                    <span>Texto plano (.txt)</span>
+                                </button>
+                                <button type="button" class="export-menu-item"
+                                    onclick="exportConversation('json'); closeExportMenu();">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="16 18 22 12 16 6"></polyline>
+                                        <polyline points="8 6 2 12 8 18"></polyline>
+                                    </svg>
+                                    <span>JSON (.json)</span>
+                                </button>
+                                <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+                                <button type="button" class="export-menu-item"
+                                    onclick="copyFullConversation(); closeExportMenu();">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                    <span>Copiar chat completo</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="top-nav-brand"
-                    style="font-weight:700;letter-spacing:1px;font-size:0.8rem;opacity:0.6; white-space: nowrap;">NEXUS
-                    AI v2.0</div>
             </nav>
 
             <div class="chat-container" id="chat-log">
-                <div id="welcome-screen" class="welcome-screen">
-                    <div class="welcome-title">Hola, {{ user.username }}</div>
-                    <div class="welcome-subtitle">¿Cómo puedo ayudarte hoy?</div>
-                    <div style="margin:-25px 0 35px 0;display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-dim);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:5px 12px;border-radius:20px;">
-                        <span>Escribe</span>
-                        <code style="color:#818cf8;background:rgba(129,140,248,0.15);padding:2px 6px;border-radius:4px;font-weight:700;">/</code>
-                        <span>para abrir la barra de comandos y elegir modelos</span>
-                    </div>
-                    <div class="suggestion-grid">
-                        <div class="suggestion-card" onclick="setInput('Dame ideas para un proyecto de Python')">
-                            <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Dame ideas</div>
-                            <div style="font-size:0.75rem;color:var(--text-dim);">para un proyecto de Python</div>
-                        </div>
-                        <div class="suggestion-card" onclick="setInput('Ayúdame a estudiar para un examen')">
-                            <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Ayúdame a estudiar</div>
-                            <div style="font-size:0.75rem;color:var(--text-dim);">vocabulario para un examen</div>
-                        </div>
-                        <div class="suggestion-card" onclick="setInput('Cuéntame un dato curioso sobre Roma')">
-                            <div style="font-weight:600;font-size:0.9rem;margin-bottom:5px;">Cuéntame un dato curioso
-                            </div>
-                            <div style="font-size:0.75rem;color:var(--text-dim);">sobre el Imperio Romano</div>
-                        </div>
-                    </div>
+                <div class="chat-loading">
+                    <div class="chat-loading-spinner"></div><span>Cargando conversación...</span>
                 </div>
             </div>
 
             <div class="input-area">
                 <div class="attachments-preview" id="attachments-preview"></div>
 
-                <div class="input-wrapper" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                    <textarea id="chat-input" placeholder="Escribe un mensaje..." rows="1" oninput="autoResize(this)"
-                        style="width: 100%; min-height: 24px; max-height: 200px;"></textarea>
+                <div class="input-wrapper" id="chat-input-wrapper">
+                    <textarea id="chat-input" placeholder="Escribe un mensaje..." rows="1"
+                        oninput="autoResize(this)"></textarea>
 
-                    <div style="display:flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <div class="chat-toolbar-desktop"
+                        style="display:flex; justify-content: space-between; align-items: center;">
                         <!-- Left toolbar items -->
-                        <div style="display:flex; align-items:center; position:relative; margin-left:-8px;">
+                        <div class="left-toolbar-group"
+                            style="display:flex; align-items:center; position:relative; margin-left:-8px;">
+                            <!-- Progressive disclosure (móvil): el '+' esconde
+                                 las herramientas secundarias tras un panel -->
+                            <button class="btn-icon" id="tools-btn" onclick="toggleToolsMenu(event)"
+                                title="Más opciones" style="display:none;">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+
+                            <input type="file" id="local-device-file-input" multiple onchange="handleFileUpload(this)"
+                                style="display:none;">
+
                             <button class="btn-icon" id="btn-attach" onclick="toggleAttachMenu(event)" title="Adjuntar">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
@@ -308,6 +404,16 @@
                             </button>
 
                             <div class="attach-menu" id="attach-menu">
+                                <div class="attach-item"
+                                    onclick="document.getElementById('local-device-file-input').click(); toggleAttachMenu(event);">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    Subir desde el dispositivo
+                                </div>
                                 <div class="attach-item" onclick="openAttachSelectorModal('cloud')">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -339,12 +445,8 @@
                         </div>
 
                         <!-- Right toolbar items -->
-                        <div style="display:flex; align-items:center; gap: 4px;">
-                            <div style="position:relative;display:flex;align-items:center;margin-right:4px;">
-                                <input type="hidden" id="model-select" value="loading">
-                                <span id="main-model-label" title="Cambia de modelo escribiendo /models en el chat"
-                                    style="color:var(--text-dim);font-size:0.85rem;padding:4px;cursor:help;user-select:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Cargando modelos...</span>
-                            </div>
+                        <div class="chat-toolbar" style="display:flex; align-items:center; gap: 4px;">
+                            <input type="hidden" id="model-select" value="loading">
 
                             <button class="btn-icon toggle-btn" id="web-search-btn" onclick="toggleWebSearch()"
                                 title="Modo Búsqueda Web">
@@ -370,10 +472,12 @@
 
                             <button class="btn-icon toggle-btn" id="reasoning-mode-btn" onclick="toggleReasoningMode()"
                                 title="Modo Razonamiento (Pensamiento Profundo)">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M9 18h6"/>
-                                    <path d="M10 22h4"/>
-                                    <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 18h6" />
+                                    <path d="M10 22h4" />
+                                    <path
+                                        d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.76 1.23 1.52 1.41 2.5" />
                                 </svg>
                             </button>
 
@@ -389,32 +493,206 @@
 
                             <button class="btn-send" id="send-btn" onclick="sendMessage(true)" title="Enviar mensaje">
                                 <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                    <path d="M9.04 15.93l-.11 4.53c.57 0 .82-.25 1.13-.56l2.7-2.59 5.61 4.13c1.03.57 1.77.27 2.05-.96l3.71-17.48c.38-1.7-.64-2.63-1.78-2.19L1.02 10.08c-1.69.66-1.67 1.62-.31 2.04l5.04 1.58 11.95-7.54c.56-.37 1.08-.17.66.21L9.04 15.93z"/>
+                                    <path
+                                        d="M9.04 15.93l-.11 4.53c.57 0 .82-.25 1.13-.56l2.7-2.59 5.61 4.13c1.03.57 1.77.27 2.05-.96l3.71-17.48c.38-1.7-.64-2.63-1.78-2.19L1.02 10.08c-1.69.66-1.67 1.62-.31 2.04l5.04 1.58 11.95-7.54c.56-.37 1.08-.17.66.21L9.04 15.93z" />
                                 </svg>
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Progressive disclosure (móvil): panel de herramientas
+                         secundarias que abre el botón '+'. En escritorio no se
+                         muestra (display:none) -->
+                    <div class="tools-scrim" id="tools-scrim"></div>
+                    <div class="tools-menu-panel" id="tools-menu">
+                        <div class="tools-sheet-handle"></div>
+                        <div class="tools-item" id="tools-attach-device"
+                            onclick="toggleToolsMenu(); document.getElementById('local-device-file-input').click();">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span class="tools-item-label">Subir desde dispositivo</span>
+                        </div>
+                        <div class="tools-item" id="tools-attach-cloud"
+                            onclick="toggleToolsMenu(); openAttachSelectorModal('cloud')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                            </svg>
+                            <span class="tools-item-label">Adjuntar Archivos</span>
+                        </div>
+                        <div class="tools-item" id="tools-attach-notes"
+                            onclick="toggleToolsMenu(); openAttachSelectorModal('notes')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            <span class="tools-item-label">Adjuntar Notas</span>
+                        </div>
+                        <div class="tools-item" id="tools-attach-knowledge"
+                            onclick="toggleToolsMenu(); openAttachSelectorModal('knowledge')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path
+                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                                </path>
+                            </svg>
+                            <span class="tools-item-label">Conocimiento</span>
+                        </div>
+                        <div class="tools-divider"></div>
+                        <div class="tools-item" id="tools-web" onclick="toggleWebSearch(); updateToolsMenuState();">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path
+                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                                </path>
+                            </svg>
+                            <span class="tools-item-label">Búsqueda Web</span>
+                        </div>
+                        <div class="tools-item" id="tools-mode" onclick="toggleAIMode(); updateToolsMenuState();">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+                                <line x1="8" y1="10" x2="16" y2="10"></line>
+                                <line x1="8" y1="14" x2="13" y2="14"></line>
+                            </svg>
+                            <span class="tools-item-label">Modo Agenda</span>
+                        </div>
+                        <div class="tools-item" id="tools-reason"
+                            onclick="toggleReasoningMode(); updateToolsMenuState();">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" />
+                                <path
+                                    d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.76 1.23 1.52 1.41 2.5" />
+                            </svg>
+                            <span class="tools-item-label">Modo Razonamiento</span>
+                        </div>
+                        <div class="tools-item" id="tools-model-settings"
+                            onclick="toggleToolsMenu(); window.openModelSelectorModal()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                                <path d="M2 12h20"></path>
+                            </svg>
+                            <span class="tools-item-label">Cambiar modelo</span>
+                        </div>
+                        <div class="tools-item" id="tools-api-keys" onclick="toggleToolsMenu(); openApiKeysDialog()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="7.5" cy="15.5" r="5.5"></circle>
+                                <path d="M21 2l-9.6 9.6"></path>
+                                <path d="M15.5 7.5l3 3L22 7l-3-3"></path>
+                            </svg>
+                            <span class="tools-item-label">APIs externas</span>
+                        </div>
+                        <div class="tools-divider"></div>
+                        <div class="tools-item danger" id="tools-mic" onclick="toggleToolsMenu(); toggleMicRecording()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                            <span class="tools-item-label">Micrófono</span>
                         </div>
                     </div>
                 </div>
 
                 <div id="ai-privacy-footer-notice"
-                    style="max-width:800px;margin:12px auto 0 auto;text-align:center;font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;opacity:0.85;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="flex-shrink:0;">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                        <line x1="12" y1="9" x2="12" y2="13"/>
-                        <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg><strong style="color:#fbbf24;">Aviso:</strong><span>Los modelos de API externos pueden almacenar datos. No compartas información sensible.</span>
+                    style="text-align:center;font-size:0.7rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;opacity:0.6;padding-top:6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"
+                        style="flex-shrink:0;">
+                        <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg><strong style="color:#fbbf24;">Aviso:</strong><span>Los modelos de API externos pueden
+                        almacenar datos. No compartas información sensible.</span>
                 </div>
             </div>
         </main>
 
-        <section class="notes-view" id="notes-view">
+        <!-- Artifact Side Panel (Estilo Claude.ai Live Preview) -->
+        <aside id="artifact-panel" class="artifact-panel" style="display:none;">
+            <div class="artifact-header">
+                <div class="artifact-header-left">
+                    <div class="artifact-tabs">
+                        <button class="artifact-tab active" id="artifact-tab-preview"
+                            onclick="switchArtifactTab('preview')">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <span>Vista Previa</span>
+                        </button>
+                        <button class="artifact-tab" id="artifact-tab-code" onclick="switchArtifactTab('code')">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                            <span>Código</span>
+                        </button>
+                    </div>
+                    <span id="artifact-title" class="artifact-title">HTML Preview</span>
+                </div>
+                <div class="artifact-header-right" style="display:flex;align-items:center;gap:6px;">
+                    <button class="btn-icon" onclick="copyArtifactCode()" title="Copiar Código">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="toggleArtifactFullscreen()" title="Pantalla Completa">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <polyline points="9 21 3 21 3 15"></polyline>
+                            <line x1="21" y1="3" x2="14" y2="10"></line>
+                            <line x1="3" y1="21" x2="10" y2="14"></line>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="closeArtifactPanel()" title="Cerrar Panel">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="artifact-body">
+                <iframe id="artifact-iframe" class="artifact-iframe"
+                    sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>
+                <pre id="artifact-code-pre" class="artifact-code-pre" style="display:none;">
+                    <code id="artifact-code-block" class="nohighlight"></code>
+                </pre>
+            </div>
+        </aside>
+
+        <section class="notes-view" id="notes-view" style="display:none;">
             <div id="notes-list-view" style="display:flex;flex-direction:column;height:100%;width:100%;">
                 <div class="notes-topbar">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()" title="Abrir Menú"
-                            style="display:none; padding:4px;">
+                            aria-label="Abrir menú">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="3" y1="12" x2="21" y2="12"></line>
                                 <line x1="3" y1="6" x2="21" y2="6"></line>
                                 <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -657,11 +935,12 @@
                     style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
                     <div class="workspace-title-box" style="display:flex;align-items:center;gap:10px;">
                         <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()" title="Abrir Menú"
-                            style="display:none; padding:4px; margin-left:-4px;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="9" y1="3" x2="9" y2="21"></line>
+                            aria-label="Abrir menú">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="3" y1="12" x2="21" y2="12"></line>
+                                <line x1="3" y1="6" x2="21" y2="6"></line>
+                                <line x1="3" y1="18" x2="21" y2="18"></line>
                             </svg>
                         </button>
                         <h2
@@ -755,11 +1034,11 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
                     <div style="display:flex;align-items:center;gap:8px;">
                         <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()" title="Abrir Menú"
-                            style="display:none;padding:4px;flex-shrink:0;">
+                            aria-label="Abrir menú">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <line x1="3" y1="6" x2="21" y2="6"></line>
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="3" y1="12" x2="21" y2="12"></line>
+                                <line x1="3" y1="6" x2="21" y2="6"></line>
                                 <line x1="3" y1="18" x2="21" y2="18"></line>
                             </svg>
                         </button>
@@ -956,7 +1235,7 @@
                     </div>
                 </div>
             </div>
-    </section>
+        </section>
     </div>
 
     <div class="app-modal-overlay" id="perm-modal-overlay" onclick="closePermissionsModal(event)">
@@ -1065,7 +1344,8 @@
         </div>
     </div>
 
-    <div class="app-modal-overlay" id="input-dialog-overlay" onclick="cancelInputDialog(event)">
+    <div class="app-modal-overlay" id="input-dialog-overlay" onclick="cancelInputDialog(event)"
+        style="z-index: 12000 !important;">
         <div class="app-modal" onclick="event.stopPropagation()" style="width:90%;max-width:420px;">
             <div class="app-modal-header">
                 <h3 id="input-dialog-title">Renombrar</h3>
@@ -1115,7 +1395,7 @@
 
     <!-- Share Dialog -->
     <div class="app-modal-overlay" id="share-dialog-overlay" onclick="closeShareDialog(event)">
-        <div class="app-modal" onclick="event.stopPropagation()" style="width:90%;max-width:450px;">
+        <div class="app-modal" onclick="event.stopPropagation()" style="width:90%;max-width:440px;">
             <div class="app-modal-header">
                 <h3 id="share-dialog-title">Compartir</h3>
                 <button class="btn-icon" onclick="closeShareDialog()" style="padding:4px;">
@@ -1125,10 +1405,11 @@
                     </svg>
                 </button>
             </div>
-            <div class="app-modal-body" style="padding-bottom:10px;">
-                <label class="dialog-label">Elige un amigo con quien compartir</label>
-                <div id="share-friends-list"
-                    style="margin-top:10px; max-height:250px; overflow-y:auto; background:var(--bg-canvas); border:1px solid var(--border); border-radius:6px; padding:5px;">
+            <div class="app-modal-body" style="padding-bottom:16px;">
+                <label class="dialog-label"
+                    style="display:block; margin-bottom:12px; font-size:0.8rem; color:var(--text-dim);">Elige un amigo
+                    con quien compartir</label>
+                <div id="share-friends-list" style="max-height:260px; overflow-y:auto;">
                     <!-- Se llena con JS -->
                 </div>
             </div>
@@ -1137,9 +1418,10 @@
 
 
     <div class="app-modal-overlay" id="command-dialog-overlay" onclick="closeCommandDialog(event)">
-        <div class="app-modal" onclick="event.stopPropagation()" style="width:90%;max-width:500px;">
-            <div class="app-modal-header">
-                <h3 id="command-dialog-title">Descargar Modelo (Ollama)</h3>
+        <div class="app-modal" onclick="event.stopPropagation()" style="width:90%;max-width:480px;">
+            <div class="app-modal-header" style="padding:16px 20px 12px;border-bottom:1px solid var(--border);">
+                <h3 id="command-dialog-title" style="margin:0;font-size:0.95rem;font-weight:600;">Descargar Modelo
+                    (Ollama)</h3>
                 <button class="btn-icon" onclick="cancelCommandDialog()" style="padding:4px;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1147,52 +1429,60 @@
                     </svg>
                 </button>
             </div>
-            <div class="app-modal-body" style="padding-bottom:10px;">
-                <label class="dialog-label">Catálogo Oficial de Ollama</label>
-                <div id="ollama-catalog-grid"
-                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; max-height: 220px; overflow-y: auto; padding-right: 5px;">
-                    <!-- Se llena con JS -->
+            <div class="app-modal-body"
+                style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;max-height:75vh;overflow-y:auto;">
+                <div>
+                    <label class="dialog-label"
+                        style="font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:8px;display:block;">Catálogo
+                        Oficial</label>
+                    <div id="ollama-catalog-grid"
+                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 2px;">
+                        <!-- Se llena con JS -->
+                    </div>
                 </div>
 
-                <div style="margin-bottom: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
                     <label class="dialog-label"
-                        style="display:flex; justify-content:space-between; align-items:center;">
+                        style="display:flex; justify-content:space-between; align-items:center; font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:6px;">
                         <span>Buscar en Hugging Face (GGUF)</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="color:#fcd34d;">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
-                            <line x1="9" y1="9" x2="9.01" y2="9"></line>
-                            <line x1="15" y1="9" x2="15.01" y2="9"></line>
-                        </svg>
                     </label>
                     <div style="display:flex; gap:8px;">
                         <input class="dialog-input" id="hf-search-input" type="text" autocomplete="off"
                             placeholder="Ej: Llama-3, Qwen, phi..."
+                            style="padding:8px 10px;font-size:0.8rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);"
                             onkeydown="if(event.key === 'Enter') searchHuggingFace()">
-                        <button class="btn-modal-confirm" style="padding: 8px 12px; width:auto;"
+                        <button class="btn-modal-confirm"
+                            style="padding: 8px 14px; width:auto; font-size:0.78rem; border-radius:8px;"
                             onclick="searchHuggingFace()">Buscar</button>
                     </div>
                     <div id="hf-results-container"
-                        style="display:none; margin-top:10px; max-height:150px; overflow-y:auto; background:var(--bg-canvas); border:1px solid var(--border); border-radius:6px; padding:5px;">
+                        style="display:none; margin-top:8px; max-height:140px; overflow-y:auto; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:6px;">
                     </div>
                 </div>
 
-                <label class="dialog-label">Nombre del modelo (Ollama / HF Tag)</label>
-                <input class="dialog-input" id="command-dialog-field" type="text" autocomplete="off"
-                    placeholder="Ej: qwen2.5:4b o hf.co/user/model">
-                <pre id="command-dialog-output"
-                    style="margin-top:15px; display:none; max-height:200px; overflow-y:auto; background:#161b22; padding:10px; font-size:12px; border-radius:6px; border:1px solid var(--border); white-space: pre-wrap;"></pre>
+                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+                    <label class="dialog-label"
+                        style="font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:6px;display:block;">Nombre
+                        directo (Tag / HF URL)</label>
+                    <input class="dialog-input" id="command-dialog-field" type="text" autocomplete="off"
+                        placeholder="Ej: qwen2.5:4b o hf.co/user/model"
+                        style="padding:8px 10px;font-size:0.8rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);">
+                    <pre id="command-dialog-output"
+                        style="margin-top:10px; display:none; max-height:160px; overflow-y:auto; background:rgba(0,0,0,0.4); padding:10px; font-size:11px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); white-space: pre-wrap; color:var(--text-dim);"></pre>
+                </div>
             </div>
-            <div class="app-modal-footer">
-                <button class="btn-modal-cancel" onclick="cancelCommandDialog()">Cancelar</button>
-                <button class="btn-modal-confirm" id="command-dialog-confirm-btn"
-                    onclick="executeCommand()">Descargar</button>
+            <div class="app-modal-footer"
+                style="padding:12px 20px;display:flex;gap:10px;border-top:1px solid var(--border);">
+                <button onclick="cancelCommandDialog()"
+                    style="flex:1;padding:9px 0;border-radius:8px;font-size:0.82rem;background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--text-dim);cursor:pointer;font-weight:500;">Cancelar</button>
+                <button id="command-dialog-confirm-btn" onclick="executeCommand()"
+                    style="flex:1;padding:9px 0;border-radius:8px;font-size:0.82rem;background:var(--primary);border:none;color:white;cursor:pointer;font-weight:600;">Descargar</button>
             </div>
         </div>
     </div>
 
-    <div class="app-modal-overlay" id="confirm-dialog-overlay" onclick="cancelConfirmDialog(event)">
+    <div class="app-modal-overlay" id="confirm-dialog-overlay" onclick="cancelConfirmDialog(event)"
+        style="z-index: 12000 !important;">
         <div class="app-modal" onclick="event.stopPropagation()" style="width:90%;max-width:400px;">
             <div class="app-modal-header">
                 <h3 id="confirm-dialog-title">Confirmar</h3>
@@ -1213,24 +1503,25 @@
         </div>
     </div>
 
-    <!-- API Keys Modal - Premium Redesign -->
     <div class="app-modal-overlay" id="api-keys-dialog-overlay" onclick="closeApiKeysDialog(event)">
-        <div class="app-modal" onclick="event.stopPropagation()" style="max-width:480px; width:100%;">
+        <div class="app-modal" onclick="event.stopPropagation()" style="max-width:520px; width:100%;">
             <div class="app-modal-header" style="padding:20px 24px 16px;">
                 <div style="display:flex;align-items:center;gap:12px;">
-                    <div style="flex-shrink:0;width:36px;height:36px;border-radius:10px;overflow:hidden;">
-                        <svg width="36" height="36" viewBox="0 0 512 509.64" shape-rendering="geometricPrecision"
-                            fill-rule="evenodd" clip-rule="evenodd">
-                            <path fill="#fff"
-                                d="M115.612 0h280.775C459.974 0 512 52.026 512 115.612v278.415c0 63.587-52.026 115.613-115.613 115.613H115.612C52.026 509.64 0 457.614 0 394.027V115.612C0 52.026 52.026 0 115.612 0z" />
-                            <path fill="#4D6BFE" fill-rule="nonzero"
-                                d="M440.898 139.167c-4.001-1.961-5.723 1.776-8.062 3.673-.801.612-1.479 1.407-2.154 2.141-5.848 6.246-12.681 10.349-21.607 9.859-13.048-.734-24.192 3.368-34.04 13.348-2.093-12.307-9.048-19.658-19.635-24.37-5.54-2.449-11.141-4.9-15.02-10.227-2.708-3.795-3.447-8.021-4.801-12.185-.861-2.509-1.725-5.082-4.618-5.512-3.139-.49-4.372 2.142-5.601 4.349-4.925 9.002-6.833 18.921-6.647 28.962.432 22.597 9.972 40.597 28.932 53.397 2.154 1.47 2.707 2.939 2.032 5.082-1.293 4.41-2.832 8.695-4.186 13.105-.862 2.817-2.157 3.429-5.172 2.205-10.402-4.346-19.391-10.778-27.332-18.553-13.481-13.044-25.668-27.434-40.873-38.702a177.614 177.614 0 00-10.834-7.409c-15.512-15.063 2.032-27.434 6.094-28.902 4.247-1.532 1.478-6.797-12.251-6.736-13.727.061-26.285 4.653-42.288 10.777-2.34.92-4.801 1.593-7.326 2.142-14.527-2.756-29.608-3.368-45.367-1.593-29.671 3.305-53.368 17.329-70.788 41.272-20.928 28.785-25.854 61.482-19.821 95.59 6.34 35.943 24.683 65.704 52.876 88.974 29.239 24.123 62.911 35.943 101.32 33.677 23.329-1.346 49.307-4.468 78.607-29.27 7.387 3.673 15.142 5.144 28.008 6.246 9.911.92 19.452-.49 26.839-2.019 11.573-2.449 10.773-13.166 6.586-15.124-33.915-15.797-26.47-9.368-33.24-14.573 17.235-20.39 43.213-41.577 53.369-110.222.8-5.448.121-8.877 0-13.287-.061-2.692.553-3.734 3.632-4.041 8.494-.981 16.742-3.305 24.314-7.471 21.975-12.002 30.84-31.719 32.933-55.355.307-3.612-.061-7.348-3.879-9.245v-.003zM249.4 351.89c-32.872-25.838-48.814-34.352-55.4-33.984-6.155.368-5.048 7.41-3.694 12.002 1.415 4.532 3.264 7.654 5.848 11.634 1.785 2.634 3.017 6.551-1.784 9.493-10.587 6.55-28.993-2.205-29.856-2.635-21.421-12.614-39.334-29.269-51.954-52.047-12.187-21.924-19.267-45.435-20.435-70.542-.308-6.061 1.478-8.207 7.509-9.307 7.94-1.471 16.127-1.778 24.068-.615 33.547 4.9 62.108 19.902 86.054 43.66 13.666 13.531 24.007 29.699 34.658 45.496 11.326 16.778 23.514 32.761 39.026 45.865 5.479 4.592 9.848 8.083 14.035 10.656-12.62 1.407-33.673 1.714-48.075-9.676zm15.899-102.519c.521-2.111 2.421-3.658 4.722-3.658a4.74 4.74 0 011.661.305c.678.246 1.293.614 1.786 1.163.861.859 1.354 2.083 1.354 3.368 0 2.695-2.154 4.837-4.862 4.837a4.748 4.748 0 01-4.738-4.034 5.01 5.01 0 01.077-1.981zm47.208 26.915c-2.606.996-5.2 1.778-7.707 1.88-4.679.244-9.787-1.654-12.556-3.981-4.308-3.612-7.386-5.631-8.679-11.941-.554-2.695-.247-6.858.246-9.246 1.108-5.144-.124-8.451-3.754-11.451-2.954-2.449-6.711-3.122-10.834-3.122-1.539 0-2.954-.673-4.001-1.224-1.724-.856-3.139-3-1.785-5.634.432-.856 2.525-2.939 3.018-3.305 5.6-3.185 12.065-2.144 18.034.244 5.54 2.266 9.727 6.429 15.759 12.307 6.155 7.102 7.263 9.063 10.773 14.39 2.771 4.163 5.294 8.451 7.018 13.348.877 2.561.071 4.74-2.341 6.277-.981.625-2.109 1.044-3.191 1.458z" />
+                    <div
+                        style="width:36px;height:36px;border-radius:10px;background:rgba(99,102,241,0.15);color:var(--primary);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
                         </svg>
                     </div>
                     <div>
-                        <h2 style="margin:0;font-size:1rem;font-weight:700;">APIs Externas</h2>
-                        <p style="margin:0;font-size:0.75rem;color:var(--text-dim);">Conecta modelos de terceros
-                            compatibles con OpenAI</p>
+                        <h2 style="margin:0;font-size:1.05rem;font-weight:700;color:var(--text-main);">APIs Externas
+                        </h2>
+                        <p style="margin:2px 0 0 0;font-size:0.75rem;color:var(--text-dim);">Conecta OpenRouter,
+                            DeepSeek, OpenAI, Groq y proveedores compatibles</p>
                     </div>
                 </div>
                 <button class="btn-icon" onclick="closeApiKeysDialog(null)" style="flex-shrink:0;">
@@ -1240,241 +1531,497 @@
                     </svg>
                 </button>
             </div>
-            <div class="app-modal-body" style="padding:0 24px 20px;display:flex;flex-direction:column;gap:14px;">
-                <div
-                    style="background:rgba(79,142,247,0.08);border:1px solid rgba(79,142,247,0.2);border-radius:8px;padding:10px 14px;font-size:0.78rem;color:#93c5fd;">
-                    Compatible con OpenRouter, DeepSeek, Groq, OpenAI, Anthropic y cualquier proveedor con API estilo OpenAI.
-                    Puedes añadir varios proveedores: cada uno aparecerá como <code>API: proveedor</code> en el selector de modelos.
-                </div>
-                <div>
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+
+            <div class="app-modal-body" style="padding:0 24px 20px;display:flex;flex-direction:column;gap:16px;">
+                <!-- SECCIÓN 1: VISTA DE TARJETAS DE PROVEEDORES GUARDADOS -->
+                <div id="api-keys-list-view">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
                         <label
-                            style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Proveedores
-                            guardados</label>
-                        <button type="button" id="api-keys-new" onclick="resetApiKeysForm()"
-                            style="background:none;border:none;color:#4F8EF7;cursor:pointer;font-size:0.75rem;font-weight:600;padding:2px 6px;">+ Nuevo</button>
-                    </div>
-                    <div id="api-keys-saved-list" style="display:flex;flex-direction:column;gap:6px;"></div>
-                </div>
-                <datalist id="api-providers-list">
-                    <option value="openrouter"></option>
-                    <option value="deepseek"></option>
-                    <option value="openai"></option>
-                    <option value="groq"></option>
-                    <option value="anthropic"></option>
-                    <option value="mistral"></option>
-                    <option value="together"></option>
-                    <option value="xai"></option>
-                    <option value="perplexity"></option>
-                    <option value="nvidia"></option>
-                </datalist>
-                <div>
-                    <label
-                        style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">Proveedor</label>
-                    <input type="text" id="api-keys-provider" list="api-providers-list" placeholder="openrouter, deepseek, openai..."
-                        value="openrouter"
-                        autocomplete="off"
-                        data-1p-ignore
-                        data-lpignore="true"
-                        style="width:100%;box-sizing:border-box;padding:10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;"
-                        onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
-                        onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                </div>
-                <div>
-                    <label
-                        style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">URL
-                        Base</label>
-                    <input type="text" id="api-keys-url" placeholder="https://openrouter.ai/api/v1"
-                        value="https://openrouter.ai/api/v1"
-                        autocomplete="off"
-                        data-1p-ignore
-                        data-lpignore="true"
-                        style="width:100%;box-sizing:border-box;padding:10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;"
-                        onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
-                        onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                </div>
-                <div>
-                    <label
-                        style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">Modelo
-                        (opcional)</label>
-                    <input type="text" id="api-keys-model" placeholder="openrouter/auto"
-                        value="openrouter/auto"
-                        autocomplete="off"
-                        data-1p-ignore
-                        data-lpignore="true"
-                        style="width:100%;box-sizing:border-box;padding:10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;font-family:monospace;"
-                        onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
-                        onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                    <div style="margin-top:4px;font-size:0.7rem;color:var(--text-dim);">Id del modelo (p. ej. <code
-                            style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">openrouter/auto</code>,
-                        <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">google/gemini-2.5-flash</code>).
-                        Solo se usa en OpenRouter y similares.</div>
-                </div>
-                <div>
-                    <label
-                        style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block;">API
-                        Key</label>
-                    <div style="position:relative;">
-                        <input type="text" id="api-keys-key" placeholder="sk-..." autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"
-                            style="width:100%;box-sizing:border-box;padding:10px 44px 10px 14px;background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;font-family:monospace;-webkit-text-security:disc;"
-                            onfocus="this.style.borderColor='rgba(79,142,247,0.5)'"
-                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                        <button type="button" onclick="toggleApiKeyVisibility()" title="Mostrar/Ocultar clave"
-                            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;display:flex;align-items:center;">
-                            <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
+                            style="font-size:0.75rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Proveedores
+                            Activos</label>
+                        <button type="button" id="api-keys-new-btn" onclick="showApiKeysForm(false)"
+                            style="background:var(--primary);border:none;color:white;cursor:pointer;font-size:0.78rem;font-weight:600;padding:6px 12px;border-radius:8px;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(99,102,241,0.3);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
+                            <span>Añadir Proveedor</span>
                         </button>
                     </div>
+                    <div id="api-keys-saved-list" style="display:flex;flex-direction:column;gap:10px;"></div>
                 </div>
-            </div>
-            <div class="app-modal-footer"
-                style="padding:16px 24px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.06);">
-                <button onclick="closeApiKeysDialog(null)"
-                    style="padding:9px 18px;background:transparent;border:1px solid rgba(255,255,255,0.12);color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:0.88rem;transition:all 0.2s;"
-                    onmouseover="this.style.borderColor='rgba(255,255,255,0.25)'"
-                    onmouseout="this.style.borderColor='rgba(255,255,255,0.12)'">Cancelar</button>
-                <button onclick="saveApiKeysConfig()"
-                    style="padding:9px 18px;background:linear-gradient(135deg,#4F8EF7,#7C3AED);border:none;color:white;border-radius:8px;cursor:pointer;font-size:0.88rem;font-weight:600;transition:opacity 0.2s;"
-                    onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Guardar</button>
+
+                <!-- SECCIÓN 2: FORMULARIO DE INSERCIÓN / EDICIÓN (Oculto por defecto) -->
+                <div id="api-keys-form-container"
+                    style="display:none;flex-direction:column;gap:14px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+                        <span id="api-form-title"
+                            style="font-size:0.85rem;font-weight:700;color:var(--text-main);">Configurar
+                            Proveedor</span>
+                        <button type="button" onclick="hideApiKeysForm()"
+                            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.75rem;">✕
+                            Cancelar</button>
+                    </div>
+
+                    <!-- GRID DE SELECCIÓN RÁPIDA DE MARCAS (LOGOS OFICIALES INLINE, SIN RECURSOS EXTERNOS) -->
+                    <div>
+                        <label
+                            style="font-size:0.72rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.04em;">Selección
+                            Rápida de Marca</label>
+                        <div class="provider-chip-grid" id="api-provider-chips">
+                            <div class="provider-chip" onclick="selectProviderChip('openrouter')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="2.1" fill="#646CFF" />
+                                    <circle cx="4.2" cy="6.2" r="1.6" fill="#646CFF" />
+                                    <circle cx="19.8" cy="6.2" r="1.6" fill="#646CFF" />
+                                    <circle cx="4.2" cy="17.8" r="1.6" fill="#646CFF" />
+                                    <circle cx="19.8" cy="17.8" r="1.6" fill="#646CFF" />
+                                    <path d="M5.6 7.3l5 3.5M18.4 7.3l-5 3.5M5.6 16.7l5-3.5M18.4 16.7l-5-3.5"
+                                        stroke="#646CFF" stroke-width="1.6" stroke-linecap="round" />
+                                </svg>
+                                <span>OpenRouter</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('deepseek')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="#4D6BFE">
+                                    <path
+                                        d="M2.8 12.2C2.8 8 6 5 10.2 5c2.4 0 4.4 1 5.9 2.6 1-1 2.4-1.6 4-1.6 1.2 0 2.3.3 3.3.9-2 1.3-3 3-3 5 2 .8 3.6 2.5 3.6 4.7 0 2.8-2.3 5-5.4 5h-5.6C6.5 21.6 2.8 17.8 2.8 12.2z" />
+                                    <path d="M20.6 7.2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                    <path d="M9.4 5.6c.1-1.3.9-2.4 2.1-2.9-.5 1.1-.8 2.1-.6 3.3-.6-.1-1.1-.2-1.5-.4z" />
+                                    <circle cx="6.2" cy="9.6" r="0.7" fill="#fff" />
+                                </svg>
+                                <span>DeepSeek</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('openai')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000000"
+                                    stroke-width="1.5">
+                                    <ellipse cx="12" cy="7.5" rx="3.6" ry="6.3" transform="rotate(0 12 12)" />
+                                    <ellipse cx="12" cy="7.5" rx="3.6" ry="6.3" transform="rotate(60 12 12)" />
+                                    <ellipse cx="12" cy="7.5" rx="3.6" ry="6.3" transform="rotate(120 12 12)" />
+                                </svg>
+                                <span>OpenAI</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('groq')">
+                                <svg width="14" height="14" viewBox="0 0 24 24">
+                                    <rect x="1.6" y="1.6" width="20.8" height="20.8" rx="6" fill="#F55036" />
+                                    <path d="M14 3.6l-7 10h4.6L9.8 20.4 17 10.4h-4.8l1.8-6.8z" fill="#ffffff" />
+                                </svg>
+                                <span>Groq</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('anthropic')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97757"
+                                    stroke-width="2.2" stroke-linecap="round">
+                                    <path d="M12 2.5v19M2.5 12h19M5.5 5.5l13 13M18.5 5.5l-13 13" />
+                                    <circle cx="12" cy="12" r="2.3" fill="#D97757" stroke="none" />
+                                </svg>
+                                <span>Anthropic</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('mistral')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF7000"
+                                    stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round">
+                                    <path d="M4 17.5L8 6l4 7 4-7 4 11.5" />
+                                </svg>
+                                <span>Mistral</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('xai')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000000"
+                                    stroke-width="3.4" stroke-linecap="round">
+                                    <path d="M5.2 5.2l13.6 13.6M18.8 5.2L5.2 18.8" />
+                                    <circle cx="12" cy="12" r="1.7" fill="#000000" stroke="none" />
+                                </svg>
+                                <span>xAI (Grok)</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('perplexity')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#20808D"
+                                    stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3.5v17" />
+                                    <path d="M12 8.5a4.6 4.6 0 1 1 0 9H4.8" />
+                                </svg>
+                                <span>Perplexity</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('nvidia')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="#76B900">
+                                    <path
+                                        d="M12 3.2C6.9 3.2 3 6.9 3 12s3.9 8.8 9 8.8 9-3.7 9-8.8S17.1 3.2 12 3.2zm0 3.5c2.9 0 5.4 2.3 5.4 5.3 0 2.9-2.5 5.3-5.4 5.3s-5.4-2.4-5.4-5.3c0-3 2.5-5.3 5.4-5.3z" />
+                                    <path
+                                        d="M12 8.6c1.9 0 3.4 1.5 3.4 3.4s-1.5 3.4-3.4 3.4-3.4-1.5-3.4-3.4 1.5-3.4 3.4-3.4z"
+                                        fill="#ffffff" />
+                                </svg>
+                                <span>NVIDIA</span>
+                            </div>
+                            <div class="provider-chip" onclick="selectProviderChip('google')">
+                                <svg width="14" height="14" viewBox="0 0 24 24">
+                                    <path fill="#4285F4"
+                                        d="M23.5 12.3c0-.9-.1-1.5-.3-2.2H12v4.1h6.5c-.1 1.1-.8 2.7-2.4 3.8l3.7 2.9c2.2-2.1 3.7-5.1 3.7-8.6z" />
+                                    <path fill="#34A853"
+                                        d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.7-2.9c-1 .7-2.4 1.2-4.2 1.2-3.2 0-5.9-2.1-6.9-5l-3.8 2.9C3.2 21.2 7.3 24 12 24z" />
+                                    <path fill="#FBBC05"
+                                        d="M5.1 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4L1.3 6.7C.5 8.3 0 10.1 0 12s.5 3.7 1.3 5.3l3.8-2.9z" />
+                                    <path fill="#EA4335"
+                                        d="M12 4.7c1.9 0 3.1.8 3.8 1.5l3.3-3.3C18 1.1 15.2 0 12 0 7.3 0 3.2 2.8 1.3 6.7l3.8 2.9C6.1 6.8 8.8 4.7 12 4.7z" />
+                                </svg>
+                                <span>Google AI Studio</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API KEY SECRETA (PUESTA DIRECTAMENTE AL PRINCIPIO) -->
+                    <div id="api-key-field-container">
+                        <label
+                            style="font-size:0.75rem;font-weight:700;color:var(--text-main);margin-bottom:6px;display:block;">API
+                            Key secreta</label>
+                        <div style="position:relative;">
+                            <input type="text" id="api-keys-key" placeholder="sk-..." autocomplete="off" data-1p-ignore
+                                data-lpignore="true" data-bwignore="true"
+                                style="width:100%;box-sizing:border-box;padding:11px 44px 11px 14px;background:var(--bg-sidebar);border:1.5px solid var(--primary, #6366f1);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;font-family:monospace;-webkit-text-security:disc;box-shadow:0 0 12px rgba(99,102,241,0.2);">
+                            <button type="button" onclick="toggleApiKeyVisibility()" title="Mostrar/Ocultar clave"
+                                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;display:flex;align-items:center;">
+                                <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2">
+                                    <path d="M1.12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- DESPLEGABLE OPCIONES AVANZADAS -->
+                    <button type="button" id="toggle-advanced-api-btn" onclick="toggleAdvancedApiFields()"
+                        style="background:none;border:none;color:var(--text-dim);font-size:0.75rem;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 0;width:fit-content;margin-top:2px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                            </path>
+                        </svg>
+                        <span id="toggle-advanced-api-text">Opciones avanzadas (URL Base, Identificador)</span>
+                    </button>
+
+                    <div id="advanced-api-fields-container"
+                        style="display:none;flex-direction:column;gap:12px;margin-top:2px;padding:12px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;">
+                        <!-- PROVEEDOR ID / NOMBRE -->
+                        <div>
+                            <label
+                                style="font-size:0.72rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;display:block;">Identificador
+                                del Proveedor</label>
+                            <input type="text" id="api-keys-provider" placeholder="openrouter, deepseek, openai..."
+                                value="openrouter" autocomplete="off"
+                                style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:6px;color:var(--text-main);font-size:0.82rem;outline:none;">
+                        </div>
+
+                        <!-- URL BASE -->
+                        <div>
+                            <label
+                                style="font-size:0.72rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;display:block;">URL
+                                Base API</label>
+                            <input type="text" id="api-keys-url" placeholder="https://openrouter.ai/api/v1"
+                                value="https://openrouter.ai/api/v1" autocomplete="off"
+                                style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:6px;color:var(--text-main);font-size:0.82rem;outline:none;">
+                        </div>
+
+                        <!-- MODELO POR DEFECTO -->
+                        <div>
+                            <label
+                                style="font-size:0.72rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;display:block;">Modelo
+                                por Defecto (opcional)</label>
+                            <input type="text" id="api-keys-model" list="api-model-suggestions"
+                                placeholder="openrouter/auto o id del modelo" value="openrouter/auto" autocomplete="off"
+                                style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:6px;color:var(--text-main);font-size:0.82rem;outline:none;font-family:monospace;">
+                            <datalist id="api-model-suggestions"></datalist>
+                        </div>
+                    </div>
+
+                    <!-- FOOTER DEL FORMULARIO -->
+                    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;">
+                        <button type="button" onclick="hideApiKeysForm()"
+                            style="padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">Cancelar</button>
+                        <button type="button" id="btn-save-api-key" onclick="saveApiKeysConfig()"
+                            style="padding:8px 20px;background:var(--primary);border:none;color:white;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:600;display:flex;align-items:center;gap:6px;box-shadow:0 2px 10px rgba(99,102,241,0.3);">Guardar
+                            Proveedor</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Model Settings Dialog - Premium Redesign -->
-    <div id="model-settings-dialog" class="app-modal-overlay" onclick="closeModelSettingsDialog(event)"
-        style="z-index: 9999;">
-        <div class="app-modal" onclick="event.stopPropagation()" style="max-width:420px;width:100%;">
-            <div class="app-modal-header" style="padding:20px 24px 16px;">
-                <div style="display:flex;align-items:center;gap:12px;">
+    <!-- MODAL DE SELECCIÓN DE AMIGOS PARA API KEY -->
+    <div class="app-modal-overlay" id="share-key-friends-dialog-overlay" onclick="closeShareKeyFriendsModal(event)"
+        style="z-index: 11000 !important;">
+        <div class="app-modal" onclick="event.stopPropagation()" style="max-width:440px; width:100%;">
+            <div class="app-modal-header" style="padding:18px 20px 14px;">
+                <div style="display:flex;align-items:center;gap:10px;">
                     <div
-                        style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                            <line x1="4" y1="6" x2="20" y2="6" />
-                            <line x1="4" y1="12" x2="20" y2="12" />
-                            <line x1="4" y1="18" x2="20" y2="18" />
-                            <circle cx="8" cy="6" r="2" fill="white" stroke="none" />
-                            <circle cx="16" cy="12" r="2" fill="white" stroke="none" />
-                            <circle cx="10" cy="18" r="2" fill="white" stroke="none" />
+                        style="width:32px;height:32px;border-radius:8px;background:rgba(99,102,241,0.15);color:var(--primary);display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                         </svg>
                     </div>
                     <div>
-                        <h2 style="margin:0;font-size:1rem;font-weight:700;">Parámetros del Modelo</h2>
-                        <p style="margin:0;font-size:0.75rem;color:var(--text-dim);">Ajusta contexto, generación y
-                            creatividad</p>
+                        <h3 style="margin:0;font-size:0.95rem;font-weight:700;color:var(--text-main);">Compartir API Key
+                        </h3>
+                        <p style="margin:2px 0 0 0;font-size:0.72rem;color:var(--text-dim);"
+                            id="share-friends-subtitle">Elige qué amigos pueden usar este proveedor</p>
                     </div>
                 </div>
-                <button class="btn-icon" onclick="closeModelSettingsDialog()" style="flex-shrink:0;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
+                <button class="btn-icon" onclick="closeShareKeyFriendsModal(null)" style="flex-shrink:0;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="app-modal-body" style="padding:0 20px 16px;display:flex;flex-direction:column;gap:12px;">
+                <div
+                    style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;">
+                    <span style="font-size:0.8rem;font-weight:600;color:var(--text-main);">Todos mis amigos del
+                        sistema</span>
+                    <input type="checkbox" id="share-all-friends-checkbox"
+                        onchange="toggleShareAllFriends(this.checked)"
+                        style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary);">
+                </div>
+                <div id="share-friends-checkbox-list"
+                    style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;padding-right:4px;">
+                </div>
+            </div>
+            <div class="app-modal-footer"
+                style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);">
+                <button type="button" onclick="closeShareKeyFriendsModal(null)"
+                    style="padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:0.8rem;">Cancelar</button>
+                <button type="button" onclick="confirmSaveShareKeyFriends()"
+                    style="padding:7px 16px;background:var(--primary);border:none;color:white;border-radius:6px;cursor:pointer;font-size:0.8rem;font-weight:600;">Guardar
+                    Permisos</button>
+            </div>
+        </div>
+    </div>
+    <!-- MODEL SELECTOR MODAL (Selector por Proveedor + Lista de Modelos) -->
+    <div id="model-selector-modal" class="app-modal-overlay model-picker-overlay"
+        onclick="closeModelSelectorModal(event)">
+        <div class="app-modal model-picker-modal" onclick="event.stopPropagation()">
+            <!-- Header -->
+            <div class="model-picker-header">
+                <div class="model-picker-title-group">
+                    <button type="button" id="model-picker-back-btn" class="model-picker-back-btn"
+                        onclick="backToProviders()" style="display:none;" title="Volver a proveedores">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                        <span>Proveedores</span>
+                    </button>
+                    <h3 id="model-picker-title">Proveedores de IA</h3>
+                    <span id="model-picker-count" class="model-picker-count">Cargando...</span>
+                </div>
+                <button class="btn-icon model-picker-close-btn" onclick="closeModelSelectorModal()" title="Cerrar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
                 </button>
             </div>
 
-            <div class="app-modal-body" style="padding:4px 24px 20px;display:flex;flex-direction:column;gap:18px;">
-
-                <!-- Context Window -->
-                <div>
-                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-                        <label
-                            style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Marco
-                            de Ventana</label>
-                        <span style="font-size:0.78rem;color:var(--primary);font-weight:600;">num_ctx</span>
-                    </div>
-                    <div style="display:flex;gap:8px;">
-                        <input type="number" id="model-settings-ctx" value="8192" min="512" max="262144" step="512"
-                            style="flex:1;padding:10px 14px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;"
-                            onfocus="this.style.borderColor='var(--primary)'"
-                            onblur="this.style.borderColor='var(--border)'"
-                            oninput="if(this.value<512||this.value<=0)this.value=512;">
-                        <select onchange="document.getElementById('model-settings-ctx').value=this.value"
-                            style="padding:10px 12px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:8px;color:var(--text-dim);font-size:0.82rem;outline:none;cursor:pointer;">
-                            <option value="512">512</option>
-                            <option value="1024">1K</option>
-                            <option value="2048">2K</option>
-                            <option value="4096">4K</option>
-                            <option value="8192" selected>8K</option>
-                            <option value="16384">16K</option>
-                            <option value="32768">32K</option>
-                            <option value="65536">64K</option>
-                            <option value="131072">128K</option>
-                            <option value="262144">256K</option>
-                        </select>
-                    </div>
-                    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">Tokens de contexto que el
-                        modelo recuerda. Mínimo: 512.</div>
+            <!-- Search Bar -->
+            <div class="model-picker-controls">
+                <div class="model-picker-search-bar">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="model-picker-search-input"
+                        placeholder="Buscar por nombre o proveedor (ej. flash, llama)..."
+                        oninput="filterModelSelectorList()" autocomplete="off" spellcheck="false">
+                    <button id="model-picker-clear-search" class="clear-search-btn" onclick="clearModelSelectorSearch()"
+                        style="display:none;" title="Limpiar búsqueda">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
-
-                <!-- Max Tokens -->
-                <div>
-                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-                        <label
-                            style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Límite
-                            de Respuesta</label>
-                        <span style="font-size:0.78rem;color:var(--primary);font-weight:600;">max_tokens</span>
-                    </div>
-                    <div style="display:flex;gap:8px;">
-                        <input type="number" id="model-settings-predict" value="2048" min="128" max="131072" step="128"
-                            style="flex:1;padding:10px 14px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:8px;color:var(--text-main);font-size:0.9rem;outline:none;transition:border-color 0.2s;"
-                            onfocus="this.style.borderColor='var(--primary)'"
-                            onblur="this.style.borderColor='var(--border)'"
-                            oninput="if(this.value<128||this.value<=0)this.value=128;">
-                        <select onchange="document.getElementById('model-settings-predict').value=this.value"
-                            style="padding:10px 12px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:8px;color:var(--text-dim);font-size:0.82rem;outline:none;cursor:pointer;">
-                            <option value="128">128</option>
-                            <option value="256">256</option>
-                            <option value="512">512</option>
-                            <option value="1024">1K</option>
-                            <option value="2048" selected>2K</option>
-                            <option value="4096">4K</option>
-                            <option value="8192">8K</option>
-                            <option value="16384">16K</option>
-                            <option value="32768">32K</option>
-                            <option value="65536">64K</option>
-                        </select>
-                    </div>
-                    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">Tokens máximos por respuesta.
-                        Mínimo: 128.</div>
-                </div>
-
-                <!-- Temperature -->
-                <div>
-                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-                        <label
-                            style="font-size:0.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Temperatura</label>
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span id="temp-val-display"
-                                style="font-size:1rem;font-weight:700;color:var(--primary-hover);min-width:28px;text-align:right;">0.7</span>
-                            <span style="font-size:0.72rem;color:var(--text-dim);">/ 1.0</span>
-                        </div>
-                    </div>
-                    <div style="position:relative;padding:4px 0;">
-                        <input type="range" id="model-settings-temp" min="0" max="1" step="0.05" value="0.7"
-                            oninput="document.getElementById('temp-val-display').innerText=parseFloat(this.value).toFixed(2)"
-                            style="width:100%;cursor:pointer;accent-color:var(--primary);height:4px;">
-                    </div>
-                    <div
-                        style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);margin-top:2px;">
-                        <span>Preciso</span>
-                        <span>Creativo</span>
-                    </div>
-                </div>
-
             </div>
 
+            <!-- Scrollable Content (Providers or Models) -->
+            <div class="model-picker-list" id="model-picker-list">
+                <!-- Dynamically generated with provider cards or model rows -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Settings Dialog - Professional SVG Redesign -->
+    <div id="model-settings-dialog" class="app-modal-overlay" onclick="closeModelSettingsDialog(event)"
+        style="z-index: 9999;">
+        <div class="app-modal model-dialog-modal" onclick="event.stopPropagation()">
+            <!-- HEADER -->
+            <div class="app-modal-header" style="padding:16px 20px 12px;border-bottom:1px solid var(--border);">
+                <h2 style="margin:0;font-size:0.95rem;font-weight:600;color:var(--text-main);">Ajustes del Modelo</h2>
+                <button class="btn-icon" onclick="closeModelSettingsDialog()" style="flex-shrink:0;padding:4px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- BODY -->
+            <div class="app-modal-body"
+                style="padding:16px 20px;display:flex;flex-direction:column;gap:16px;max-height:75vh;overflow-y:auto;">
+
+                <!-- MODELO ACTIVO -->
+                <div
+                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+                    <div style="display:flex;align-items:center;gap:8px;overflow:hidden;min-width:0;">
+                        <div style="width:6px;height:6px;border-radius:50%;background:var(--primary);flex-shrink:0;">
+                        </div>
+                        <span id="modal-active-model-name"
+                            style="font-size:0.82rem;font-weight:500;color:var(--text-main);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            Sin modelos</span>
+                    </div>
+                    <span id="model-capability-badge"
+                        style="font-size:0.68rem;font-weight:600;color:var(--primary);background:rgba(99,102,241,0.12);padding:2px 8px;border-radius:5px;flex-shrink:0;">-</span>
+                </div>
+
+                <!-- SIN MODELOS: guía compacta -->
+                <div id="no-models-help-box"
+                    style="display:none;flex-direction:column;gap:8px;padding:12px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;">
+                    <div style="font-size:0.8rem;font-weight:600;color:var(--text-main);">No tienes modelos instalados
+                    </div>
+                    <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.45;">
+                        Descarga uno desde Ollama para empezar. Suelen ocupar entre 300 MB y 5 GB.
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="openCommandDialog()"
+                            style="padding:6px 12px;border-radius:8px;font-size:0.75rem;background:var(--primary);border:none;color:white;cursor:pointer;font-weight:600;">
+                            Descargar modelo</button>
+                        <button onclick="location.reload()"
+                            style="padding:6px 12px;border-radius:8px;font-size:0.75rem;background:transparent;border:1px solid rgba(255,255,255,0.1);color:var(--text-dim);cursor:pointer;font-weight:500;">
+                            Ya descargué uno</button>
+                    </div>
+                </div>
+
+                <!-- PRESETS: Velocidad -->
+                <div>
+                    <div
+                        style="font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:8px;">
+                        Rendimiento</div>
+
+                    <div style="display:flex;gap:8px;">
+                        <!-- FAST -->
+                        <div class="preset-card-pro" id="preset-fast" onclick="selectModelPresetPro(this, 'fast')"
+                            style="flex:1;text-align:center;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin:0 auto 4px;display:block;color:var(--primary);">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            <div style="font-size:0.78rem;font-weight:600;color:var(--text-main);">Rápido</div>
+                            <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">Preguntas simples</div>
+                        </div>
+                        <!-- BALANCED -->
+                        <div class="preset-card-pro active" id="preset-balanced"
+                            onclick="selectModelPresetPro(this, 'balanced')" style="flex:1;text-align:center;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin:0 auto 4px;display:block;color:var(--primary);">
+                                <path d="M12 3v18M3 9l9-6 9 6M3 9l3 6M21 9l-3 6M6 15a3 3 0 0 0 6 0M18 15a3 3 0 0 0 6 0">
+                                </path>
+                            </svg>
+                            <div style="font-size:0.78rem;font-weight:600;color:var(--text-main);">Equilibrado</div>
+                            <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">Recomendado</div>
+                        </div>
+                        <!-- DETAILED -->
+                        <div class="preset-card-pro" id="preset-coding" onclick="selectModelPresetPro(this, 'coding')"
+                            style="flex:1;text-align:center;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin:0 auto 4px;display:block;color:var(--primary);">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                            <div style="font-size:0.78rem;font-weight:600;color:var(--text-main);">Detallado</div>
+                            <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">Código / largo</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADVANCED -->
+                <div>
+                    <div class="advanced-toggle-pro" id="advanced-toggle-btn"
+                        onclick="toggleAdvancedModelSettings(this)" style="padding:10px 12px;border-radius:8px;">
+                        <div class="toggle-icon">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <span style="font-size:0.78rem;font-weight:500;color:var(--text-dim);flex:1;">Avanzado</span>
+                    </div>
+
+                    <div class="advanced-panel-pro" id="advanced-model-panel" style="padding:14px;margin-top:8px;">
+                        <!-- CONTEXT MEMORY -->
+                        <div style="margin-bottom:16px;">
+                            <div
+                                style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-size:0.78rem;font-weight:500;color:var(--text-main);">Memoria</span>
+                                <span class="badge-val" id="memoryValue">16K</span>
+                            </div>
+                            <input type="range" class="range-slider-pro" id="model-settings-ctx" min="4" max="2048"
+                                value="16" step="4" oninput="updateMemorySlider(this)">
+                            <div
+                                style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.65rem;color:var(--text-dim);">
+                                <span>4K</span>
+                                <span id="memory-max-label">2M</span>
+                            </div>
+                        </div>
+
+                        <!-- MAX TOKENS -->
+                        <div style="margin-bottom:16px;">
+                            <div
+                                style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-size:0.78rem;font-weight:500;color:var(--text-main);">Respuesta
+                                    máx.</span>
+                                <span class="badge-val" id="tokensValue">8K</span>
+                            </div>
+                            <input type="range" class="range-slider-pro" id="model-settings-predict" min="2" max="128"
+                                value="8" step="2" oninput="updateTokensSlider(this)">
+                            <div
+                                style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.65rem;color:var(--text-dim);">
+                                <span>2K</span>
+                                <span id="tokens-max-label">128K</span>
+                            </div>
+                        </div>
+
+                        <!-- TEMPERATURE -->
+                        <div>
+                            <div
+                                style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span
+                                    style="font-size:0.78rem;font-weight:500;color:var(--text-main);">Creatividad</span>
+                                <span class="badge-val" id="creativityValue">0.7</span>
+                            </div>
+                            <input type="range" class="range-slider-pro" id="model-settings-temp" min="0" max="1"
+                                value="0.7" step="0.05" oninput="updateCreativitySlider(this)">
+                            <div
+                                style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.65rem;color:var(--text-dim);">
+                                <span>Preciso</span>
+                                <span>Creativo</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FOOTER -->
             <div class="app-modal-footer"
-                style="padding:16px 24px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--border);">
+                style="padding:12px 20px;display:flex;gap:10px;border-top:1px solid var(--border);">
                 <button onclick="closeModelSettingsDialog()"
-                    style="padding:9px 18px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:0.88rem;transition:border-color 0.2s;"
-                    onmouseover="this.style.borderColor='var(--primary-hover)'"
-                    onmouseout="this.style.borderColor='var(--border)'">Cancelar</button>
+                    style="flex:1;padding:9px 0;border-radius:8px;font-size:0.82rem;background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--text-dim);cursor:pointer;font-weight:500;transition:all 0.2s;">Cancelar</button>
                 <button onclick="saveModelSettings()"
-                    style="padding:9px 18px;background:var(--primary);border:none;color:white;border-radius:8px;cursor:pointer;font-size:0.88rem;font-weight:600;transition:background 0.2s;"
-                    onmouseover="this.style.background='var(--primary-hover)'"
-                    onmouseout="this.style.background='var(--primary)'">Guardar Ajustes</button>
+                    style="flex:1;padding:9px 0;border-radius:8px;font-size:0.82rem;background:var(--primary);border:none;color:white;cursor:pointer;font-weight:600;transition:all 0.2s;">Guardar</button>
             </div>
         </div>
     </div>
@@ -1598,7 +2145,8 @@
         window.currentChatId = null;
         window.isGenerating = false;
         window.abortController = null;
-        window.socket = io();
+        // (el socket lo crea initSockets() en socket_manager.js, tras cargar
+        // socket.io con defer — antes hacía falta aquí por el orden de parse)
         window.addEventListener('popstate', () => window.handleRouting && window.handleRouting());
         document.getElementById('chat-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1614,8 +2162,13 @@
                 menu.classList.remove('show');
         });
 
-        if (localStorage.getItem('sidebar_collapsed') === 'true')
+        if (window.innerWidth <= 767) {
+            // Móvil: el cajón arranca siempre cerrado al entrar al módulo
+            // (sin flash: el CSS ya lo oculta por defecto con translateX(-100%)).
+            document.getElementById('sidebar').classList.remove('open', 'collapsed');
+        } else if (localStorage.getItem('sidebar_collapsed') === 'true') {
             document.getElementById('sidebar').classList.add('collapsed');
+        }
 
 
 
@@ -1737,9 +2290,20 @@
         });
     </script>
     <style>
+        .nv-model-picker {
+            font-family: inherit;
+        }
+
         .nv-model-picker-item:hover,
         .nv-model-picker-item.active {
-            background: rgba(99, 102, 241, 0.16);
+            background: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        @media (max-width: 800px) {
+            .nv-model-picker {
+                left: 8px !important;
+                width: calc(100vw - 16px) !important;
+            }
         }
     </style>
 </body>

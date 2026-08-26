@@ -1,3 +1,5 @@
+import { isModelPickerOpen } from './slash_commands.js';
+
 let currentWorkspaceId = null;
 
 export async function showWorkspaces() {
@@ -16,8 +18,9 @@ export async function showWorkspaces() {
     document.getElementById('nav-workspaces').classList.add('active');
 
     if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.remove('show');
-        document.querySelector('.sidebar-overlay').classList.remove('show');
+        document.getElementById('sidebar').classList.remove('open', 'show');
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (overlay) overlay.classList.remove('show');
     }
 
     history.pushState({ view: 'workspaces' }, '', '/ai/projects');
@@ -64,10 +67,6 @@ export async function loadWorkspaces() {
                     openWorkspaceDetail(s.id, s.name, s.description, s.is_starred);
                 };
                 
-                const dateStr = sortVal === 'updated' 
-                    ? `Actualizado: hace ${Math.floor((Date.now() / 1000 - (s.updated_at || s.created_at)) / 60) || 1} minutos` // Mock string just to fit visual or use the original
-                    : `Creado: ${new Date(s.created_at * 1000).toLocaleDateString()}`;
-
                 const formatRelativeTime = (timestamp) => {
                     const diffMins = Math.floor((Date.now() - timestamp * 1000) / 60000);
                     if (diffMins < 60) return `hace ${Math.max(1, diffMins)} minuto${diffMins === 1 ? '' : 's'}`;
@@ -215,18 +214,14 @@ export async function createNewWorkspace() {
     };
 }
 
-// Función para cerrar (asegúrate de que sea global si la llamas desde el HTML directamente)
-window.closeWorkspaceModal = function () {
-    const overlay = document.getElementById('new-workspace-modal');
-    overlay.classList.remove('show');
-}
-
+// Función para cerrar (global para los onclick del HTML)
 export function closeWorkspaceModal() {
     document.getElementById('new-workspace-modal').classList.remove('show');
     // Limpiar campos
     document.getElementById('ws-input-name').value = '';
     document.getElementById('ws-input-desc').value = '';
 }
+window.closeWorkspaceModal = closeWorkspaceModal;
 
 export async function openWorkspaceDetail(id, name, desc, is_starred) {
     currentWorkspaceId = id;
@@ -244,7 +239,7 @@ export async function openWorkspaceDetail(id, name, desc, is_starred) {
 
     // Close sidebar on mobile
     if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.remove('show');
+        document.getElementById('sidebar').classList.remove('open', 'show');
         const overlay = document.querySelector('.sidebar-overlay');
         if (overlay) overlay.classList.remove('show');
     }
@@ -471,12 +466,12 @@ export async function uploadWorkspaceFiles(event) {
 
     window.showToast("Subiendo archivos...", "info");
     for (const file of files) {
-        const content = await file.text();
+        const fd = new FormData();
+        fd.append('file', file);
         try {
             await fetch(`/api/ai/workspaces/${currentWorkspaceId}/files`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: file.name, content: content })
+                body: fd
             });
         } catch (e) {
             console.error(e);
@@ -507,8 +502,6 @@ export function startWorkspaceChat() {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     }
 }
-
-import { isModelPickerOpen } from './slash_commands.js';
 
 export function startWorkspaceChatFromInput() {
     if (window.isGenerating) {

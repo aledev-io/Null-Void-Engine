@@ -15,7 +15,7 @@ def _now():
 def get_internal_folders_with_unread(user_id):
     with get_db() as db:
         counts = db.execute(
-            "SELECT folder, COUNT(*) as c FROM internal_mail WHERE user_id = ? AND is_read = 0 GROUP BY folder",
+            "SELECT folder, unread AS c FROM mail_stats WHERE user_id = ? AND unread > 0",
             (user_id,)
         ).fetchall()
     return {row['folder']: row['c'] for row in counts}
@@ -23,7 +23,11 @@ def get_internal_folders_with_unread(user_id):
 
 def get_internal_all_folders(user_id):
     with get_db() as db:
-        rows = db.execute("SELECT DISTINCT folder FROM internal_mail WHERE user_id = ?", (user_id,)).fetchall()
+        # Solo carpetas con contenido: mail_stats conserva filas con total 0
+        # cuando una carpeta se vacía por completo.
+        rows = db.execute(
+            "SELECT folder FROM mail_stats WHERE user_id = ? AND total > 0", (user_id,)
+        ).fetchall()
     return [r['folder'] for r in rows]
 
 
@@ -31,19 +35,27 @@ def get_internal_emails(user_id, folder, page=1, limit=50):
     offset = (page - 1) * limit
     with get_db() as db:
         if folder == 'all':
-            total = db.execute("SELECT COUNT(*) as c FROM internal_mail WHERE user_id = ?", (user_id,)).fetchone()['c']
+            total = db.execute(
+                "SELECT COALESCE(SUM(total), 0) FROM mail_stats WHERE user_id = ?", (user_id,)
+            ).fetchone()[0]
             rows = db.execute(
                 "SELECT * FROM internal_mail WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
                 (user_id, limit, offset)
             ).fetchall()
         elif folder == 'starred':
-            total = db.execute("SELECT COUNT(*) as c FROM internal_mail WHERE user_id = ? AND is_starred = 1", (user_id,)).fetchone()['c']
+            total = db.execute(
+                "SELECT COALESCE(SUM(starred), 0) FROM mail_stats WHERE user_id = ?", (user_id,)
+            ).fetchone()[0]
             rows = db.execute(
                 "SELECT * FROM internal_mail WHERE user_id = ? AND is_starred = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
                 (user_id, limit, offset)
             ).fetchall()
         else:
-            total = db.execute("SELECT COUNT(*) as c FROM internal_mail WHERE user_id = ? AND folder = ?", (user_id, folder)).fetchone()['c']
+            row = db.execute(
+                "SELECT total FROM mail_stats WHERE user_id = ? AND folder = ?",
+                (user_id, folder)
+            ).fetchone()
+            total = row['total'] if row else 0
             rows = db.execute(
                 "SELECT * FROM internal_mail WHERE user_id = ? AND folder = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
                 (user_id, folder, limit, offset)

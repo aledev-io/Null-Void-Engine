@@ -66,21 +66,23 @@ def get_unread_count(contact_id: str, viewer_id: str) -> int:
     with get_db() as conn:
         if contact_id.startswith('group_'):
             return 0 # Simplified: No unread counts for groups yet
-            
-        res = conn.execute(f"""
-            SELECT COUNT(*) as count FROM chat_messages
-            WHERE sender_id = ? AND receiver_id = ? AND read = 0 AND {_NOT_DELETED_SQL}
-        """, (contact_id, viewer_id, viewer_id)).fetchone()
-        return res['count'] if res else 0
+
+        # Contador mantenido por triggers (chat_unread_counts)
+        res = conn.execute(
+            "SELECT unread FROM chat_unread_counts WHERE user_id = ? AND contact_id = ?",
+            (viewer_id, contact_id)
+        ).fetchone()
+        return res['unread'] if res else 0
 
 
 def get_total_unread(viewer_id: str) -> int:
     with get_db() as conn:
-        res = conn.execute(f"""
-            SELECT COUNT(*) as count FROM chat_messages
-            WHERE receiver_id = ? AND read = 0 AND {_NOT_DELETED_SQL}
-        """, (viewer_id, viewer_id)).fetchone()
-        return res['count'] if res else 0
+        # Contador mantenido por triggers (chat_unread_counts)
+        res = conn.execute(
+            "SELECT SUM(unread) AS total FROM chat_unread_counts WHERE user_id = ?",
+            (viewer_id,)
+        ).fetchone()
+        return res['total'] if res and res['total'] else 0
 
 
 def get_messages_before(viewer_id: str, contact_id: str, before: float, limit: int):

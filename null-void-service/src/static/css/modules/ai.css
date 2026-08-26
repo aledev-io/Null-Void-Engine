@@ -4,9 +4,19 @@
     box-sizing: border-box;
 }
 
+/* Ancho único de columna de contenido (mensajes, bienvenida, píldora de
+   entrada y aviso legal): todo queda lateralmente alineado. */
+:root {
+    --chat-max-width: 880px;
+}
+
 body,
 html {
+    height: 100%;
+    /* fallback base para WebView antiguo */
+    height: 100vh;
     height: 100dvh;
+    width: 100%;
     width: 100vw;
     background: var(--bg-canvas);
     color: var(--text-main);
@@ -16,8 +26,15 @@ html {
 
 .app-layout {
     display: flex;
+    height: 100%;
+    /* hereda del body */
+    height: 100vh;
     height: 100dvh;
+    width: 100%;
     width: 100vw;
+    background: var(--bg-canvas);
+    /* Fondo unificado de la app */
+    overflow: hidden;
 }
 
 .sidebar {
@@ -334,6 +351,18 @@ html {
     }
 }
 
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 #main-model-label,
 #workspace-model-label,
 #ws-model-label {
@@ -343,13 +372,11 @@ html {
     text-overflow: ellipsis;
 }
 
-.ws-model-item > div:first-child,
-.main-model-item > div:first-child {
+.ws-model-item>div:first-child {
     min-width: 0;
     max-width: 240px;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .ctx-item {
@@ -433,12 +460,6 @@ html {
     color: var(--text-dim);
 }
 
-.menu-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 8px 0;
-}
-
 .main-chat {
     flex: 1;
     display: flex;
@@ -453,20 +474,10 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    padding: 0 16px;
     backdrop-filter: blur(10px);
     z-index: 10;
     flex-shrink: 0;
-}
-
-.model-selector {
-    background: var(--bg-hover);
-    border: 1px solid var(--border);
-    color: var(--text-main);
-    padding: 5px 12px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    outline: none;
 }
 
 .btn-icon {
@@ -491,6 +502,72 @@ html {
     display: none !important;
 }
 
+.top-nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.top-nav-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Chip interactivo del Modelo Actual en el Top Nav */
+.top-model-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: var(--text-main);
+    padding: 5px 12px;
+    border-radius: 18px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    max-width: 220px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.top-model-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    transform: translateY(-1px);
+}
+
+.top-model-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+    flex-shrink: 0;
+}
+
+#top-model-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    display: inline-block;
+}
+
+.top-model-btn svg {
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.top-model-btn:hover svg {
+    opacity: 1;
+}
+
 .chat-container {
     flex: 1;
     min-height: 0;
@@ -504,7 +581,7 @@ html {
 
 .message-row {
     width: 100%;
-    max-width: 800px;
+    max-width: var(--chat-max-width);
     margin: 0 auto;
     padding: 0 20px;
     display: flex;
@@ -535,6 +612,7 @@ html {
     margin: 0 0 8px 2px;
     opacity: 0.85;
 }
+
 .msg-reasoning summary {
     cursor: pointer;
     font-style: italic;
@@ -545,9 +623,11 @@ html {
     display: inline-block;
     padding: 2px 0;
 }
+
 .msg-reasoning summary::marker {
     color: var(--text-dim);
 }
+
 .msg-reasoning-body {
     margin-top: 4px;
     padding-left: 10px;
@@ -564,6 +644,54 @@ html {
     border-radius: 10px;
     padding: 8px 12px;
     margin: 2px 0;
+}
+
+.msg-cancelled {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.8rem;
+    font-style: italic;
+    font-weight: 600;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.55);
+    border-radius: 8px;
+    padding: 7px 12px;
+    margin-top: 8px;
+    user-select: none;
+}
+
+.msg-cancelled svg {
+    flex-shrink: 0;
+    color: #ef4444;
+}
+
+.chat-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    min-height: 240px;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+.chat-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid rgba(99, 102, 241, 0.2);
+    border-top-color: var(--primary, #6366f1);
+    animation: chatLoadingSpin 0.8s linear infinite;
+}
+
+@keyframes chatLoadingSpin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .msg-typing {
@@ -591,6 +719,7 @@ html {
 }
 
 @keyframes typingBounce {
+
     0%,
     60%,
     100% {
@@ -600,23 +729,6 @@ html {
 
     30% {
         transform: translateY(-4px);
-        opacity: 1;
-    }
-}
-
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-        opacity: 1;
-    }
-
-    50% {
-        transform: scale(1.12);
-        opacity: 0.85;
-    }
-
-    100% {
-        transform: scale(1);
         opacity: 1;
     }
 }
@@ -659,11 +771,16 @@ html {
     margin: 10px 0;
     width: 100%;
     max-width: 100%;
-    max-height: 480px;
+    max-height: 520px;
     overflow: auto;
     border: 1px solid var(--border);
     position: relative;
     overscroll-behavior: contain;
+    transition: max-height 0.3s ease;
+}
+
+.message-content pre.expanded {
+    max-height: none !important;
 }
 
 .message-content table {
@@ -706,21 +823,22 @@ html {
 }
 
 .input-area {
-    padding: 16px 20px 18px 20px;
-    background: var(--bg-canvas);
-    border-top: 1px solid var(--border);
-    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.18);
+    padding: 12px 14px 14px 14px;
+    background: transparent;
+    /* Se unifica con el fondo general para efecto de píldora flotante */
+    border-top: none;
+    box-shadow: none;
     flex-shrink: 0;
     position: relative;
     z-index: 10;
+    width: 100%;
 }
 
-.attachments-preview {
-    display: none;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 15px 0 15px;
-    width: 100%;
+.input-area.drag-over-active .input-wrapper,
+.input-wrapper.drag-over-active,
+#chat-area.drag-over-active .input-wrapper {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.35) !important;
 }
 
 .attachment-chip {
@@ -805,25 +923,37 @@ html {
 }
 
 .input-wrapper {
-    max-width: 800px;
+    max-width: var(--chat-max-width);
+    width: 100% !important;
     margin: 0 auto;
     background: var(--bg-sidebar);
+    /* Fondo de la píldora para que destaque */
     border: 1px solid var(--border);
     border-radius: 24px;
-    padding: 14px 20px;
+    /* Píldora muy redondeada */
+    padding: 6px 6px 6px 12px;
+    min-height: 52px;
+    /* Asegurar altura mínima para evitar que el texto se aplaste */
     display: flex;
     align-items: flex-end;
-    gap: 10px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    /* Alinear herramientas abajo si el texto crece */
+    justify-content: space-between;
+    /* Por si el flex falla en algún webview */
+    gap: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     position: relative;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.28s,
+        box-shadow 0.28s, background 0.28s;
 }
+
+
 
 .attachments-preview {
     display: none;
     flex-wrap: wrap;
     gap: 8px;
     padding: 0 10px 12px 10px;
-    max-width: 800px;
+    max-width: var(--chat-max-width);
     margin: 0 auto;
     width: 100%;
 }
@@ -848,6 +978,16 @@ html {
     display: flex;
 }
 
+/* Progressive disclosure: el botón '+' y su panel de herramientas solo
+   existen en móvil (se activan en la media query ≤800px). */
+#tools-btn {
+    display: none;
+}
+
+.tools-menu-panel {
+    display: none;
+}
+
 .attach-item {
     display: flex;
     align-items: center;
@@ -869,23 +1009,37 @@ html {
     flex-shrink: 0;
 }
 
-.attach-item-chevron {
-    margin-left: auto;
-    color: var(--text-dim);
-    opacity: 0.5;
-}
-
 #chat-input {
     flex: 1;
+    min-width: 0;
+    min-height: 24px;
+    max-height: 180px;
     background: transparent;
     border: none;
     color: var(--text-main);
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     resize: none;
-    max-height: 200px;
-    padding: 10px 0;
+    padding: 8px 0;
     outline: none;
     line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+#chat-input::-webkit-scrollbar {
+    width: 4px;
+}
+
+#chat-input::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+#chat-input::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 #chat-input::placeholder {
@@ -920,8 +1074,8 @@ html {
 }
 
 .welcome-screen {
-    max-width: 800px;
-    margin: 15vh auto 0 auto;
+    max-width: var(--chat-max-width);
+    margin: auto;
     padding: 0 20px;
     text-align: left;
 }
@@ -957,12 +1111,6 @@ html {
 .suggestion-card:hover {
     background: var(--bg-hover);
     border-color: var(--text-dim);
-}
-
-.typing-dots {
-    display: flex;
-    gap: 4px;
-    padding: 10px 0;
 }
 
 .dot {
@@ -1105,12 +1253,6 @@ html {
     white-space: nowrap;
 }
 
-.search-result-item .item-date {
-    font-size: 0.72rem;
-    color: var(--text-dim);
-    flex-shrink: 0;
-}
-
 .search-empty {
     text-align: center;
     color: var(--text-dim);
@@ -1195,6 +1337,20 @@ html {
     gap: 12px;
     flex-wrap: wrap;
     flex-shrink: 0;
+}
+
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 20px 10px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: transparent;
+    /* Deja ver el bg-canvas inferior */
+    scroll-behavior: smooth;
+    overscroll-behavior-y: none;
+    /* Evita que la página salte al hacer scroll en móvil */
 }
 
 .notes-search-wrap {
@@ -1540,19 +1696,14 @@ html {
     color: var(--text-dim);
 }
 
-.note-word-count {
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    margin-top: 8px;
-}
-
 .app-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 500;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     opacity: 0;
@@ -1561,21 +1712,33 @@ html {
 }
 
 .app-modal-overlay.show {
+    display: flex;
     opacity: 1;
     pointer-events: all;
 }
 
+/* Diálogos secundarios y de confirmación por encima de otros modales */
+#share-key-friends-dialog-overlay {
+    z-index: 10500 !important;
+}
+
+#confirm-dialog-overlay,
+#input-dialog-overlay {
+    z-index: 12000 !important;
+}
+
 .app-modal {
-    background: #1c2128;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    background: var(--bg-secondary, #171717);
+    border: 1px solid var(--border, #333);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     padding: 0;
     min-width: 380px;
     max-width: 480px;
     width: 90%;
     transform: scale(0.96) translateY(8px);
     transition: transform 0.15s ease;
+    overflow: hidden;
 }
 
 .ai-toast {
@@ -1591,7 +1754,7 @@ html {
     font-size: 0.9rem;
     white-space: nowrap;
     text-align: center;
-    z-index: 1000;
+    z-index: 30000;
     opacity: 0;
     pointer-events: none;
     transition: all 0.3s ease;
@@ -1940,25 +2103,21 @@ html {
     background: rgba(99, 102, 241, 0.1);
 }
 
-.desktop-only-title {
-    display: block;
-}
-
-.mobile-only-title {
-    display: none !important;
-}
-
 /* RESPONSIVE RULES */
-@media (max-width: 800px),
+@media (max-width: 767px),
 (max-height: 500px) and (orientation: landscape) {
 
     /* Main Layout */
     .app-layout {
         position: relative;
         overflow: hidden;
+        height: 100svh !important;
     }
 
-    /* Sidebar goes absolute on mobile */
+    /* Sidebar goes absolute on mobile. El cajón arranca CERRADO por defecto
+       (translateX(-100%)): al entrar al módulo jamás se ve desplegado. La
+       hamburguesa lo abre añadiendo .open (solo móvil); .collapsed conserva
+       su significado de barra estrecha en escritorio. */
     .sidebar {
         position: absolute;
         top: 0;
@@ -1966,32 +2125,52 @@ html {
         height: auto !important;
         left: 0;
         z-index: 200;
-        transform: translateX(0);
+        transform: translateX(-100%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         width: 280px !important;
         /* Slightly wider for better touch targets */
-        box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
-        /* Shadow to separate from chat */
+        box-shadow: none;
     }
 
     .sidebar.collapsed {
-        transform: translateX(-100%);
         width: 280px !important;
         box-shadow: none;
+    }
+
+    /* Drawer visible solo cuando el usuario lo abre (.open en móvil) */
+    .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
+        /* Shadow to separate from chat */
     }
 
     /* Mobile Overlay */
     .sidebar-overlay {
         display: none;
-        position: absolute;
+    }
+    
+    .search-overlay {
+        position: fixed;
         inset: 0;
         background: rgba(0, 0, 0, 0.6);
-        z-index: 150;
-        backdrop-filter: blur(2px);
-        transition: opacity 0.3s;
+        backdrop-filter: blur(4px);
+        z-index: 200;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 12vh;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
     }
 
-    .sidebar:not(.collapsed)~.sidebar-overlay {
+    .search-overlay.show {
+        display: flex;
+        opacity: 1;
+        pointer-events: all;
+    }
+
+    .sidebar.open~.sidebar-overlay {
         display: block;
         animation: fadeIn 0.3s ease forwards;
     }
@@ -2017,35 +2196,436 @@ html {
         display: none;
     }
 
+    /* ─── Input wrapper: pastilla nativa estilo iMessage ──────── */
     .input-wrapper {
-        padding: 8px 10px;
+        padding: 8px 12px !important;
         gap: 6px;
+        border-radius: 22px !important;
+        background: rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: none !important;
+        transform: none !important;
+        max-width: none !important;
+        max-height: 150px !important;
     }
 
-    .input-wrapper textarea {
+    .input-wrapper:focus-within {
+        background: rgba(255, 255, 255, 0.09) !important;
+        border-color: rgba(139, 92, 246, 0.35) !important;
+        box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.2) !important;
+        transform: none !important;
+    }
+
+    .input-wrapper textarea,
+    #chat-input {
         min-width: 0;
-        /* Allow textarea to shrink below default */
-        font-size: 1.1rem !important;
-        /* Make sure placeholder is large enough on mobile */
+        min-height: 24px;
+        max-height: 112px !important;
+        /* Cap a ~4.5 líneas en móvil para mantener visible el chat */
+        font-size: 1rem !important;
+        line-height: 1.5;
+        padding: 6px 0;
     }
 
-    /* Make welcome screen more compact on landscape mobile */
+    /* El toolbar comparte fila con el textarea: ancho natural, shrink
+       permitido y grupo derecho pegado a la derecha (el '+' queda a la
+       izquierda junto al textarea). */
+    .chat-toolbar-desktop {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+
+    .chat-toolbar {
+        margin-left: auto !important;
+    }
+
+    /* Toolbar inferior en móvil (360px): NO se permite el wrap; los tres
+       elementos visibles son '+' · modelo (chip compacto) · enviar. Con
+       flex-shrink en el chip, nada se corta ni se solapa. */
+    .chat-toolbar {
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        justify-content: flex-end;
+        min-width: 0;
+    }
+
+    .chat-toolbar .btn-icon {
+        padding: 6px;
+    }
+
+    /* Progressive disclosure: las herramientas secundarias salen de la barra
+       y se mueven al panel flotante que abre el botón '+'. */
+    #btn-attach,
+    #web-search-btn,
+    #ai-mode-btn,
+    #reasoning-mode-btn,
+    #mic-btn {
+        display: none !important;
+    }
+
+    #tools-btn {
+        display: flex !important;
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        margin-left: 2px;
+    }
+
+    /* El nombre del modelo ya vive en el top-nav (junto a "exportar chat"):
+       se oculta el chip del modelo dentro de la píldora del mensaje. */
+    #main-model-btn {
+        display: none !important;
+    }
+
+    /* Enviar: botón circular destacado, 44px de área de toque (pulgar) */
+    #send-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50% !important;
+        background: var(--primary);
+        color: #fff;
+        margin-bottom: 0;
+        flex-shrink: 0;
+        transition: transform 0.2s ease, box-shadow 0.25s ease, background 0.25s ease, opacity 0.2s ease;
+    }
+
+    #send-btn:active {
+        transform: scale(0.9);
+    }
+
+    #send-btn:disabled {
+        opacity: 0.35;
+        background: var(--bg-hover);
+        color: var(--text-dim);
+        box-shadow: none;
+        transform: none;
+    }
+
+    /* Con texto */
+    #send-btn.has-text {
+        background: var(--primary);
+        box-shadow: none;
+    }
+
+    /* Durante la generación */
+    #send-btn.generating {
+        background: var(--danger, #ef4444);
+        box-shadow: none;
+    }
+
+
+
+
+    /* ─── Header sticky-hide: cristal minimalista ──────────────── */
+    .top-nav {
+        background: rgba(10, 10, 10, 0.6) !important;
+        backdrop-filter: blur(20px) saturate(1.4);
+        -webkit-backdrop-filter: blur(20px) saturate(1.4);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+        box-shadow: none !important;
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.32s;
+        height: 48px;
+        min-height: 48px;
+    }
+
+    #chat-view.nav-hidden .top-nav {
+        transform: translateY(-100%);
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /* El contenedor de chat recupera la altura del header al ocultarlo */
+    .chat-container {
+        transition: margin-top 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #chat-view.nav-hidden .chat-container {
+        margin-top: -56px;
+    }
+
+    /* ─── Tipografía móvil: más pequeña y con aire ─────────────── */
+    #chat-log {
+        font-size: 0.95rem;
+        line-height: 1.7;
+        scroll-padding-bottom: 24px;
+    }
+
+    /* Respaldo de teclado: si el navegador no auto-posiciona, --kb-offset
+       (fijado por visualViewport en JS) empuja el contenido hacia arriba. */
+    #chat-log {
+        padding-bottom: calc(32px + var(--kb-offset, 0px));
+    }
+
+    #chat-log .message-row {
+        line-height: 1.7;
+        /* Entrada sutil de cada mensaje (acabado de mensajería nativa) */
+        animation: msgIn 0.28s cubic-bezier(0.25, 0.8, 0.35, 1);
+    }
+
+    @keyframes msgIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.985);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    /* Burbujas nativas: el contenido del mensaje se convierte en burbuja
+       con radios asimétricos y el usuario alineado a la derecha. */
+    .message-row.user-row {
+        justify-content: flex-end;
+    }
+
+    .message-row.user-row .avatar {
+        order: 2;
+        margin-left: 10px;
+    }
+
+    .message-row.user-row .message-content {
+        flex: none;
+        max-width: 85%;
+        background: var(--bg-hover);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 18px 18px 4px 18px;
+        padding: 10px 14px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+    }
+
+    .message-row.ai-row .message-content {
+        flex: none;
+        max-width: 92%;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 18px 18px 18px 4px;
+        padding: 10px 14px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+    }
+
+    /* El mensaje en streaming conserva el mismo acabado de burbuja */
+    #streaming-message {
+        border-radius: 18px 18px 18px 4px;
+    }
+
+    /* Sombras suaves en vez de bordes marcados (profundidad) */
+    #chat-log .message-row.user-row,
+    #chat-log .message-row.ai-row {
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+    }
+
+    /* ─── Bottom Sheet del '+' ─────────────────────────────────── */
+    #tools-scrim {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 350;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    #tools-scrim.show {
+        display: block;
+        opacity: 1;
+    }
+
+    .tools-menu-panel {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-height: 50vh;
+        max-width: none;
+        width: 100%;
+        border-radius: 22px 22px 0 0;
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(24, 28, 36, 0.92);
+        backdrop-filter: blur(28px) saturate(1.4);
+        -webkit-backdrop-filter: blur(28px) saturate(1.4);
+        box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.55);
+        padding: 0 12px calc(14px + env(safe-area-inset-bottom, 0px));
+        transform: translateY(105%);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+        z-index: 400;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .tools-menu-panel.show {
+        display: flex;
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .tools-sheet-handle {
+        width: 38px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.28);
+        margin: 10px auto 8px auto;
+        flex-shrink: 0;
+    }
+
+    .tools-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 52px;
+        padding: 0 14px;
+        border-radius: 12px;
+        cursor: pointer;
+        color: var(--text-main);
+        font-size: 0.95rem;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.15s;
+    }
+
+    .tools-item:active {
+        background: var(--bg-hover);
+    }
+
+    .tools-item.active {
+        color: var(--primary);
+    }
+
+    .tools-item.active .tools-item-label::after {
+        content: ' ✓';
+    }
+
+    .tools-item.danger {
+        color: #ef4444;
+    }
+
+    .tools-item svg {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+
+    .tools-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 5px 10px;
+        flex-shrink: 0;
+    }
+
+    /* ─── Panel '+': solo iconos (sin títulos) ───────────────── */
+    .tools-menu-panel {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+    }
+
+    .tools-item {
+        flex: 0 0 52px;
+        width: 52px;
+        height: 52px;
+        min-height: 52px;
+        padding: 0;
+        gap: 0;
+        border-radius: 50%;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .tools-item.danger {
+        background: rgba(239, 68, 68, 0.14);
+    }
+
+    .tools-item.active {
+        background: rgba(139, 92, 246, 0.16);
+    }
+
+    .tools-item-label,
+    .tools-divider {
+        display: none !important;
+    }
+
+    .attach-menu {
+        max-width: calc(100vw - 32px);
+    }
+
+    /* ─── Welcome screen: centrado vertical, respirable ────────── */
     .welcome-screen {
-        margin-top: 5vh !important;
+        margin-top: auto !important;
+        margin-bottom: auto !important;
+        padding: 0 20px !important;
+        max-width: none !important;
+    }
+
+    .chat-container:has(.welcome-screen) {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: stretch;
     }
 
     .welcome-title {
-        font-size: 1.6rem !important;
-        margin-bottom: 8px !important;
+        font-size: 1.5rem !important;
+        margin-bottom: 6px !important;
     }
 
     .welcome-subtitle {
-        font-size: 1rem !important;
-        margin-bottom: 20px !important;
+        font-size: 0.9rem !important;
+        margin-bottom: 16px !important;
+        opacity: 0.7;
+    }
+
+    /* ─── Tarjetas de sugerencia: glassmorphism + animación ───── */
+    .suggestion-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
     }
 
     .suggestion-card {
-        padding: 10px 14px !important;
+        padding: 14px 16px !important;
+        background: rgba(255, 255, 255, 0.04) !important;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.07) !important;
+        border-radius: 14px !important;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease !important;
+        animation: fadeInUp 0.4s ease both;
+    }
+
+    .suggestion-card:nth-child(1) {
+        animation-delay: 0.05s;
+    }
+
+    .suggestion-card:nth-child(2) {
+        animation-delay: 0.12s;
+    }
+
+    .suggestion-card:nth-child(3) {
+        animation-delay: 0.19s;
+    }
+
+    .suggestion-card:active {
+        background: rgba(255, 255, 255, 0.09) !important;
+        border-color: rgba(139, 92, 246, 0.3) !important;
+        transform: scale(0.98);
+    }
+
+    /* ─── Aviso legal: minimizado ─────────────────────────────── */
+    #ai-privacy-footer-notice {
+        font-size: 0.62rem !important;
+        opacity: 0.45 !important;
+        padding: 4px 16px 0 16px !important;
+        margin: 0 !important;
     }
 
     /* Show mobile menu button */
@@ -2058,12 +2638,18 @@ html {
         width: 100vw;
     }
 
+    /* ─── Input area: zona inferior transparente, fundida con el fondo ─── */
     .input-area {
-        padding: 15px 15px 70px 15px !important;
+        padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px !important;
+        background: transparent !important;
+        border-top: none !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
 
     .top-nav {
-        padding: 0 10px !important;
+        padding: 0 12px !important;
     }
 
     .notes-topbar {
@@ -2121,11 +2707,18 @@ html {
     }
 
     .top-nav-controls {
-        gap: 8px !important;
+        gap: 6px !important;
     }
 
-    .top-nav-brand {
-        display: none !important;
+    .top-nav-actions {
+        gap: 3px !important;
+    }
+
+    .top-model-btn {
+        max-width: 130px;
+        font-size: 0.72rem;
+        padding: 3px 8px;
+        gap: 4px;
     }
 
     .model-selector {
@@ -2171,6 +2764,23 @@ html {
         flex: 0 1 auto;
     }
 
+    /* Modal APIs Externas: tarjetas de proveedores en móvil */
+    .api-saved-card {
+        align-items: flex-start;
+        padding: 10px 12px !important;
+        gap: 8px;
+    }
+
+    .api-saved-card button {
+        padding: 4px 8px !important;
+        white-space: nowrap;
+    }
+
+    .api-saved-card>div:last-child {
+        width: 100%;
+        justify-content: flex-start !important;
+    }
+
     .app-modal-footer {
         padding: 10px 16px 12px !important;
     }
@@ -2199,12 +2809,8 @@ html {
         overflow-y: auto;
     }
 
-    .desktop-only-title {
+    .search-footer {
         display: none !important;
-    }
-
-    .mobile-only-title {
-        display: block !important;
     }
 }
 
@@ -2346,20 +2952,1034 @@ html {
     margin-bottom: 20px;
 }
 
-@media (max-width: 800px),
+@media (max-width: 767px),
 (max-height: 500px) and (orientation: landscape) {
     .workspace-detail-layout .ws-col-chat {
         margin-bottom: 12px;
     }
 }
 
-/* Global Responsive Scaling (Option 3) */
-@media screen and (min-width: 1536px) {
-    .app-layout { zoom: 0.9; width: 111.11vw; height: 111.11dvh; }
+/* ─────────────────────────────────────────────────────────────────────────
+   MODO ESCRITORIO (≥768px): la barra de entrada deja de ser un "cajón
+   flotante" y se convierte en una barra integrada y minimalista, anclada al
+   pie del área de chat (estilo ChatGPT/Claude). Se alinea con la columna de
+   mensajes, algo más amplia, para que la interfaz se sienta de pantalla
+   completa y no "encajonada".
+────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+
+    /* Zona inferior: fondo continuo con el chat (sin borde macizo) y un
+       respiro inferior para que el composer "flote" con vida, no clavado.
+       El padding horizontal (24px) coincide con el del chat-container para
+       que la píldora quede SIEMPRE alineada con la columna de mensajes. */
+    .input-area {
+        padding: 8px 24px 24px 24px !important;
+    }
+
+    /* Chat: mismo padding lateral que .input-area → mensajes y píldora
+       comparten ancho exacto en cualquier resolución. */
+    .chat-container {
+        padding: 40px 24px 32px 24px;
+    }
+
+    /* Composer ancho y profesional: centrado en una columna cómoda (alineada
+       con los mensajes) y con margen inferior, radio generoso y elevación
+       suave que lo presentan como elemento "vivo", listo para recibir texto. */
+    .input-wrapper {
+        margin: 0 auto 6px auto;
+        padding: 12px 16px;
+        background: var(--bg-sidebar);
+        border: 1px solid var(--border);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+        transform: none !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    /* Vida: al pasar el ratón el borde despierta; al enfocar, eleva y se
+       enciende con el anillo primario. */
+    .input-wrapper:hover {
+        border-color: rgba(139, 92, 246, 0.4);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
+    }
+
+    .input-wrapper:focus-within {
+        transform: translateY(-2px) !important;
+        background: var(--bg-sidebar) !important;
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 1px var(--primary), 0 12px 32px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .input-wrapper:focus-within textarea {
+        min-height: 24px !important;
+    }
+
+    .input-wrapper textarea {
+        font-size: 0.95rem !important;
+        line-height: 1.55 !important;
+    }
+
+    /* El toolbar comparte fila con el textarea: ancho natural (contenido),
+       shrink permitido, y el grupo derecho pegado a la derecha. Sin esto el
+       basis width:100% del toolbar anula el flex:1 del textarea (colapso). */
+    .input-wrapper .chat-toolbar-desktop {
+        min-width: 0;
+    }
+
+    .input-wrapper .chat-toolbar {
+        margin-left: auto;
+    }
+
+    /* Columna de mensajes y bienvenida alineadas con la barra (más amplias) */
+
+    /* Bienvenida centrada verticalmente en el espacio disponible (margin:auto
+       en contenedor flex → centra sin recortar aunque haya scroll). */
+    .welcome-screen {
+        padding: 0 20px !important;
+    }
+
+    /* Aviso legal: footer del composer, ordenado bajo la píldora con un
+       separador sutil, mismo ancho que la columna. */
+    #ai-privacy-footer-notice {
+        max-width: var(--chat-max-width) !important;
+        margin: 14px auto 0 auto !important;
+        padding: 12px 0 0 0 !important;
+        border-top: 1px solid var(--border);
+    }
 }
-@media screen and (min-width: 1920px) {
-    .app-layout { zoom: 0.8; width: 125vw; height: 125dvh; }
+
+/* Artifact Side Panel (Estilo Claude.ai Split View) */
+.app-layout.has-artifact .main-chat {
+    flex: 1;
+    min-width: 0;
 }
-@media screen and (min-width: 1024px) and (-webkit-min-device-pixel-ratio: 1.25) {
-    .app-layout { zoom: 0.85; width: 117.64vw; height: 117.64dvh; }
+
+.artifact-panel {
+    width: 50%;
+    min-width: 380px;
+    height: 100vh;
+    background: #0d1117;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    transition: width 0.3s ease;
+}
+
+.artifact-panel.fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 999999 !important;
+    border-left: none !important;
+    margin: 0 !important;
+}
+
+.artifact-header {
+    height: 50px;
+    padding: 0 16px;
+    background: rgba(22, 27, 34, 0.95);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.artifact-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    overflow: hidden;
+}
+
+.artifact-tabs {
+    display: flex;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px;
+    border-radius: 6px;
+    gap: 2px;
+}
+
+.artifact-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 4px 10px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.artifact-tab.active {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.artifact-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.artifact-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #0d1117;
+    display: flex;
+    flex-direction: column;
+}
+
+.artifact-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #ffffff;
+    flex: 1;
+}
+
+.artifact-code-pre {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 16px;
+    overflow: auto;
+    background: #0d1117;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #c9d1d9;
+    flex: 1;
+}
+
+.preset-card-pro {
+    padding: 12px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.preset-card-pro:hover {
+    border-color: rgba(139, 92, 246, 0.3);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.preset-card-pro.active {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+}
+
+.advanced-toggle-pro {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.advanced-toggle-pro:hover {
+    border-color: rgba(139, 92, 246, 0.25);
+    background: rgba(99, 102, 241, 0.04);
+}
+
+.advanced-toggle-pro .toggle-icon {
+    transition: transform 0.2s ease;
+    color: var(--text-dim);
+}
+
+.advanced-toggle-pro.open .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.advanced-panel-pro {
+    display: none;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    margin-top: 8px;
+    animation: fadeIn 0.2s ease;
+}
+
+.advanced-panel-pro.open {
+    display: block;
+}
+
+.range-slider-pro {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.range-slider-pro::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--primary);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
+}
+
+.range-slider-pro::-webkit-slider-thumb:hover {
+    transform: scale(1.12);
+}
+
+.badge-val {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+    padding: 2px 7px;
+    border-radius: 5px;
+}
+
+/* Export Popover Menu Items */
+.export-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.export-menu-item:hover {
+    background: rgba(99, 102, 241, 0.14);
+    color: var(--primary, #6366f1);
+}
+
+/* Lazy Loading History Banner */
+.load-more-history-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 12px 0 18px 0;
+    width: 100%;
+}
+
+.load-more-history-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 20px;
+    color: var(--primary, #818cf8);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.load-more-history-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--primary, #6366f1);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+
+/* External API Keys Modal Overhaul */
+.provider-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 8px;
+    margin-top: 6px;
+    margin-bottom: 14px;
+}
+
+.provider-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.provider-chip:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #ffffff;
+}
+
+.provider-chip.active {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--primary, #6366f1);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
+}
+
+.api-saved-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    background: var(--bg-sidebar, #161b22);
+    border: 1px solid var(--border, #30363d);
+    border-radius: 10px;
+    padding: 12px 14px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.api-saved-card:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(22, 27, 34, 0.8);
+}
+
+.api-card-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--primary, #818cf8);
+    background: rgba(99, 102, 241, 0.12);
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+/* ==========================================================================
+   MODEL SELECTOR MODAL (Minimalista, compacto y responsivo)
+   ========================================================================== */
+.model-picker-overlay {
+    z-index: 10000;
+}
+
+.model-picker-modal {
+    width: 94%;
+    max-width: 480px;
+    height: auto;
+    max-height: min(85vh, 680px);
+    max-height: min(85dvh, 680px);
+    background: #18181b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    animation: modalScaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.model-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px 11px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.model-picker-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.model-picker-title-group h3 {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #f4f4f5;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.model-picker-count {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    font-weight: 400;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Back Button in Modal Header */
+.model-picker-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f4f4f5;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.model-picker-back-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+}
+
+.model-picker-close-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #94a3b8;
+    transition: all 0.15s ease;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.model-picker-close-btn svg {
+    width: 17px;
+    height: 17px;
+}
+
+.model-picker-close-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+/* Search and Controls Container */
+.model-picker-controls {
+    padding: 10px 14px 8px;
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.model-picker-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 8px;
+    padding: 0 10px;
+    height: 35px;
+    transition: all 0.15s ease;
+}
+
+.model-picker-search-bar:focus-within {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.model-picker-search-bar .search-icon {
+    width: 14px;
+    height: 14px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.model-picker-search-bar input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #f4f4f5;
+    font-size: 0.81rem;
+    font-family: inherit;
+}
+
+.model-picker-search-bar input::placeholder {
+    color: #94a3b8;
+}
+
+.clear-search-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.clear-search-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.clear-search-btn:hover {
+    color: #ffffff;
+}
+
+/* Scrollable Model List */
+.model-picker-list {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(min(85vh, 680px) - 110px);
+    max-height: calc(min(85dvh, 680px) - 110px);
+    padding: 6px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.model-picker-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.model-picker-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+/* Provider Section Divider Header */
+.provider-section-header {
+    font-size: 0.67rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #71717a;
+    padding: 8px 6px 4px;
+    margin-top: 4px;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.provider-section-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Claude-Style Provider Picker Cards (Step 1) */
+.provider-picker-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    min-width: 0;
+}
+
+.provider-picker-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.09);
+}
+
+.provider-picker-card.highlighted {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.provider-picker-card.active-provider {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.provider-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #e4e4e7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.12s ease;
+}
+
+.provider-picker-card:hover .provider-card-icon {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.provider-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.provider-card-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.provider-card-name {
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: #f4f4f5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.provider-card-badge {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #94a3b8;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.provider-active-pill {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 1px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-left: 2px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.provider-card-desc {
+    font-size: 0.74rem;
+    color: #a1a1aa;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.35;
+    min-width: 0;
+}
+
+.provider-card-arrow {
+    color: #71717a;
+    opacity: 0.6;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, opacity 0.15s ease, color 0.15s ease;
+}
+
+.provider-picker-card:hover .provider-card-arrow {
+    opacity: 1;
+    transform: translateX(2px);
+    color: #f4f4f5;
+}
+
+/* Minimalist Claude-Style Model Row Card */
+.model-picker-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    min-height: 38px;
+    min-width: 0;
+}
+
+.model-picker-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.model-picker-card.highlighted {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.model-picker-card.active {
+    background: rgba(16, 185, 129, 0.07);
+    border-color: rgba(16, 185, 129, 0.28);
+}
+
+.model-card-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.model-card-top {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.model-card-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.model-active-pill {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.model-card-prov-badge {
+    font-size: 0.62rem;
+    font-weight: 400;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.model-card-free-badge {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 0 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    line-height: 1.3;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.model-card-meta {
+    font-size: 0.71rem;
+    color: #94a3b8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+    min-width: 0;
+}
+
+.model-card-right {
+    margin-left: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.model-active-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.model-picker-more-notice {
+    padding: 8px 12px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    margin-top: 4px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    user-select: none;
+}
+
+/* Empty State */
+.model-picker-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 16px;
+    text-align: center;
+    gap: 8px;
+    color: var(--text-dim);
+}
+
+
+
+.model-picker-empty h4 {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--text-main);
+}
+
+.model-picker-empty p {
+    margin: 0;
+    font-size: 0.78rem;
+    max-width: 280px;
+    line-height: 1.4;
+}
+
+.model-picker-empty-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.model-picker-btn {
+    padding: 6px 12px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.model-picker-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.model-picker-btn.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    font-weight: 600;
+}
+
+.model-picker-btn.primary:hover {
+    filter: brightness(1.1);
+}
+
+.model-picker-btn.secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-dim);
+}
+
+.model-picker-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+}
+
+/* Mobile Full-Screen Minimal Layout */
+@media (max-width: 768px) {
+    .model-picker-overlay .model-picker-modal {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        border-radius: 0 !important;
+        border: none !important;
+        margin: 0 !important;
+        background: #0d1117 !important;
+    }
+
+    .model-picker-header {
+        padding: calc(env(safe-area-inset-top, 8px) + 8px) 14px 8px !important;
+    }
+
+    .model-picker-controls {
+        padding: 8px 14px 6px !important;
+    }
+
+    .model-picker-list {
+        padding: 4px 10px calc(env(safe-area-inset-bottom, 8px) + 12px) 10px !important;
+    }
 }

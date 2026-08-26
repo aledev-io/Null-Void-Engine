@@ -10,6 +10,30 @@
   gap: 16px;
 }
 
+
+.cal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+
+.cal-header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.cal-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex: 1;
+}
+
 .cal-nav-group {
   display: flex;
   align-items: center;
@@ -118,7 +142,7 @@
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(0, 1fr);
   flex: 1;
   border-left: 1px solid var(--border);
   border-top: 1px solid var(--border);
@@ -649,3 +673,4 @@
     transition: filter var(--t-fast), opacity var(--t-fast);
   }
 }
+/* Mobile optimizations (max-width: 480px) */

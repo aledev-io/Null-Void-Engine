@@ -1122,7 +1122,11 @@ export function init() {
     }
     
     // Background polling fallback in case socket disconnects or Google Mode IMAP doesn't trigger a push
-    setInterval(() => { loadFolders(true); loadCurrentFolder(true, true); }, 15000);
+    // (pausado en segundo plano: evita peticiones en vuelo al salir del módulo)
+    const pollTimer = setInterval(() => { loadFolders(true); loadCurrentFolder(true, true); }, 15000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearInterval(pollTimer);
+    });
 
     // Expose functions needed by inline onclick attributes in the HTML
     const expose = {

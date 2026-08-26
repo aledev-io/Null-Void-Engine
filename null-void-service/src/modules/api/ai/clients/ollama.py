@@ -1,3 +1,4 @@
+"""Cliente HTTP para comunicación con el servidor local Ollama."""
 import os
 import requests
 import json
@@ -6,20 +7,19 @@ OLLAMA_URL = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 
 
 def fetch_models() -> list[dict]:
-    """Lista de modelos de Ollama. Lanza excepción si no es accesible
-    (tras 5 intentos), para no cachear listas vacías cuando está parado."""
+    """Lista de modelos de Ollama."""
     import time
     last_err: Exception | None = None
-    for attempt in range(5):
+    for attempt in range(2):
         try:
-            r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
+            r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=1.5)
             if r.status_code == 200:
                 return r.json().get("models", [])
             last_err = RuntimeError(f"Ollama respondió HTTP {r.status_code}")
         except requests.RequestException as e:
             last_err = e
-        if attempt < 4:
-            time.sleep(1)
+        if attempt < 1:
+            time.sleep(0.5)
     raise last_err or RuntimeError("Ollama no accesible")
 
 
@@ -58,7 +58,6 @@ def unload_all_models():
                 requests.post(f"{OLLAMA_URL}/api/generate", json={"model": m["name"], "keep_alive": 0}, timeout=2)
     except Exception:
         pass
-
 
 
 def stream_chat(payload: dict):
@@ -112,6 +111,9 @@ def stream_chat(payload: dict):
     if "tools" in payload and isinstance(payload["tools"], list) and payload["tools"]:
         strict_payload["tools"] = payload["tools"]
 
+    if payload.get("format") in ("json",):
+        strict_payload["format"] = "json"
+
     if "options" in payload and isinstance(payload["options"], dict):
         strict_options = {}
         for opt in ("temperature", "top_p", "seed", "num_predict", "repeat_penalty", "num_thread", "num_ctx"):
@@ -151,5 +153,5 @@ def stream_chat(payload: dict):
 
     except requests.RequestException as e:
         yield (json.dumps({
-            "error": f"Error de red con Ollama: {str(e)}"
+            "error": f"Error de conexión con Ollama: {str(e)}"
         }) + "\n").encode("utf-8")

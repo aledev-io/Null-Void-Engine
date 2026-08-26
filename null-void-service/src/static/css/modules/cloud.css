@@ -683,28 +683,46 @@
     display: block;
 }
 
-/* Marca "compartido conmigo" en tarjetas grid: píldora sobre la miniatura */
+/* Badge "compartido conmigo" sobre la miniatura (tarjetas sugeridas y grid):
+   chip/píldora flotante con la foto redonda del usuario + nombre (mismo
+   componente que la tabla inferior), con fondo semitransparente que deja
+   ver la vista previa: nunca forma un bloque sólido ni se corta. */
 .cloud-card-shared-badge {
     position: absolute;
     left: 8px;
     bottom: 8px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
+    gap: 6px;
+    padding: 3px 10px 3px 4px;
     border-radius: 999px;
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: #e2e8f0;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(3px);
-    max-width: calc(100% - 16px);
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #f1f5f9;
+    font-size: 0.72rem;
+    font-weight: 500;
+    max-width: 85%;
+    pointer-events: auto;
+    cursor: help;
+    z-index: 3;
+    box-sizing: border-box;
+}
+
+/* El nombre dentro del chip: nunca desborda ni rompe la tarjeta */
+.cloud-badge-name {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    pointer-events: none;
-    z-index: 3;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+/* El círculo de iniciales siempre queda redondo y con anillo de contraste */
+.cloud-badge-avatar {
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
 }
 
 .cloud-preview-fallback {

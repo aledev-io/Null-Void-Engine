@@ -9,8 +9,10 @@
 
 html,
 body {
+    height: 100%;        /* fallback base para WebView antiguo */
     min-height: 100vh;
     min-height: 100dvh;
+    width: 100%;
     background: var(--bg);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     overflow: hidden;
@@ -20,8 +22,10 @@ body {
 /* ROOT LAYOUT */
 #root {
     display: flex;
-    height: 100vh;
-    height: 100dvh;
+    height: 100%;        /* hereda del body — funciona en todos los WebView */
+    height: 100vh;       /* fallback moderno */
+    height: 100dvh;      /* dinámico (Chrome 108+) */
+    width: 100%;
     width: 100vw;
 }
 
@@ -631,6 +635,7 @@ body::before {
         flex-direction: column;
         position: relative;
         height: auto;
+        min-height: 100%;
         min-height: 100vh;
         min-height: 100dvh;
         justify-content: center;

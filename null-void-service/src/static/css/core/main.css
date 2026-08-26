@@ -89,8 +89,10 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
   line-height: 1.5;
+  height: 100%;        /* fallback base para WebView antiguo */
   height: 100vh;
   height: 100dvh;
+  width: 100%;
   overflow: hidden;
 }
 
@@ -126,8 +128,10 @@ textarea {
 
 .app-container {
   display: flex;
+  height: 100%;        /* hereda del body */
   height: 100vh;
   height: 100dvh;
+  width: 100%;
   overflow: hidden;
 }
 

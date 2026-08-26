@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request, Response, stream_with_context, render_template, redirect, url_for
-import subprocess
+from flask import Blueprint, jsonify, request, Response, stream_with_context, render_template, redirect, url_for, send_file
+import os
 from modules.session import session as sess
+from core.database import get_db
 from . import services, repository
 from core.socket_ext import socketio
 from flask_socketio import join_room, leave_room
@@ -33,7 +34,9 @@ def ai_page(path=''):
     username, user_id, token = _get_user()
     if not username:
         return redirect(url_for("auth.index"))
-    services.handle_heartbeat(user_id)
+    # SIN handle_heartbeat aquí: arrancar el contenedor Ollama (hasta 45s)
+    # bloquearía el render de la página. El arranque perezoso ocurre bajo
+    # demanda en /api/ai/models y /api/ai/chat.
     user = {"username": username, "user_id": user_id}
     return render_template("modules/ai.html", user=user, token=token)
 
@@ -41,9 +44,10 @@ def ai_page(path=''):
 @ai_bp.route("/api/ai/models")
 def get_ai_models():
     uid = _get_uid() or request.remote_addr or "anonymous"
-    # No arrancar el contenedor si hay caché fresca (arranque perezoso)
-    if services.models_cache_needs_refresh():
-        services.handle_heartbeat(uid)
+    # NUNCA arrancar el contenedor Ollama aquí: elegir un modelo no debe
+    # cargar nada en memoria. La lista se sirve desde caché (con fallback a
+    # caché vieja si el contenedor está parado) y el arranque perezoso del
+    # contenedor + carga del modelo ocurre solo al enviar (/api/ai/chat).
     models, error = services.get_available_models(uid)
     status = 200 if not error else 500
     resp = {"models": models}
@@ -216,11 +220,38 @@ def save_note():
     data = request.get_json() or {}
     if "id" not in data:
         return jsonify(error="Falta ID de la nota"), 400
-    
-    if not data.get("user_id"):
-        data["user_id"] = uid
-    
-    repository.save_note(data)
+
+    from modules.api.cloud import services as cloud_services
+    # El contenido de la nota se persiste como archivo en <DATA_DIR>/ai/<uid>/
+    # (gestión cloud); en la BD solo queda la FK.
+    content = data.get("content", "")
+    # El storage se resuelve acotado al usuario actual: un id de nota reutilizado
+    # por otro usuario (o restos de una sesión anterior) no puede secuestrar la
+    # nota ajena.
+    storage = repository.get_note_storage(data["id"], uid)
+    # El dueño real sale de la BD (no del cliente): un colaborador edita
+    # sobre el archivo del dueño y no puede reasignar la nota a otro usuario.
+    owner_uid = (storage or {}).get("user_id") or uid
+    data["user_id"] = owner_uid
+    file_id = (storage or {}).get("file_id")
+    if file_id:
+        updated = cloud_services.ai_update_file_by_uid(owner_uid, file_id, content.encode("utf-8"), check_quota=True)
+        if isinstance(updated, dict) and "error" in updated:
+            return jsonify(error=updated["error"]), 400
+        if updated is None:
+            return jsonify(error="Archivo de la nota no encontrado"), 404
+    else:
+        ref = cloud_services.ai_save_file_uid(owner_uid,
+                                              repository.note_filename_for_title(data.get("title")),
+                                              content.encode("utf-8"), check_quota=True)
+        if isinstance(ref, dict) and "error" in ref:
+            return jsonify(error=ref["error"]), 400
+        if not isinstance(ref, dict) or not ref.get("id"):
+            return jsonify(error="No se pudo guardar la nota"), 500
+        file_id = ref["id"]
+    data.pop("content", None)
+    if not repository.save_note(data, file_id):
+        return jsonify(error="El ID de la nota ya existe en otra cuenta"), 409
     return jsonify(ok=True)
 
 @ai_bp.route("/api/ai/notes/<note_id>", methods=["DELETE"])
@@ -228,7 +259,10 @@ def delete_note(note_id):
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    repository.delete_note(note_id, uid)
+    owner_uid, file_id = repository.delete_note(note_id, uid)
+    if owner_uid and file_id:
+        from modules.api.cloud import services as cloud_services
+        cloud_services.ai_delete_files_by_uid(owner_uid, [file_id])
     return jsonify(ok=True)
 
 @ai_bp.route("/api/ai/notes/share", methods=["POST"])
@@ -381,6 +415,18 @@ def get_api_keys():
         return jsonify(error="No autorizado"), 401
     return jsonify(repository.get_user_api_keys(uid))
 
+
+@ai_bp.route("/api/ai/keys/models", methods=["GET"])
+def get_provider_models_suggestions():
+    """Sugerencias de modelos (máx 5) para el autocomplete del diálogo de API keys."""
+    uid = _get_uid()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    provider = (request.args.get("provider") or "").strip().lower()
+    if not provider:
+        return jsonify(models=[]), 200
+    return jsonify(models=services.get_provider_model_suggestions(uid, provider)), 200
+
 @ai_bp.route("/api/ai/keys", methods=["POST"])
 def save_api_key():
     uid = _get_uid()
@@ -391,10 +437,36 @@ def save_api_key():
     api_key = data.get("api_key")
     api_url = data.get("api_url")
     model = data.get("model")
-    if not provider or not api_key:
+    is_shared = data.get("is_shared", False)
+    if not provider:
         return jsonify(error="Faltan parámetros"), 400
-    
-    repository.save_api_key(uid, provider, api_key, api_url, model)
+
+    # Edición sin clave: conservar la almacenada (la clave nunca se devuelve
+    # al cliente, así que una edición nunca debe sobrescribirla con vacío).
+    if not api_key:
+        existing = repository.get_api_key(uid, provider)
+        if not existing:
+            return jsonify(error="Falta la API key"), 400
+        api_key = existing["api_key"]
+
+    repository.save_api_key(uid, provider, api_key, api_url, model, 1 if is_shared else 0)
+    return jsonify(ok=True)
+
+
+@ai_bp.route("/api/ai/keys/share", methods=["POST"])
+def toggle_api_key_share():
+    uid = _get_uid()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    data = request.get_json() or {}
+    provider = data.get("provider")
+    is_shared = data.get("is_shared", False)
+    shared_with = data.get("shared_with_users", "*")
+    if isinstance(shared_with, list):
+        shared_with = ",".join([str(u).strip() for u in shared_with if u])
+    if not provider:
+        return jsonify(error="Faltan parámetros"), 400
+    repository.toggle_api_key_sharing(uid, provider, 1 if is_shared else 0, shared_with or "*")
     return jsonify(ok=True)
 
 
@@ -455,94 +527,170 @@ def handle_disconnect():
             del ACTIVE_NOTE_USERS[note_id][uid]
             socketio.emit('active_collaborators', {"users": ACTIVE_NOTE_USERS[note_id]}, room=f"note_{note_id}")
 
-@ai_bp.route("/api/ai/workspaces", methods=["GET"])
-def list_workspaces():
-    uid = _get_uid()
-    if not uid:
-        return jsonify(error="No autorizado"), 401
-    spaces = repository.get_workspaces(uid)
-    return jsonify(spaces), 200
 
-@ai_bp.route("/api/ai/workspaces", methods=["POST"])
-def create_workspace():
-    uid = _get_uid()
-    if not uid:
-        return jsonify(error="No autorizado"), 401
-    data = request.json or {}
-    name = data.get("name")
-    desc = data.get("description", "")
-    if not name:
-        return jsonify(error="El nombre es obligatorio"), 400
-    wid = repository.create_workspace(uid, name, desc)
-    return jsonify({"id": wid, "name": name, "description": desc}), 201
+def _ai_token():
+    return request.cookies.get("token") or request.headers.get("X-Token")
 
-@ai_bp.route("/api/ai/workspaces/<workspace_id>", methods=["DELETE"])
-def delete_workspace(workspace_id):
+
+@ai_bp.route("/api/ai/attachments/upload", methods=["POST"])
+def upload_ai_attachment():
+    username, uid, token = _get_user()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify(error="No se recibió ningún archivo"), 400
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+    if size > 64 * 1024 * 1024:
+        return jsonify(error="El archivo supera el límite de 64MB"), 400
+    from modules.api.cloud import services as cloud_services
+    ref = cloud_services.ai_save_file(token, file.filename, file.read(), username, uid)
+    if "error" in ref:
+        return jsonify(error=ref["error"]), 400
+    return jsonify(ref), 201
+
+
+@ai_bp.route("/api/ai/attachments", methods=["GET"])
+def list_ai_attachments():
     uid = _get_uid()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    repository.delete_workspace(uid, workspace_id)
+    from modules.api.cloud import services as cloud_services
+    return jsonify(cloud_services.ai_list_files(_ai_token())), 200
+
+
+@ai_bp.route("/api/ai/attachments/<path:name>", methods=["GET"])
+def download_ai_attachment(name):
+    uid = _get_uid()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    from modules.api.cloud import services as cloud_services
+    path = cloud_services.ai_download_file(_ai_token(), name)
+    if not path:
+        return jsonify(error="Archivo no encontrado"), 404
+    return send_file(path, as_attachment=False, download_name=os.path.basename(name), conditional=True)
+
+
+@ai_bp.route("/api/ai/attachments/<path:name>", methods=["DELETE"])
+def delete_ai_attachment(name):
+    uid = _get_uid()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    from modules.api.cloud import services as cloud_services
+    if not cloud_services.ai_delete_file(_ai_token(), name):
+        return jsonify(error="Archivo no encontrado"), 404
     return jsonify(success=True), 200
 
-@ai_bp.route("/api/ai/workspaces/<workspace_id>", methods=["PUT"])
-def update_workspace(workspace_id):
-    uid = _get_uid()
-    if not uid:
-        return jsonify(error="No autorizado"), 401
-    data = request.json or {}
-    name = data.get("name")
-    desc = data.get("description", "")
-    if not name:
-        return jsonify(error="El nombre es obligatorio"), 400
-    repository.update_workspace(uid, workspace_id, name, desc)
-    return jsonify(success=True), 200
 
-@ai_bp.route("/api/ai/workspaces/<workspace_id>/star", methods=["POST"])
-def toggle_star_workspace(workspace_id):
-    uid = _get_uid()
+@ai_bp.route("/api/ai/files/generate", methods=["POST"])
+def generate_ai_file():
+    """La IA (o el cliente) genera un archivo: se guarda físicamente en
+    <DATA_DIR>/ai/<uid>/ con metadata en Cloud, igual que los adjuntos.
+    Acepta JSON {filename, content} o {filename, data} (base64)."""
+    username, uid, token = _get_user()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    data = request.json or {}
-    is_starred = 1 if data.get("is_starred") else 0
-    repository.toggle_workspace_star(uid, workspace_id, is_starred)
-    return jsonify(success=True, is_starred=is_starred), 200
-
-@ai_bp.route("/api/ai/workspaces/<workspace_id>/archive", methods=["POST"])
-def toggle_archive_workspace(workspace_id):
-    uid = _get_uid()
-    if not uid:
-        return jsonify(error="No autorizado"), 401
-    data = request.json or {}
-    is_archived = 1 if data.get("is_archived") else 0
-    repository.toggle_workspace_archive(uid, workspace_id, is_archived)
-    return jsonify(success=True), 200
-
-@ai_bp.route("/api/ai/workspaces/<workspace_id>/files", methods=["GET"])
-def list_workspace_files(workspace_id):
-    uid = _get_uid()
-    if not uid:
-        return jsonify(error="No autorizado"), 401
-    files = repository.get_workspace_files(workspace_id)
-    return jsonify(files), 200
-
-@ai_bp.route("/api/ai/workspaces/<workspace_id>/files", methods=["POST"])
-def upload_workspace_file(workspace_id):
-    uid = _get_uid()
-    if not uid:
-        return jsonify(error="No autorizado"), 401
-    data = request.json or {}
+    data = request.get_json() or {}
     filename = data.get("filename")
-    content = data.get("content")
-    if not filename or content is None:
-        return jsonify(error="Faltan datos"), 400
-    fid = repository.add_workspace_file(workspace_id, filename, content)
-    return jsonify({"id": fid, "filename": filename}), 201
+    if not filename:
+        return jsonify(error="Falta el nombre del archivo"), 400
+    from modules.api.cloud import services as cloud_services
+    import base64
+    if data.get("data") is not None:
+        try:
+            payload = base64.b64decode(data["data"])
+        except Exception:
+            return jsonify(error="data base64 inválido"), 400
+    else:
+        content = data.get("content")
+        if content is None:
+            return jsonify(error="Falta content o data"), 400
+        if isinstance(content, str):
+            payload = content.encode("utf-8")
+        elif isinstance(content, (bytes, bytearray)):
+            payload = bytes(content)
+        else:
+            return jsonify(error="content debe ser texto o bytes"), 400
+    ref = cloud_services.ai_save_file(token, filename, payload, username, uid)
+    if "error" in ref:
+        return jsonify(error=ref["error"]), 400
+    return jsonify(ref), 201
 
-@ai_bp.route("/api/ai/workspaces/<workspace_id>/files/<file_id>", methods=["DELETE"])
-def delete_workspace_file(workspace_id, file_id):
-    uid = _get_uid()
+
+@ai_bp.route("/api/ai/exports/conversation", methods=["POST"])
+def export_conversation():
+    """Exporta una conversación a un archivo de texto/markdown guardado en
+    <DATA_DIR>/ai/<uid>/ con metadata en Cloud."""
+    username, uid, token = _get_user()
     if not uid:
         return jsonify(error="No autorizado"), 401
-    repository.delete_workspace_file(file_id)
-    return jsonify(success=True), 200
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+    fmt = (data.get("format") or "md").lower()
+    if not session_id:
+        return jsonify(error="Falta session_id"), 400
+    if fmt not in ("md", "txt", "json"):
+        return jsonify(error="Formato no soportado (md, txt o json)"), 400
 
+    messages = repository.get_session_messages(uid, session_id)
+    if not messages:
+        return jsonify(error="Conversación vacía"), 404
+
+    if fmt == "json":
+        import json
+        body = json.dumps(messages, ensure_ascii=False, indent=2)
+    elif fmt == "txt":
+        lines = []
+        for m in messages:
+            role_label = {"user": "Usuario", "assistant": "Asistente", "system": "Sistema"}.get(m.get("role"), m.get("role", ""))
+            lines.append(f"[{role_label}]:\n{m.get('content', '')}\n")
+        body = "\n".join(lines)
+    else:
+        lines = []
+        for m in messages:
+            role_label = {"user": "Usuario", "assistant": "Asistente", "system": "Sistema"}.get(m.get("role"), m.get("role", ""))
+            lines.append(f"**{role_label}**:\n{m.get('content', '')}\n")
+        body = "\n".join(lines)
+
+    with get_db() as conn:
+        row = conn.execute("SELECT title FROM ai_sessions WHERE id = ? AND user_id = ?", (session_id, uid)).fetchone()
+    title = (row['title'] if row and row['title'] else "conversacion")[:60] or "conversacion"
+    safe = "".join(c for c in title if c.isalnum() or c in ' ._-()').strip() or "conversacion"
+    import time
+    filename = f"{safe}_{time.strftime('%Y%m%d_%H%M%S')}.{fmt}"
+
+    from modules.api.cloud import services as cloud_services
+    ref = cloud_services.ai_save_file(token, filename, body.encode("utf-8"), username, uid)
+    if "error" in ref:
+        return jsonify(error=ref["error"]), 400
+    ref["content"] = body
+    return jsonify(ref), 201
+
+
+@ai_bp.route("/api/ai/exports/note", methods=["POST"])
+def export_note():
+    """Exporta una nota de IA a markdown guardado en <DATA_DIR>/ai/<uid>/."""
+    username, uid, token = _get_user()
+    if not uid:
+        return jsonify(error="No autorizado"), 401
+    data = request.get_json() or {}
+    note_id = data.get("note_id")
+    if not note_id:
+        return jsonify(error="Falta note_id"), 400
+    note = None
+    for n in repository.get_user_notes(uid):
+        if n["id"] == note_id:
+            note = n
+            break
+    if not note:
+        return jsonify(error="Nota no encontrada"), 404
+    body = f"# {note.get('title') or 'Sin título'}\n\n{note.get('content') or ''}"
+
+    from modules.api.cloud import services as cloud_services
+    ref = cloud_services.ai_save_file(token, repository.note_filename_for_title(note.get('title')),
+                                      body.encode("utf-8"), username, uid)
+    if "error" in ref:
+        return jsonify(error=ref["error"]), 400
+    return jsonify(ref), 201

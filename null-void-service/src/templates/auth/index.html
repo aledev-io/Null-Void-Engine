@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <meta name="color-scheme" content="light dark" />
     <meta name="darkreader-lock" />
@@ -18,10 +18,14 @@
             document.documentElement.setAttribute('data-theme', __theme);
         })();
     </script>
+    <!-- Compat Legacy: detección síncrona ANTES del primer paint -->
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/auth.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/responsive.css') }}">
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
     <style>
         :root {
             --login-bg-image: url("{{ url_for('static', filename='img/login-bg.jpg') }}");

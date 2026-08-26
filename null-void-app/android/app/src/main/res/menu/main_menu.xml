@@ -9,6 +9,6 @@
     <item
         android:id="@+id/action_settings"
         android:icon="@drawable/ic_settings"
-        android:title="Ajustes"
+        android:title="@string/menu_edit"
         app:showAsAction="always" />
 </menu>

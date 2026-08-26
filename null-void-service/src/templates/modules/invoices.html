@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Null-Void Facturación</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
     <script>
@@ -118,7 +118,10 @@
             border: 1px solid;
         }
     </style>
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}" />
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
 </head>
 
 <body>
@@ -126,13 +129,10 @@
         style="display: flex; flex-direction: column; height: calc(100vh - 40px); padding: 20px clamp(16px, 4vw, 32px);">
         <div
             style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background: var(--surface-hi); padding: 10px 20px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 10px;">
-            <button class="btn-back" onclick="location.href='/app'" style="margin: 0;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
-                Volver
-            </button>
+                <button class="app-back-header" onclick="nvGoBack()" title="Volver" data-i18n-title="back" aria-label="Volver">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    <span class="app-back-header-title">Facturas</span>
+                </button>
             <div style="width: 1px; height: 24px; background: var(--border);"></div>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim);">VISTAS:</span>

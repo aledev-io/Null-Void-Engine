@@ -16,6 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (App && App.state) App.state.selectedDate = null;
     App.refresh();
   });
+  // i18n.js dispara 'languageChanged' (camelCase); escucharlo también para
+  // re-renderizar la vista semana cuando el idioma cambia desde otro módulo
+  window.addEventListener('languageChanged', () => {
+    if (App && App.state) App.state.selectedDate = null;
+    App.refresh();
+  });
 
   if (typeof io !== 'undefined') {
     const socket = io({ auth: { token: window.TOKEN }, reconnection: true });

@@ -3,9 +3,10 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Recordatorios - Null-Void Engine</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}" />
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/profile-menu.css') }}">
     <script>
@@ -269,6 +270,8 @@
             }
         }
     </style>
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
 </head>
 
 <body>
@@ -340,10 +343,6 @@
                     <span style="font-weight:600;">{{ user }}</span>
                 </div>
                 <div class="profile-dropdown" id="user-menu" style="bottom: 100%; margin-bottom: 12px; left: 0; width: 100%; padding: 4px; border-radius: 12px; background: var(--surface-hi, #1e293b); border: 1px solid var(--border); display: none; position: absolute;">
-                    <div class="nav-item" onclick="window.location.href='/app'" style="margin-bottom: 0;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                        <span data-i18n="back_menu">Volver al Menú</span>
-                    </div>
                 </div>
             </div>
         </aside>
@@ -353,10 +352,14 @@
             <!-- Topbar -->
             <header class="topbar">
                 <div style="display:flex; align-items:center; gap:16px;">
-                    <button class="btn-icon btn-mobile-menu" style="display:none; border:1px solid var(--border);" onclick="toggleSidebar()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                <button onclick="nvGoBack()" title="Volver" data-i18n-title="back" aria-label="Volver"
+                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                     </button>
-                    <h2 style="margin:0; font-size:1.2rem; font-weight:800;" id="page-title" data-i18n="page_title_all">Todos los Recordatorios</h2>
+<button class="btn-icon btn-mobile-menu" style="display:none; border:1px solid var(--border);" onclick="toggleSidebar()" aria-label="Abrir menú">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    <span class="app-back-header-title" id="page-title" data-i18n="page_title_all">Todos los Recordatorios</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <button class="btn-icon" onclick="window.location.href='/app'" title="Dashboard">

@@ -13,7 +13,26 @@ export async function initNotes(userId) {
     try {
         const res = await fetch('/api/ai/notes');
         const data = await res.json();
-        notes = data.notes || [];
+        notes = (data.notes || []).map(n => {
+            let u = Number(n.updatedAt ?? n.updated);
+            let c = Number(n.createdAt ?? n.created);
+            if ((!u || isNaN(u) || u <= 0) && (!c || isNaN(c) || c <= 0)) {
+                const nid = Number(n.id);
+                if (!isNaN(nid) && nid > 1e9) {
+                    c = nid > 1e11 ? nid : nid * 1000;
+                    u = c;
+                }
+            }
+            if (!u || isNaN(u) || u <= 0) u = c || 0;
+            if (!c || isNaN(c) || c <= 0) c = u || 0;
+            return {
+                ...n,
+                createdAt: c,
+                created: c,
+                updatedAt: u,
+                updated: u
+            };
+        });
         if (document.getElementById('notes-view').classList.contains('active')) {
             renderNotesList();
         }
@@ -76,15 +95,29 @@ export function redoNote() {
 }
 
 export function formatNoteDate(ts) {
-    const d = new Date(ts);
+    if (!ts) return 'Fecha desconocida';
+    let num = Number(ts);
+    if (isNaN(num) || num <= 0) return 'Fecha desconocida';
+    if (num < 1e11) num *= 1000;
+    const d = new Date(num);
+    if (isNaN(d.getTime())) return 'Fecha desconocida';
     const now = new Date();
-    const diffMin = Math.floor((now - d) / 60000);
-    if (diffMin < 1) return window.t('note_just_now');
-    if (diffMin < 60) return `${window.t('note_ago')} ${diffMin} ${window.t('note_mins')}`;
+    const diffMs = now.getTime() - d.getTime();
+    if (diffMs < 0) return window.t ? window.t('note_just_now') : 'hace un momento';
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return window.t ? window.t('note_just_now') : 'hace un momento';
+    if (diffMin < 60) return `${window.t ? window.t('note_ago') : 'hace'} ${diffMin} ${window.t ? window.t('note_mins') : 'minutos'}`;
     const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24) return `${window.t('note_ago')} ${diffH} ${window.t('note_hours')}`;
+    if (diffH < 24) return `${window.t ? window.t('note_ago') : 'hace'} ${diffH} ${window.t ? window.t('note_hours') : 'horas'}`;
+    const diffDays = Math.floor(diffH / 24);
+    if (diffDays === 1) return 'ayer';
+    if (diffDays < 7) return `${window.t ? window.t('note_ago') : 'hace'} ${diffDays} días`;
+    if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        return `${window.t ? window.t('note_ago') : 'hace'} ${weeks} ${weeks === 1 ? 'semana' : 'semanas'}`;
+    }
     const lang = document.documentElement.lang || 'es';
-    return d.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US');
+    return d.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
 }
 
 export function renderNotesList(filterQuery = '') {
@@ -100,6 +133,12 @@ export function renderNotesList(filterQuery = '') {
         return;
     }
 
+    filtered.sort((a, b) => {
+        const timeA = Number(a.updatedAt || a.updated || a.createdAt || a.created || 0);
+        const timeB = Number(b.updatedAt || b.updated || b.createdAt || b.created || 0);
+        return timeB - timeA;
+    });
+
     if (notesViewMode === 'lista') {
         container.innerHTML = '';
         const groupLabel = document.createElement('div');
@@ -109,6 +148,7 @@ export function renderNotesList(filterQuery = '') {
         filtered.forEach(note => {
             const row = document.createElement('div');
             row.className = 'note-row';
+            const noteTs = note.updatedAt || note.updated || note.createdAt || note.created;
             // Also show if it has linked dates
             let linkedDatesHtml = '';
             if (note.linkedDates && note.linkedDates.length > 0) {
@@ -120,7 +160,7 @@ export function renderNotesList(filterQuery = '') {
         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
             <span class="note-row-title" style="margin-bottom: 2px;">${note.title || window.t('note_untitled')}</span>
             <div style="display: flex; gap: 8px; align-items: center;">
-                <span class="note-row-meta">${formatNoteDate(note.updatedAt || note.updated || Date.now())}</span>
+                <span class="note-row-meta">${formatNoteDate(noteTs)}</span>
             </div>
             ${linkedDatesHtml}
         </div>
@@ -135,7 +175,7 @@ export function renderNotesList(filterQuery = '') {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4h6v2"></path></svg>
             </button>
         </div>
-        <div class="note-row-meta mobile-only-date" style="display: none; margin-top: 6px; padding-left: 2px;">${formatNoteDate(note.updatedAt || note.updated || Date.now())}</div>
+        <div class="note-row-meta mobile-only-date" style="display: none; margin-top: 6px; padding-left: 2px;">${formatNoteDate(noteTs)}</div>
     </div>`;
             row.onclick = () => openNoteEditor(note.id);
             list.appendChild(row);
@@ -150,6 +190,7 @@ export function renderNotesList(filterQuery = '') {
 
         filtered.forEach(note => {
             const card = document.createElement('div'); card.className = 'note-card';
+            const noteTs = note.updatedAt || note.updated || note.createdAt || note.created;
             let linkedDatesHtml = '';
             if (note.linkedDates && note.linkedDates.length > 0) {
                 linkedDatesHtml = `<div style="font-size: 0.7rem; color: var(--accent); margin-top: 4px;">${note.linkedDates.length} fechas vinculadas</div>`;
@@ -166,7 +207,7 @@ export function renderNotesList(filterQuery = '') {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4h6v2"></path></svg>
                     </button>
                 </div>
-                <div class="note-card-title" style="padding-right: 70px;">${note.title || window.t('note_untitled')}</div><div class="note-card-preview">${note.content || 'Sin contenido'}</div><div class="note-card-meta">${formatNoteDate(note.updatedAt || note.updated || Date.now())}</div>${linkedDatesHtml}
+                <div class="note-card-title" style="padding-right: 70px;">${note.title || window.t('note_untitled')}</div><div class="note-card-preview">${note.content || 'Sin contenido'}</div><div class="note-card-meta">${formatNoteDate(noteTs)}</div>${linkedDatesHtml}
             `;
             card.style.position = 'relative';
             card.onclick = () => openNoteEditor(note.id);
@@ -180,8 +221,7 @@ export function renderNotesList(filterQuery = '') {
 export function createNewNote() {
     const note = {
         id: Date.now(), title: '', content: '',
-        author: 'Usuario', createdAt: Date.now(), updatedAt: Date.now(),
-        linkedDates: [] // Array of string dates YYYY-MM-DD
+        createdAt: Date.now(), created: Date.now(), updatedAt: Date.now(), updated: Date.now(), linkedDates: []
     };
     notes.unshift(note); 
     syncNote(note.id);
@@ -190,24 +230,22 @@ export function createNewNote() {
 
 export function openNoteEditor(noteId) {
     currentNoteId = noteId;
-    const note = notes.find(n => n.id === noteId);
+    const note = notes.find(n => n.id == noteId);
     if (!note) return;
 
-    if (!note.linkedDates) note.linkedDates = [];
-
     document.getElementById('notes-list-view').style.display = 'none';
-    document.getElementById('note-editor').style.display = 'flex';
+    document.getElementById('note-editor').classList.add('active');
     
     const calMenu = document.getElementById('calendar-link-menu');
     if (calMenu) calMenu.classList.add('hidden');
-    document.getElementById('note-title-input').value = note.title;
-    document.getElementById('note-content-input').value = note.content;
+    document.getElementById('note-title-input').value = note.title || '';
+    document.getElementById('note-content-input').value = note.content || '';
 
     noteHistory = [];
     noteHistoryIdx = -1;
     saveToNoteHistory();
 
-    window.updateEditorMeta();
+    window.updateEditorMeta(false);
     document.getElementById('note-content-input').focus();
     renderLinkedDates();
 }
@@ -219,11 +257,14 @@ export function saveCurrentNote() {
 
     const newTitle = document.getElementById('note-title-input').value;
     const newContent = document.getElementById('note-content-input').value;
+    const oldTitle = note.title || '';
+    const oldContent = note.content || '';
 
-    if (note.title !== newTitle || note.content !== newContent) {
+    if (oldTitle !== newTitle || oldContent !== newContent) {
         note.title = newTitle;
         note.content = newContent;
         note.updatedAt = Date.now();
+        note.updated = note.updatedAt;
         syncNote(currentNoteId);
     }
 }
@@ -342,15 +383,22 @@ window.updateEditorMeta = function (save = true) {
     const text = document.getElementById('note-content-input').value || '';
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     const chars = text.length;
+    const note = notes ? notes.find(n => n.id == currentNoteId) : null;
+    const updatedTs = (note && (note.updatedAt || note.updated)) ? (note.updatedAt || note.updated) : Date.now();
+    let num = Number(updatedTs);
+    if (num < 1e11) num *= 1000;
+    const d = new Date(num);
     const now = new Date();
     const lang = document.documentElement.lang || 'es';
-    let timeStr = `${window.t('note_today_at')} ` + now.toLocaleTimeString(lang === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+    const isToday = !isNaN(d.getTime()) && d.toDateString() === now.toDateString();
+    const dateStr = !isNaN(d.getTime()) ? (isToday ? (window.t ? window.t('note_today_at') : 'Hoy a las') : d.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' }) + ' ' + (window.t ? window.t('note_at') : 'a las')) : (window.t ? window.t('note_today_at') : 'Hoy a las');
+    const timeStr = !isNaN(d.getTime()) ? d.toLocaleTimeString(lang === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '';
 
     document.getElementById('note-meta-bar').innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 4px; line-height: 1.2;">
-            <span>${timeStr}</span>
-            <span>${words} ${window.t('note_words')}</span>
-            <span>${chars} ${window.t('note_chars')}</span>
+            <span>${dateStr} ${timeStr}</span>
+            <span>${words} ${window.t ? window.t('note_words') : 'palabras'}</span>
+            <span>${chars} ${window.t ? window.t('note_chars') : 'caracteres'}</span>
         </div>
     `;
     saveCurrentNote();

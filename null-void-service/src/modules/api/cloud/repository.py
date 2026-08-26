@@ -165,14 +165,20 @@ def get_shares_in_path(owner_id, file_path):
 
 
 def remove_shares_by_file(owner_id, file_name, file_path, view):
-    """Remove all share records when the owner deletes a file."""
+    """Remove all share records when the owner deletes a file.
+    Devuelve los uids de los usuarios con los que estaba compartido
+    (para notificarles en tiempo real)."""
     with get_db() as conn:
+        rows = conn.execute("""
+            SELECT shared_with FROM cloud_shared
+            WHERE owner_id = ? AND file_name = ? AND file_path = ? AND view = ?
+        """, (owner_id, file_name, file_path, view)).fetchall()
         conn.execute("""
             DELETE FROM cloud_shared
             WHERE owner_id = ? AND file_name = ? AND file_path = ? AND view = ?
         """, (owner_id, file_name, file_path, view))
         conn.commit()
-        return []
+        return [r['shared_with'] for r in rows]
 
 
 def stop_sharing_with_me(owner_id, shared_with_uid, file_name):
@@ -237,3 +243,159 @@ def cancel_quota_request(user_id):
     with get_db() as conn:
         conn.execute("DELETE FROM quota_requests WHERE user_id = ? AND status = 'pending'", (user_id,))
         conn.commit()
+
+
+# ── Metadatos de adjuntos de IA (ai_attachment_files) ─────────────
+# Tabla gestionada por el módulo de Cloud: los adjuntos de la IA
+# guardan aquí su metadata y en ai_messages solo queda la FK (id).
+
+def add_ai_attachment(user_id, file_id, filename, size, mime, is_image, is_text, is_audio):
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO ai_attachment_files (id, user_id, filename, size, mime, is_image, is_text, is_audio, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (file_id, user_id, filename, size, mime, int(is_image), int(is_text), int(is_audio),
+             time.strftime('%Y-%m-%dT%H:%M:%S')),
+        )
+        conn.commit()
+
+
+def get_ai_attachment(user_id, file_id):
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT * FROM ai_attachment_files WHERE user_id = ? AND id = ?",
+            (user_id, file_id),
+        ).fetchone()
+
+
+def get_ai_attachment_by_filename(user_id, filename):
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT * FROM ai_attachment_files WHERE user_id = ? AND filename = ?",
+            (user_id, filename),
+        ).fetchone()
+
+
+def get_ai_attachments_by_ids(user_id, ids):
+    if not ids:
+        return []
+    placeholders = ",".join("?" * len(ids))
+    with get_db() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM ai_attachment_files WHERE user_id = ? AND id IN ({placeholders})",
+            (user_id, *ids),
+        ).fetchall()
+        by_id = {r['id']: dict(r) for r in rows}
+        # Preservar el orden en que se pidieron los ids
+        return [by_id[i] for i in ids if i in by_id]
+
+
+def list_ai_attachments(user_id):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ai_attachment_files WHERE user_id = ? AND trashed_at IS NULL "
+            "ORDER BY created_at DESC, filename ASC",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def update_ai_attachment_size(user_id, file_id, size):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE ai_attachment_files SET size = ? WHERE user_id = ? AND id = ?",
+            (size, user_id, file_id),
+        )
+        conn.commit()
+
+
+def update_ai_attachment_filename(user_id, old_filename, new_filename):
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE ai_attachment_files SET filename = ? "
+            "WHERE user_id = ? AND filename = ? AND trashed_at IS NULL",
+            (new_filename, user_id, old_filename),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def trash_ai_attachment_by_filename(user_id, filename):
+    """Soft-delete: marca el adjunto como en la papelera del Cloud (la fila
+    sobrevive para poder reactivarse al restaurar)."""
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE ai_attachment_files SET trashed_at = ? "
+            "WHERE user_id = ? AND filename = ? AND trashed_at IS NULL",
+            (time.strftime('%Y-%m-%dT%H:%M:%S'), user_id, filename),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def restore_ai_attachment_by_filename(user_id, filename, final_name=None):
+    """Reactiva un adjunto en papelera; si el archivo se restauró con otro
+    nombre (colisión), la metadata sigue al archivo. Devuelve True si había
+    fila que reactivar."""
+    final_name = final_name or filename
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE ai_attachment_files SET trashed_at = NULL, filename = ? "
+            "WHERE user_id = ? AND filename = ? AND trashed_at IS NOT NULL",
+            (final_name, user_id, filename),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_ai_attachment_by_filename(user_id, filename):
+    with get_db() as conn:
+        cur = conn.execute(
+            "DELETE FROM ai_attachment_files WHERE user_id = ? AND filename = ?",
+            (user_id, filename),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_ai_attachment(user_id, file_id):
+    with get_db() as conn:
+        cur = conn.execute(
+            "DELETE FROM ai_attachment_files WHERE user_id = ? AND id = ?",
+            (user_id, file_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_ai_attachments_by_ids(user_id, ids):
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with get_db() as conn:
+        cur = conn.execute(
+            f"DELETE FROM ai_attachment_files WHERE user_id = ? AND id IN ({placeholders})",
+            (user_id, *ids),
+        )
+        conn.commit()
+        return cur.rowcount
+
+
+def get_user_quota_by_uid(user_id):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT quota_gb FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row and row['quota_gb'] is not None:
+            return row['quota_gb']
+    return 10
+
+
+def get_ai_storage_usage(user_id):
+    """Uso en bytes de los archivos de IA del usuario (mantenido por triggers
+    en ai_storage_usage)."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT total_bytes FROM ai_storage_usage WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        return row['total_bytes'] if row else 0

@@ -15,7 +15,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Configuración del Servidor"
+            android:text="@string/title_settings"
             android:textSize="22sp"
             android:textStyle="bold"
             android:layout_marginBottom="32dp" />
@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            android:hint="IP o Dominio del servidor">
+            android:hint="@string/hint_server_address">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etServerAddress"
@@ -39,7 +39,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            android:hint="Puerto (opcional)">
+            android:hint="@string/hint_port">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etPort"
@@ -54,14 +54,14 @@
             android:id="@+id/switchHttps"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Usar HTTPS"
+            android:text="@string/label_use_https"
             android:layout_marginBottom="32dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSaveConnect"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="Guardar y Conectar"
+            android:text="@string/btn_save_connect"
             android:textSize="16sp" />
 
     </LinearLayout>

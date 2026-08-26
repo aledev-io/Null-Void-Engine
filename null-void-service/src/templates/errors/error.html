@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ code }} - Null-Void Engine</title>
+    <script src="{{ url_for('static', filename='js/lib/compat-legacy.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fonts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/core/main.css') }}">
     <style>
@@ -124,6 +125,8 @@
             animation: pulse 8s infinite ease-in-out;
         }
     </style>
+    <!-- Compat Legacy: overrides al final para máxima especificidad -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/compat-legacy.css') }}">
 </head>
 
 <body>
