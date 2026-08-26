@@ -277,6 +277,100 @@ def send_email(user_id, username, to_email, subject, body, files, mode, is_sched
     connector.send_via_smtp(gmail_user, gmail_pass, to_email, subject, body, files)
 
 
+# ── Despacho de correos programados ───────────────────────────────────────────
+# Ownership del bucle de envío programado (antes en core/mail_scheduler.py).
+# El scheduler de core solo dispara este servicio; el dominio Mail posee la
+# lectura de internal_mail, la evaluación de due-time, la resolución de
+# destinatario interno, las transiciones de estado y el transporte SMTP.
+
+def _parse_scheduled_dt(created_at):
+    """Interpreta created_at (hora programada) como datetime timezone-aware."""
+    dt_str = (created_at or '').replace('Z', '+00:00')
+    dt = datetime.fromisoformat(dt_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _dispatch_scheduled_row(conn, row):
+    """Despacha una fila programada concreta (un commit por fila exitosa).
+
+    - Interna (@nullvoid / @null-void.com): scheduled -> sent (remitente) y
+      scheduled -> inbox (destinatario).
+    - Externa: scheduled -> eliminada solo tras un envío SMTP exitoso.
+    - Fallo o credenciales ausentes: no commit -> la fila permanece 'scheduled'
+      (se reintenta en el siguiente ciclo). No existe estado de fallo explícito.
+    Devuelve True si el despacho fue exitoso y committeado."""
+    from_email = row['from_email']
+    to_email = row['to_email']
+    try:
+        if "@nullvoid" in from_email or "@null-void.com" in from_email:
+            conn.execute("UPDATE internal_mail SET folder = 'sent' WHERE id = ?", (row['id'],))
+            recipient = conn.execute(
+                "SELECT username FROM users WHERE username = ? OR email = ?", (to_email, to_email)
+            ).fetchone()
+            if recipient:
+                now_str = datetime.now(timezone.utc).isoformat() + "Z"
+                conn.execute(
+                    "INSERT INTO internal_mail (id, user_id, folder, subject, from_email, to_email, body_plain, body_html, is_read, created_at) "
+                    "VALUES (?, ?, 'inbox', ?, ?, ?, ?, ?, 0, ?)",
+                    (str(uuid.uuid4()), recipient['username'], row['subject'], row['from_email'],
+                     row['to_email'], row['body_plain'], row['body_html'], now_str)
+                )
+        else:
+            user_id = row['user_id']
+            gmail_user, gmail_pass = connector.get_google_credentials(user_id)
+
+            if not gmail_user or not gmail_pass:
+                print(f"[MailScheduler] Credenciales no configuradas para el usuario {user_id}")
+                return False
+
+            connector.send_via_smtp(
+                gmail_user, gmail_pass, to_email,
+                row['subject'] or "",
+                row['body_html'] or row['body_plain'] or "",
+                files=[],
+            )
+            conn.execute("DELETE FROM internal_mail WHERE id = ?", (row['id'],))
+
+        conn.commit()
+        print(f"[MailScheduler] Correo {row['id']} programado enviado correctamente a {to_email}")
+        return True
+    except Exception as e:
+        print(f"[MailScheduler] Error enviando correo programado {row['id']}: {e}")
+        return False
+
+
+def dispatch_scheduled_emails(now=None):
+    """Despacha los correos programados cuya hora (created_at) ya se cumplió.
+
+    Encapsula el bucle de despacho del correo programado. `now` por defecto es
+    la hora actual UTC; se evalúa una sola vez para todo el ciclo.
+    Retorna el número de correos despachados y committeados con éxito."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    dispatched = 0
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT * FROM internal_mail WHERE folder = 'scheduled'"
+            ).fetchall()
+
+            for row in rows:
+                try:
+                    dt = _parse_scheduled_dt(row['created_at'])
+                except ValueError:
+                    print(f"[MailScheduler] Formato de fecha inválido para correo {row['id']}: {row['created_at']}")
+                    continue
+
+                if dt <= now:
+                    if _dispatch_scheduled_row(conn, row):
+                        dispatched += 1
+    except Exception as e:
+        print(f"[MailScheduler] Error crítico en dispatch_scheduled_emails: {e}")
+    return dispatched
+
+
 def read_email(user_id, folder, msg_id, mode, google_email=None):
     if mode == 'internal' or folder == 'scheduled':
         row = repository.get_internal_email_by_id(user_id, msg_id)

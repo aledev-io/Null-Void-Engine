@@ -19,7 +19,7 @@ import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from flask import request, send_file, jsonify, Response
+from flask import request, send_file, Response
 from modules.session import session as sess
 from config.config import CONFIG
 from . import repository
@@ -93,16 +93,6 @@ def _cleanup_expired_tokens():
     expired = [tk for tk, info in download_tokens.items() if now > info.get('expires', 0)]
     for tk in expired:
         download_tokens.pop(tk, None)
-
-_user_json_locks = {}
-_global_lock_manager = threading.Lock()
-
-def _get_user_lock(user_id) -> threading.Lock:
-    with _global_lock_manager:
-        if user_id not in _user_json_locks:
-            _user_json_locks[user_id] = threading.Lock()
-        return _user_json_locks[user_id]
-
 
 # Hardening ZIP (CWE-400): chunks de I/O y cooperación con el event loop
 _ZIP_CHUNK_BYTES = int(os.environ.get("ZIP_CHUNK_BYTES", str(2 * 1024 * 1024)))
@@ -304,6 +294,24 @@ def get_user_root(token=None):
     return user_root_for_uid(uid)
 
 
+def resolve_restore_destination(uid, target_rel_path):
+    """Devuelve el directorio destino seguro de un restore dentro del Cloud del
+    usuario. Reutiliza `user_root_for_uid` + `safe_join` de Cloud.
+
+    Devuelve la ruta absoluta segura, o None ante un usuario/ruta inválidos o
+    si `target_rel_path` intenta escapar del root del usuario. Esta capacidad
+    NO ejecuta el restore: solo resuelve el destino (frontera Core→Cloud)."""
+    user_root = user_root_for_uid(uid)
+    if not user_root:
+        return None
+    if not target_rel_path:
+        return user_root
+    try:
+        return safe_join(user_root, target_rel_path)
+    except ValueError:
+        return None
+
+
 # ── Adjuntos del módulo de IA ────────────────────────────────────
 # Los archivos adjuntos de la IA se guardan físicamente en
 # <DATA_DIR>/ai/<uid>/ y su metadata vive en la tabla de Cloud
@@ -450,11 +458,6 @@ def ai_get_refs_by_uid(uid, ids):
     return [_ai_ref_from_row(row) for row in rows]
 
 
-def ai_get_refs(token, ids):
-    uid = sess.get_user_id(token) if token else None
-    return ai_get_refs_by_uid(uid, ids)
-
-
 def ai_delete_file(token, file_id):
     uid = sess.get_user_id(token) if token else None
     if not uid:
@@ -560,13 +563,6 @@ def ai_read_file_by_uid(uid, file_id):
         return f.read()
 
 
-def ai_read_file(token, file_id):
-    uid = sess.get_user_id(token) if token else None
-    if not uid:
-        return None
-    return ai_read_file_by_uid(uid, file_id)
-
-
 def ai_update_file_by_uid(uid, file_id, data: bytes, check_quota=True):
     """Sobrescribe el contenido de un archivo de IA preservando nombre y
     metadata (usado por notas y archivos generados). Devuelve el ref o None."""
@@ -596,13 +592,6 @@ def ai_update_file_by_uid(uid, file_id, data: bytes, check_quota=True):
     repository.restore_ai_attachment_by_filename(uid, row['filename'])
     updated = repository.get_ai_attachment(uid, file_id)
     return _ai_ref_from_row(updated) if updated else None
-
-
-def ai_update_file(token, file_id, data: bytes, check_quota=True):
-    uid = sess.get_user_id(token) if token else None
-    if not uid:
-        return None
-    return ai_update_file_by_uid(uid, file_id, data, check_quota)
 
 
 def find_protected_ancestor(protected_data, view, subpath, name):
@@ -927,7 +916,6 @@ def list_recent(token):
 
     current_uid = sess.get_user_id(token)
     current_user = sess.get_user(token)
-    filter_computers = request.args.get('filter_computers') == 'true'
 
     starred_data = _load_json(user_root, '.starred.json')
     protected_data = _load_json(user_root, '.protected.json')
@@ -953,10 +941,8 @@ def list_recent(token):
                     raise PermissionError("Acceso denegado a este recurso")
                     
                 fp = safe_join(BASE_CLOUD_ROOT, owner_id, act['path'], act['name'])
-                base_scope = os.path.join(BASE_CLOUD_ROOT, owner_id)
             else:
                 fp = safe_join(user_root, act['path'], act['name'])
-                base_scope = user_root
                 
             if not os.path.exists(fp):
                 continue
@@ -2197,7 +2183,6 @@ def list_starred(token):
             if 'owner_id' in item and str(item['owner_id']) != str(current_uid):
                 item_view = item.get('view', 'shared')
                 fp = _resolve_shared_or_recent_path(current_uid, item['owner_id'], item['name'], item['path'], item_view)
-                is_comp = False
                 owner = repository.get_username_by_id(item['owner_id'])
                 owner_id = item['owner_id']
                 is_shared = True
@@ -2207,7 +2192,6 @@ def list_starred(token):
                     fp = safe_join(ai_root_for_uid(current_uid), item['path'], item['name'])
                 else:
                     fp = safe_join(base_root, item['path'], item['name'])
-                is_comp = False
                 owner = sess.get_user(token) or "Usuario"
                 owner_id = current_uid
                 is_shared = False
@@ -2215,7 +2199,6 @@ def list_starred(token):
             if 'owner_id' not in item or str(item.get('owner_id')) == str(current_uid):
                 try:
                     fp = safe_join(base_root, '.computers', item['path'], item['name'])
-                    is_comp = True
                     item_view = "computers"
                     owner = sess.get_user(token) or "Usuario"
                     owner_id = current_uid

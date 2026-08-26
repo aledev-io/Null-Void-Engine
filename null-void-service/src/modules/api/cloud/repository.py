@@ -13,31 +13,12 @@ def get_user_quota_from_db(username):
     return 10
 
 
-def update_user_quota(username, limit_gb):
-    # Impedir asignar 0 (o negativos): bloquearía todas las subidas del usuario.
-    limit_gb = max(1, int(limit_gb))
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE users SET quota_gb = ? WHERE username = ?", (limit_gb, username)
-        )
-        conn.commit()
-
-
 def search_users_db(query, exclude_uid):
     with get_db() as conn:
         return conn.execute(
             "SELECT user_id, username, email FROM users "
             "WHERE (username LIKE ? OR email LIKE ?) AND user_id != ? LIMIT 10",
             (f"%{query}%", f"%{query}%", exclude_uid)
-        ).fetchall()
-
-
-def get_user_contacts(uid):
-    with get_db() as conn:
-        return conn.execute(
-            "SELECT u.user_id, u.username, u.email FROM users u "
-            "JOIN user_connections c ON u.user_id = c.contact_id WHERE c.user_id = ?",
-            (uid,)
         ).fetchall()
 
 
@@ -107,14 +88,6 @@ def get_username_by_id(user_id):
     with get_db() as conn:
         row = conn.execute("SELECT username FROM users WHERE user_id = ?", (user_id,)).fetchone()
         return row['username'] if row else "Usuario"
-
-
-def get_file_shares(owner_id, file_name, file_path):
-    with get_db() as conn:
-        return conn.execute("""
-            SELECT shared_with FROM cloud_shared
-            WHERE owner_id = ? AND file_name = ? AND file_path = ?
-        """, (owner_id, file_name, file_path)).fetchall()
 
 
 def get_shares_in_path(owner_id, file_path):

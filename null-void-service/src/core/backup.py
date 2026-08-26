@@ -87,11 +87,6 @@ def _qput(q, evt, cancel_event):
             continue
 
 
-def _cooperative_wait(seconds):
-    """Sleep cooperativo: con gevent/eventlet parcheados cede el hub; si no, bloqueo breve."""
-    threading.Event().wait(seconds)
-
-
 def _is_stored_ext(name):
     ext = os.path.splitext(name)[1].lower()
     return ext in _STORED_EXTS
@@ -908,7 +903,7 @@ def run_automated_backup(user_id, cfg):
 def restore_backup(user_id, filename, target_rel_path=""):
     """Descifra y restaura un archivo de copia de seguridad (ZIP/NVBAK) en la unidad Cloud del usuario."""
     from core.crypto_utils import decrypt_file
-    from modules.api.cloud.services import BASE_CLOUD_ROOT
+    from modules.api.cloud.services import resolve_restore_destination
     from werkzeug.security import safe_join
 
     target_rel_path = (target_rel_path or "").strip("/")
@@ -921,16 +916,16 @@ def restore_backup(user_id, filename, target_rel_path=""):
     if not zip_path or not os.path.exists(zip_path):
         return False, "Archivo de respaldo no encontrado o no pertenece a este usuario."
 
-    user_cloud_root = safe_join(BASE_CLOUD_ROOT, str(user_id))
+    user_cloud_root = resolve_restore_destination(str(user_id), "")
     if not user_cloud_root:
         return False, "Ruta de usuario inválida."
 
-    try:
-        target_dir = safe_join(user_cloud_root, target_rel_path) if target_rel_path else user_cloud_root
-    except ValueError:
-        return False, "Ruta de destino inválida."
-    if not target_dir:
-        return False, "Ruta de destino inválida."
+    if target_rel_path:
+        target_dir = resolve_restore_destination(str(user_id), target_rel_path)
+        if not target_dir:
+            return False, "Ruta de destino inválida."
+    else:
+        target_dir = user_cloud_root
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_zip = os.path.join(tmp_dir, "decrypted.zip")
