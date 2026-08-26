@@ -319,6 +319,38 @@ def clear_session_messages(uid: str, session_id: str):
         conn.commit()
 
 
+def replace_session_messages(uid: str, session_id: str, messages: list):
+    """Reemplaza el historial de una sesión en una única transacción y conexión.
+
+    messages: lista de dicts {role, content, model, attachments} ya resueltos
+    (attachments como refs de almacenamiento). Si cualquier INSERT falla se hace
+    rollback y el historial previo permanece intacto (nunca queda vacío ni parcial).
+    """
+    ensure_schema()
+    now = datetime.now().isoformat()
+    with get_db() as conn:
+        try:
+            conn.execute(
+                "DELETE FROM ai_messages WHERE user_id = ? AND session_id = ?",
+                (uid, session_id),
+            )
+            for m in messages:
+                att_str = json.dumps(m.get("attachments")) if m.get("attachments") is not None else None
+                conn.execute(
+                    "INSERT INTO ai_messages (session_id, user_id, role, content, model, attachments, cancelled, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (session_id, uid, m["role"], m["content"], m.get("model"), att_str, 0, now),
+                )
+            conn.execute(
+                "UPDATE ai_sessions SET updated_at = ? WHERE id = ?",
+                (now, session_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
 def get_user_sessions(uid: str) -> list[dict]:
     ensure_schema()
     with get_db() as conn:

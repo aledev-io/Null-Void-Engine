@@ -40,7 +40,7 @@ if _current_dir not in sys.path:
 from config.config import CONFIG
 from core.database import init_db, migrate_users_to_db
 from core.notifications import notifier
-from core.mail_scheduler import mail_scheduler
+from modules.api.mail.scheduler import mail_scheduler
 from core.backup_scheduler import backup_scheduler
 from modules.session import session as sess 
 from core.socket_ext import socketio
@@ -149,6 +149,14 @@ def create_app():
     # a los usuarios con un "Sesión expirada" inesperado.
 
     if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        # Composición (fase 6M.3): se inyecta la fuente real de recordatorios
+        # desde el dominio Events en el notifier, de modo que core no dependa
+        # de modules.api.events.
+        from types import SimpleNamespace
+        from modules.api.events import services as events_services
+        notifier.reminder_source = SimpleNamespace(
+            upcoming_reminder_events=events_services.get_upcoming_reminder_events
+        )
         notifier.start()
         mail_scheduler.start()
         backup_scheduler.start()

@@ -1,11 +1,6 @@
-import glob
-import json
-import os
 import threading
 import time
 from datetime import datetime
-
-from config.config import CONFIG
 
 
 class BackupScheduler:
@@ -39,16 +34,14 @@ class BackupScheduler:
                 break
 
     def _check_backups(self):
-        pattern = os.path.join(CONFIG.DATA_DIR, "Cloud", "*", ".backups", "automation.json")
-        for cfg_path in glob.glob(pattern):
-            try:
-                parts = cfg_path.replace("\\", "/").split("/")
-                idx = parts.index("Cloud") + 1
-                user_id = parts[idx]
-            except (ValueError, IndexError):
-                continue
+        from core.database import get_db
+        from core.backup import load_automations_config, run_automated_backup
 
-            from core.backup import load_automations_config, run_automated_backup
+        with get_db() as conn:
+            rows = conn.execute("SELECT user_id FROM users").fetchall()
+        user_ids = [row["user_id"] for row in rows]
+
+        for user_id in user_ids:
             automations = load_automations_config(user_id)
             if not automations:
                 continue

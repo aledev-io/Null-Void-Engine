@@ -131,7 +131,7 @@ def api_backup():
     dest_mode = request.form.get("dest_mode", "download")
     backup_type = backup_service.normalize_backup_type(request.form.get("backup_type", "full"))
 
-    result, error = backup_service.create_backup(files, dest_mode, token, backup_type)
+    result, error = backup_service.create_backup(files, dest_mode, user_id, backup_type)
     if error:
         return jsonify({"ok": False, "error": error}), 400 if "inválida" in error or "Cloud" in error else 500
 
@@ -173,7 +173,7 @@ def api_backup_stream():
 
     def generate():
         try:
-            for evt in backup_service.create_backup_stream(saved, upload_dir, dest_mode, token, backup_type):
+            for evt in backup_service.create_backup_stream(saved, upload_dir, dest_mode, user_id, backup_type):
                 yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
         finally:
             shutil.rmtree(upload_dir, ignore_errors=True)

@@ -446,14 +446,15 @@ def stream_chat(uid: Optional[str], data: dict):
                         return mdl, atts
                 return None, None
 
-            repository.clear_session_messages(uid, session_id)
+            rows = []
             for m in messages:
                 _m_model, _m_atts = _prev_meta_for(m.get("role"), m.get("content"))
                 _m_model = _m_model or model
                 _m_atts = m.get("attachments") or _m_atts
                 if m["role"] == "user" and _m_atts:
                     _m_atts = _persist_attachments(uid, _m_atts)
-                repository.save_message(uid, session_id, m["role"], m["content"], _m_model, _m_atts)
+                rows.append({"role": m["role"], "content": m["content"], "model": _m_model, "attachments": _m_atts})
+            repository.replace_session_messages(uid, session_id, rows)
 
     options = dict(data.get("options") or {})
     if reasoning_mode:

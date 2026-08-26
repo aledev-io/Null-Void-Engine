@@ -1,5 +1,7 @@
 import threading
 
+from modules.api.mail import services as mail_services
+
 
 class MailScheduler:
     """
@@ -7,9 +9,11 @@ class MailScheduler:
 
     El ownership del despacho (lectura de internal_mail, evaluación de
     due-time, resolución de destinatario, transiciones de estado y transporte
-    SMTP) vive en el dominio Mail: modules.api.mail.services.
-    dispatch_scheduled_emails(). Este módulo solo gestiona el ciclo de vida
-    del hilo y delega el despacho.
+    SMTP) vive en modules.api.mail.services.dispatch_scheduled_emails(). Este
+    módulo solo gestiona el ciclo de vida del hilo y delega el despacho.
+
+    (Fase 6M.2: se movió de core/mail_scheduler.py a modules/api/mail/scheduler.py
+    para romper la dependencia core → modules.api.mail.)
     """
     def __init__(self):
         self._stop_event = threading.Event()
@@ -43,10 +47,8 @@ class MailScheduler:
                 break
 
     def _check_scheduled_emails(self):
-        """Delega el despacho en el dominio Mail. Core ya no toca internal_mail
-        ni SMTP; solo dispara el servicio de Mail."""
+        """Delega el despacho en el dominio Mail."""
         try:
-            from modules.api.mail import services as mail_services
             mail_services.dispatch_scheduled_emails()
         except Exception as e:
             print(f"[MailScheduler] Error crítico en _check_scheduled_emails: {e}")

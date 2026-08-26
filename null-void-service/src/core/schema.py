@@ -1001,19 +1001,6 @@ MIGRATIONS[107] = _migrate_v4_timestamps
 
 # ── Runner ────────────────────────────────────────────────────────────────────
 
-def _ensure_module_migrations() -> None:
-    """Registra las migraciones declaradas por los módulos (ej. IA: 101-104)
-    por si este runner se ejecuta sin haberlos importado antes. Se comprueba
-    la presencia de esas migraciones concretas (el dict ya puede contener
-    migraciones del propio core, como la 105)."""
-    if 101 in MIGRATIONS and 104 in MIGRATIONS:
-        return
-    try:
-        from modules.api.ai import repository as _ai_repo  # noqa: F401
-    except Exception:
-        pass
-
-
 def _heal_legacy_schema() -> None:
     """Alinea columnas de tablas legacy con el DDL canónico.
 
@@ -1063,7 +1050,6 @@ def apply_migrations() -> None:
       (una sola vez) y se marca BASELINE_LEGACY.
     - A partir de ahí se aplican las MIGRATIONS numeradas > BASELINE_LEGACY.
     """
-    _ensure_module_migrations()
     _heal_legacy_schema()
     with get_db() as conn:
         version = conn.execute("PRAGMA user_version").fetchone()[0]

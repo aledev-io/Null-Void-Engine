@@ -9,7 +9,6 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from modules.session import session as sess
 from config.config import CONFIG
 
 TEMP_BACKUP_DIR = "/tmp/nullvoid_backups"
@@ -595,16 +594,16 @@ def _cloud_stream_worker(user_id, source_paths, dest_mode, backup_type,
 
 
 # API pública (firmas y estructuras JSON inalteradas).
-def create_backup(files, dest_mode, token, backup_type="full"):
+def create_backup(files, dest_mode, user_id, backup_type="full"):
     """
     Procesa la lista de archivos enviados desde el frontend, genera un ZIP
     (en worker secundario) y lo almacena en el búnker o lo prepara para descarga.
 
     backup_type: "full" (todos los archivos), "differential" o "incremental"
     (los ZIP parciales incluyen un manifest.json con la fecha de referencia).
+    El user_id ya resuelto por la capa HTTP (auth) llega directamente.
     """
     backup_type = normalize_backup_type(backup_type)
-    user_id = sess.get_user_id(token)
     if not user_id:
         return None, "No autorizado"
 
@@ -678,15 +677,15 @@ def create_backup(files, dest_mode, token, backup_type="full"):
         }, None
 
 
-def create_backup_stream(file_names, upload_dir, dest_mode, token, backup_type="full"):
+def create_backup_stream(file_names, upload_dir, dest_mode, user_id, backup_type="full"):
     """
     Generador SSE que crea el ZIP en un hilo secundario y emite progreso
     periódico, dejando el event loop libre para heartbeats y peticiones HTTP.
 
     Los archivos ya deben estar materializados en upload_dir.
+    El user_id ya resuelto por la capa HTTP (auth) llega directamente.
     """
     backup_type = normalize_backup_type(backup_type)
-    user_id = sess.get_user_id(token)
     if not user_id:
         yield {"type": "error", "message": "No autorizado"}
         return
@@ -757,11 +756,26 @@ def load_automations_config(user_id):
 
 
 def save_automations_config(user_id, automations):
-    """Persiste la lista de automatizaciones de respaldo del usuario."""
+    """Persiste la lista de automatizaciones de respaldo del usuario.
+
+    Escritura atómica: se vuelca el JSON a un archivo temporal del mismo
+    directorio y luego se hace os.replace() sobre el destino, de modo que una
+    interrupción durante la escritura nunca deje automation.json truncado."""
     path = _automation_file(user_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"automations": automations}, f, ensure_ascii=False, indent=2)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(path), prefix=".automation-", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"automations": automations}, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def get_user_backup_path(user_id, filename):
@@ -885,7 +899,7 @@ def run_automated_backup(user_id, cfg):
 def restore_backup(user_id, filename, target_rel_path=""):
     """Descifra y restaura un archivo de copia de seguridad (ZIP/NVBAK) en la unidad Cloud del usuario."""
     from core.crypto_utils import decrypt_file
-    from modules.api.cloud.services import resolve_restore_destination
+    from core.cloud_paths import resolve_restore_destination
     from werkzeug.security import safe_join
 
     target_rel_path = (target_rel_path or "").strip("/")

@@ -6,6 +6,7 @@ import json
 import hashlib
 import platform
 from datetime import datetime
+from typing import List, Optional, Protocol
 from core.database import get_db, DB_PATH
 
 try:
@@ -17,15 +18,29 @@ from core.webpush_utils import get_or_create_vapid_keys, get_vapid_claims
 
 HISTORY_PATH = os.path.join(os.path.dirname(DB_PATH), 'notifications_history.json')
 
+class ReminderSource(Protocol):
+    """Port (fase 6M.3): origen de recordatorios de eventos.
+
+    Core posee el mecanismo de notificación y solo necesita saber que existe
+    una fuente capaz de devolver los recordatorios próximos a notificar.
+    La implementación real vive en la aplicación y se inyecta desde la capa
+    de bootstrap; core no importa el dominio de eventos.
+    """
+    def upcoming_reminder_events(self) -> List[dict]:
+        """Devuelve las filas de eventos con recordatorios pendientes."""
+        ...
+
 class SystemNotifier:
     """
     Monitor de eventos en segundo plano que envía notificaciones nativas de Linux
     usando el comando 'notify-send'. Funciona independientemente del navegador.
     """
-    def __init__(self):
+    def __init__(self, reminder_source: Optional[ReminderSource] = None):
         self.notified_ids = set()
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
+        # Fuente de recordatorios inyectada desde la capa de composición.
+        self.reminder_source = reminder_source
 
     def start(self):
         with self._lock:
@@ -66,10 +81,11 @@ class SystemNotifier:
             self.notified_ids.clear()
 
         try:
-            # Lectura de datos de calendario a través del dominio `events`
-            # (contract de servicio), no consultando la tabla directamente.
-            from modules.api.events import services as events_services
-            rows = events_services.get_upcoming_reminder_events()
+            # Los recordatorios llegan a través del port ReminderSource,
+            # inyectado por la capa de bootstrap; core no importa Events.
+            if self.reminder_source is None:
+                return
+            rows = self.reminder_source.upcoming_reminder_events()
 
             for row in rows:
                 ev_id = row['id']

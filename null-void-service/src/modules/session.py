@@ -1,9 +1,31 @@
 import secrets
 import json
 import os
+import tempfile
 import unicodedata
 from datetime import datetime, timedelta
 from config.config import CONFIG
+
+
+def _atomic_write_json(path, data, indent=None):
+    """Vuelca `data` como JSON de forma atómica (temp + os.replace).
+
+    La escritura directa sobre el destino puede dejar el archivo truncado o
+    corrupto ante una interrupción. Este helper escribe a un temporal del mismo
+    directorio y lo reemplaza con os.replace(); en caso de fallo limpia el
+    temporal y re-lanza la excepción."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=indent)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
 
 class SecurityManager:
     """Gestiona una tabla hash de intentos de ataque para bloquear IPs."""
@@ -24,9 +46,7 @@ class SecurityManager:
 
     def _save(self):
         try:
-            os.makedirs(os.path.dirname(self._persistence_file), exist_ok=True)
-            with open(self._persistence_file, 'w') as f:
-                json.dump(self._attack_table, f, indent=4)
+            _atomic_write_json(self._persistence_file, self._attack_table, indent=4)
         except: pass
 
     def is_blocked(self, ip: str) -> bool:
@@ -108,9 +128,7 @@ class AuditManager:
 
     def _save(self):
         try:
-            os.makedirs(os.path.dirname(self._log_file), exist_ok=True)
-            with open(self._log_file, 'w') as f:
-                json.dump(self._logs, f, indent=4)
+            _atomic_write_json(self._log_file, self._logs, indent=4)
         except: pass
 
     def _normalize(self, text):
@@ -200,12 +218,10 @@ class SessionManager:
 
     def _save(self):
         try:
-            os.makedirs(os.path.dirname(self._persistence_file), exist_ok=True)
-            with open(self._persistence_file, 'w') as f:
-                json.dump({
-                    'sessions': self._sessions,
-                    'index': self._user_index
-                }, f)
+            _atomic_write_json(self._persistence_file, {
+                'sessions': self._sessions,
+                'index': self._user_index
+            })
         except: pass
 
     def has_active_session(self, username: str) -> bool:
