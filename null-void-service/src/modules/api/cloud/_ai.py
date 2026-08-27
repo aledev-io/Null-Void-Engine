@@ -1,10 +1,9 @@
 """Cluster IA extraído de cloud.services (fase 6N.6).
 
 Gestiona los archivos adjuntos del módulo IA bajo <DATA_DIR>/ai/<uid> con su
-metadata en la tabla ai_attachment_files. Depende de helpers de otros clusters
-de cloud.services (get_token, user_root_for_uid, add_activity, _update_json,
-invalidate_user_index), que se importan de forma perezosa desde .services para
-evitar la importación circular (services importa este módulo como façade).
+metadata en la tabla ai_attachment_files. Depende de _infra (get_token,
+ai_root_for_uid, _update_json), de _context (user_root_for_uid, add_activity) y
+directamente de _search (invalidate_user_index). No depende de services.py.
 """
 
 import logging
@@ -14,37 +13,28 @@ import shutil
 import time
 import uuid
 
-from config.config import CONFIG
 from modules.session import session as sess
 from . import repository
 from core.cloud_paths import safe_join
+from ._infra import ai_root_for_uid, _update_json, get_token
+from ._context import user_root_for_uid, add_activity
+from ._search import invalidate_user_index
 
 logger = logging.getLogger("NullVoidCloud")
 
 # <DATA_DIR>/ai/<uid>/ y su metadata vive en la tabla de Cloud
 # ai_attachment_files (id uuid = FK usada por ai_messages.attachments).
-# AI_BASE_ROOT vive en cloud.services (los consumidores/tests lo parchean vía
-# cloud.services.AI_BASE_ROOT); se resuelve en tiempo de llamada.
+# AI_BASE_ROOT vive en _infra (los consumidores/tests lo parchean vía
+# _infra.AI_BASE_ROOT); se resuelve en tiempo de llamada.
 
 
 def get_ai_root(token=None):
     if token is None:
-        from .services import get_token
         token = get_token()
     uid = sess.get_user_id(token) if token else None
     if not uid:
         return None
     return ai_root_for_uid(uid)
-
-
-def ai_root_for_uid(uid):
-    from .services import AI_BASE_ROOT
-    if not uid:
-        return None
-    safe_uid = "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-    if not safe_uid:
-        safe_uid = "unknown"
-    return safe_join(AI_BASE_ROOT, safe_uid)
 
 
 def _ai_ref_from_row(row):
@@ -113,7 +103,6 @@ def ai_save_file_uid(uid, filename, data: bytes, username=None, check_quota=True
     repository.add_ai_attachment(uid, file_id, candidate, file_size, flags["mime"],
                                  flags["is_image"], flags["is_text"], flags["is_audio"])
     if username and uid:
-        from .services import add_activity
         add_activity(username, uid, "Adjuntaste en IA", candidate, "")
     row = repository.get_ai_attachment(uid, file_id)
     return _ai_ref_from_row(row) if row else {"error": "No se pudo registrar el archivo"}
@@ -198,7 +187,6 @@ def ai_trash_files_by_uid(uid, ids):
     """Mueve los archivos adjuntos de IA a la papelera del usuario con origen 'Módulo de IA'."""
     if not uid or not ids:
         return 0
-    from .services import user_root_for_uid, _update_json, invalidate_user_index
 
     rows = repository.get_ai_attachments_by_ids(uid, ids)
     if not rows:

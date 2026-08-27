@@ -55,7 +55,7 @@ null-void-app/android/app/google-services.json
 
 client_agent/.build.lock
 tests/
-
+logs
 .agents
 .ignore
 node_modules/
@@ -77,3 +77,5 @@ node_modules/
 .cache/
 **/.cache/
 docs/ARCHITECTURE_DEPENDENCY_AUDIT.md
+null-void-service/src/modules/logs/ai_conversations_audit.txt
+null-void-service/src/modules/logs/ai_conversations_audit.txt
