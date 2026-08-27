@@ -80,7 +80,10 @@ def get_invoices(uid: str, token: str = None) -> list[dict]:
                     for fn in filenames:
                         if fn.lower().endswith('.pdf'):
                             cloud_files.append(os.path.relpath(os.path.join(dirpath, fn), business_root))
-                cloud_files_set = set(cloud_files)
+                # Las referencias finales de todos los PDFs presentes (tras su
+                # organización por fecha), para poder detectar huérfanos contra
+                # el estado real del filesystem.
+                final_refs = set()
 
                 with get_db() as conn:
                     # 1. Añadir nuevas facturas (Cloud -> DB). Una única consulta
@@ -96,16 +99,27 @@ def get_invoices(uid: str, token: str = None) -> list[dict]:
                     }
                     new_rows = []
                     for rel in cloud_files:
+                        # La organización se hace sobre el snapshot recogido antes
+                        # (os.walk ya terminó), para no mutar el árbol al recorrerlo.
                         if rel in existing_refs:
+                            final_refs.add(rel)
                             continue
                         file_path = os.path.join(business_root, rel)
                         filename = os.path.basename(rel)
                         parsed = parse_pdf(file_path)
                         fallback_client = os.path.splitext(filename)[0].replace('_', ' ').title()
                         client = parsed["client"] or fallback_client
+                        # Organizar por fecha (YYYY/MM-MES) dentro de business_root,
+                        # reutilizando el helper de invoices. Si no hay fecha, falla o
+                        # no se mueve (devuelve solo el nombre), conserva la ubicación
+                        # actual y la referencia relativa recorrida (rel).
+                        rel_final = organize_uploaded_pdf(file_path, business_root)
+                        if not rel_final or '/' not in rel_final:
+                            rel_final = rel
+                        final_refs.add(rel_final)
                         new_rows.append((
                             uid, parsed["invoice_number"], parsed["date"], client,
-                            rel, parsed["total"], 'no_pagada', parsed["raw_text"],
+                            rel_final, parsed["total"], 'no_pagada', parsed["raw_text"],
                             datetime.now().isoformat()
                         ))
 
@@ -118,7 +132,7 @@ def get_invoices(uid: str, token: str = None) -> list[dict]:
                     db_refs = conn.execute("SELECT id, reference FROM invoices WHERE user_id = ?", (uid,)).fetchall()
                     for row in db_refs:
                         ref = row['reference']
-                        if ref and ref not in cloud_files_set:
+                        if ref and ref not in final_refs:
                             conn.execute("DELETE FROM invoices WHERE id = ?", (row['id'],))
 
                     conn.commit()

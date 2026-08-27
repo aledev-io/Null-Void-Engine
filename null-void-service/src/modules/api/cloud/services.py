@@ -18,11 +18,10 @@ import uuid
 
 from modules.session import session as sess
 from . import repository
+from . import _infra
 
 # Infraestructura neutral (constantes, FileLock, JSON, tamaños, tokens, path).
 from ._infra import (
-    AI_BASE_ROOT,
-    BASE_CLOUD_ROOT,
     MAX_FILE_SIZE_PREVIEW,
     logger,
     FileLock,
@@ -220,6 +219,14 @@ from ._info import (
 )
 
 
+def __getattr__(name):
+    """Expone BASE_CLOUD_ROOT/AI_BASE_ROOT como alias dinámicos de _infra
+    (única fuente de verdad), preservando la API pública del módulo."""
+    if name in ("BASE_CLOUD_ROOT", "AI_BASE_ROOT"):
+        return getattr(_infra, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def list_recent(token):
     user_root = get_user_root(token)
     if not user_root:
@@ -251,7 +258,7 @@ def list_recent(token):
                 if not any(str(s['shared_with']) == str(current_uid) for s in combined):
                     raise PermissionError("Acceso denegado a este recurso")
 
-                fp = safe_join(BASE_CLOUD_ROOT, owner_id, act['path'], act['name'])
+                fp = safe_join(_infra.BASE_CLOUD_ROOT, owner_id, act['path'], act['name'])
             else:
                 fp = safe_join(user_root, act['path'], act['name'])
 
@@ -448,7 +455,7 @@ def upload_file(view, subpath, token, file_storage, overwrite_existing=False):
     if current_usage - existing_size + file_size > limit_bytes:
         return False, "Espacio insuficiente en Null-Void Cloud"
 
-    pool_dir = os.path.join(BASE_CLOUD_ROOT, '.pool')
+    pool_dir = os.path.join(_infra.BASE_CLOUD_ROOT, '.pool')
     os.makedirs(pool_dir, exist_ok=True)
 
     fd, temp_path = tempfile.mkstemp(dir=pool_dir)
@@ -613,7 +620,7 @@ def list_file_shares(name, subpath, token):
 
 def clean_pool_async():
     def _clean():
-        pool_dir = os.path.join(BASE_CLOUD_ROOT, '.pool')
+        pool_dir = os.path.join(_infra.BASE_CLOUD_ROOT, '.pool')
         if not os.path.exists(pool_dir):
             return
         try:

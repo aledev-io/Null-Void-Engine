@@ -126,16 +126,8 @@ def _finalize_upload(token, user_root, view, subpath, safe_filename, temp_path, 
     current_uid = sess.get_user_id(token)
     add_activity(current_user, current_uid, "act_subiste", final_filename, subpath)
 
-    # Organización automática de facturas: cualquier PDF subido a la vista
-    # Facturación se clasifica por su fecha y se mueve a .business/YYYY/MM-MES
-    if view == 'business' and final_filename.lower().endswith('.pdf'):
-        try:
-            from modules.api.invoices.services import organize_uploaded_pdf
-            organize_uploaded_pdf(final_file_path, user_root)
-            invalidate_user_index(current_uid)
-        except Exception as e:
-            logger.error(f"[Cloud] Error organizando factura {final_filename}: {e}")
-
+    # La organización de facturas por fecha (YYYY/MM-MES) se realiza ahora en el
+    # dominio invoices (get_invoices), para eliminar la dependencia Cloud → Invoices.
     invalidate_user_index(current_uid)
     return True, None
 
