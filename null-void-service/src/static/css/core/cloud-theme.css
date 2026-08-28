@@ -3,13 +3,13 @@
 :root,
 [data-theme="dark"] {
     /* Backgrounds (dark-to-light: bg-primary → surface-hi) */
-    --bg-primary: #151f35;
-    --bg-secondary: #111827;
-    --bg-card: #161d2f;
-    --surface: #161d2f;
-    --surface-hi: #1e2842;
+    --bg-primary: #0f1422;
+    --bg-secondary: #0d111a;
+    --bg-card: #171d2b;
+    --surface: #141a28;
+    --surface-hi: #1a2236;
     --bg-tertiary: #1e2842;
-    --bg: #111827;
+    --bg: #111622;
 
     /* Accent — indigo/violet */
     --accent: #6366f1;
@@ -30,7 +30,7 @@
     --text-muted: #8b95b0;
 
     /* Borders */
-    --border: rgba(255, 255, 255, 0.07);
+    --border: rgba(255, 255, 255, 0.06);
     --border-hi: rgba(99, 102, 241, 0.3);
     --border-hover: rgba(99, 102, 241, 0.4);
 

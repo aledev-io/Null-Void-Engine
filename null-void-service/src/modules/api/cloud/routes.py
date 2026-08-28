@@ -1,5 +1,4 @@
 import os
-import sys
 import logging
 from functools import wraps
 from flask import Blueprint, jsonify, request, send_file
@@ -8,10 +7,6 @@ from core.socket_ext import socketio
 from . import services, repository
 
 logger = logging.getLogger("NullVoidCloud")
-
-service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
-if service_dir not in sys.path:
-    sys.path.insert(0, service_dir)
 
 import sync_agent
 

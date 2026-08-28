@@ -74,7 +74,7 @@ def invalidate_user_index(user_id):
 
 
 def _ensure_fts_table():
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS cloud_doc_fts USING fts5("
@@ -133,7 +133,7 @@ def _index_user_content(user_id):
     except sqlite3.OperationalError:
         return
 
-    from src.core.database import get_db
+    from core.database import get_db
     indexed = set()
     texts = {}
     with get_db() as conn:
@@ -273,7 +273,7 @@ def search_files(query, token):
     # Búsqueda por CONTENIDO (FTS5): coincide dentro de documentos indexados
     # (.txt/.md/.pdf/.docx) cuando la query no acierta solo por nombre.
     existing_keys = {(r['view'], r['path'], r['name']) for r in results}
-    from src.core.database import get_db
+    from core.database import get_db
     try:
         _ensure_fts_table()
         fts_q = '"' + query.replace('"', '""') + '"*'

@@ -21,6 +21,7 @@ from ._context import (
     get_user_root,
     resolve_protect_view,
     find_protected_ancestor,
+    find_protected_ancestor_name,
     is_item_protected,
     _resolve_shared_or_recent_path,
 )
@@ -142,30 +143,36 @@ def toggle_protect(name, subpath, view, token):
     view = resolve_protect_view(base_root, view, subpath, name)
 
     item_key = {"name": name, "path": subpath, "view": view}
-    result = {"is_prot": False, "ancestor": None}
 
-    def _toggle(protected_data):
-        # El elemento no tiene protección propia: si aparece como protegido es porque
-        # una carpeta superior está bloqueada; sólo la carpeta raíz puede desbloquearse.
-        if item_key not in protected_data:
-            ancestor = find_protected_ancestor(protected_data, view, subpath, name)
-            if ancestor:
-                result["ancestor"] = ancestor
-                return protected_data
+    def _is_prot():
+        return is_item_protected(
+            _load_json(base_root, '.protected.json'),
+            view, subpath, name,
+            _load_json(base_root, '.unprotected.json'),
+        )
 
-        if item_key in protected_data:
-            protected_data.remove(item_key)
-            result["is_prot"] = False
-        else:
-            protected_data.append(item_key)
-            result["is_prot"] = True
-        return protected_data
+    currently_protected = _is_prot()
 
-    _update_json(base_root, '.protected.json', _toggle)
+    if currently_protected:
+        # Desproteger: eliminar la protección propia y, si el elemento sigue
+        # protegido por herencia (una carpeta superior bloqueada), añadir un
+        # override a .unprotected.json para dejarlo efectivamente desbloqueado
+        # sin tocar la entrada de la carpeta.
+        _update_json(base_root, '.protected.json',
+                     lambda d: [x for x in d if x != item_key])
+        if _is_prot():
+            _update_json(base_root, '.unprotected.json',
+                         lambda d: d + [item_key] if item_key not in d else d)
+    else:
+        # Proteger: quitar el override (volver a la protección heredada) o, si
+        # no hay ancestro protegido, añadir protección propia.
+        _update_json(base_root, '.unprotected.json',
+                     lambda d: [x for x in d if x != item_key])
+        if not _is_prot():
+            _update_json(base_root, '.protected.json',
+                         lambda d: d + [item_key] if item_key not in d else d)
 
-    if result["ancestor"]:
-        return False, ('protected_ancestor', result["ancestor"]['name'])
-    return True, result["is_prot"]
+    return True, _is_prot()
 
 
 def list_starred(token):
@@ -174,6 +181,7 @@ def list_starred(token):
         return None
     starred_data = _load_json(base_root, '.starred.json')
     protected_data = _load_json(base_root, '.protected.json')
+    unprotected_data = _load_json(base_root, '.unprotected.json')
     current_uid = sess.get_user_id(token)
     files = []
     valid_starred = []
@@ -218,7 +226,8 @@ def list_starred(token):
             "mtime": info.st_mtime, "owner": owner, "owner_id": owner_id,
             "ext": os.path.splitext(item['name'])[1].lower(),
             "starred": True,
-            "protected": is_item_protected(protected_data, item_view, item['path'], item['name']),
+            "protected": is_item_protected(protected_data, item_view, item['path'], item['name'], unprotected_data),
+            "protected_ancestor": find_protected_ancestor_name(protected_data, item_view, item['path'], item['name'], unprotected_data),
             "view": item_view,
             "is_shared": is_shared
         })

@@ -62,6 +62,7 @@ from ._context import (
     resolve_shared_path,
     _resolve_shared_or_recent_path,
     find_protected_ancestor,
+    find_protected_ancestor_name,
     is_item_protected,
     resolve_protect_view,
     add_activity,
@@ -237,6 +238,7 @@ def list_recent(token):
 
     starred_data = _load_json(user_root, '.starred.json')
     protected_data = _load_json(user_root, '.protected.json')
+    unprotected_data = _load_json(user_root, '.unprotected.json')
     activity_data = _load_json(user_root, '.activity.json')
 
     recent_files = []
@@ -291,7 +293,8 @@ def list_recent(token):
             "owner": owner_name, "owner_id": owner_id,
             "action_type": act['action'], "action_time": act['time'],
             "starred": is_item_starred,
-            "protected": is_item_protected(protected_data, item_view, act['path'], act['name']),
+            "protected": is_item_protected(protected_data, item_view, act['path'], act['name'], unprotected_data),
+            "protected_ancestor": find_protected_ancestor_name(protected_data, item_view, act['path'], act['name'], unprotected_data),
             "view": item_view,
             "shared": len(shared_users) > 0,
             "shared_with": shared_users,
@@ -325,6 +328,7 @@ def list_files(view, subpath, token):
 
     base_root = get_user_root(token)
     protected_data = _load_json(base_root, '.protected.json')
+    unprotected_data = _load_json(base_root, '.unprotected.json')
     starred_data = _load_json(base_root, '.starred.json')
     current_user = sess.get_user(token)
     current_uid = sess.get_user_id(token)
@@ -347,12 +351,13 @@ def list_files(view, subpath, token):
                 continue
             is_dir = os.path.isdir(fp)
             info = os.stat(fp)
-            is_protected = is_item_protected(protected_data, resolve_protect_view(base_root, view, subpath, name), subpath, name)
+            is_protected = is_item_protected(protected_data, resolve_protect_view(base_root, view, subpath, name), subpath, name, unprotected_data)
+            protected_ancestor = find_protected_ancestor_name(protected_data, resolve_protect_view(base_root, view, subpath, name), subpath, name, unprotected_data)
             active_status = False
             if view == 'computers' and subpath == '':
                 is_protected = True
                 device_name = name.replace(' 💻', '')
-                from src.core.database import get_db
+                from core.database import get_db
                 with get_db() as conn:
                     user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (current_user,)).fetchone()
                     if user_row:
@@ -374,7 +379,7 @@ def list_files(view, subpath, token):
                 "name": name, "path": subpath, "is_dir": is_dir, "size": item_size,
                 "mtime": info.st_mtime, "owner": "Yo", "owner_id": current_uid,
                 "ext": os.path.splitext(name)[1].lower(),
-                "protected": is_protected, "starred": is_starred, "active": active_status,
+                "protected": is_protected, "protected_ancestor": protected_ancestor, "starred": is_starred, "active": active_status,
                 "shared": len(shared_users) > 0, "shared_with": shared_users,
             })
         except OSError as e:
@@ -520,7 +525,7 @@ def delete_item(view, name, subpath, trash_id, token):
 
     if view == 'computers' and subpath == '':
         device_name = name.replace(' 💻', '')
-        from src.core.database import get_db
+        from core.database import get_db
         with get_db() as conn:
             conn.execute("DELETE FROM cloud_devices WHERE user_id = ? AND name = ?", (current_uid, device_name))
             conn.commit()
@@ -555,8 +560,9 @@ def delete_item(view, name, subpath, trash_id, token):
 
     base_root = get_user_root(token)
     protected_data = _load_json(base_root, '.protected.json')
+    unprotected_data = _load_json(base_root, '.unprotected.json')
     view = resolve_protect_view(base_root, view, subpath, name)
-    if is_item_protected(protected_data, view, subpath, name):
+    if is_item_protected(protected_data, view, subpath, name, unprotected_data):
         return "Este elemento está protegido contra eliminación"
 
     try:

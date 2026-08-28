@@ -2,7 +2,6 @@ import uuid
 import re
 from werkzeug.security import generate_password_hash, check_password_hash
 from core.security import SecurityManager
-from modules.api.cloud import init_user_cloud
 
 
 def authenticate(username: str, password: str):
@@ -47,5 +46,6 @@ def create_user(username: str, password: str):
     hashed = generate_password_hash(password)
     SecurityManager.insert_user(username, hashed, email, new_user_id)
 
+    from modules.api.cloud import init_user_cloud
     init_user_cloud(new_user_id)
     return {"user_id": new_user_id, "email": email}, None

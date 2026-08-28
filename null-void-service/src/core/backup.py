@@ -9,7 +9,8 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from config.config import CONFIG
+from config.config import CONFIG  # re-export: atributo público usado por tests/consumidores
+from core.cloud_paths import safe_join, user_root_for_uid
 
 TEMP_BACKUP_DIR = "/tmp/nullvoid_backups"
 os.makedirs(TEMP_BACKUP_DIR, exist_ok=True)
@@ -97,12 +98,19 @@ def normalize_backup_type(value):
 
 
 def _backup_meta_file(user_id):
-    return os.path.join(CONFIG.DATA_DIR, "Cloud", user_id, ".backups", "backup_meta.json")
+    root = _cloud_root(user_id)
+    if not root:
+        return None
+    return safe_join(root, ".backups", "backup_meta.json")
 
 
 def backup_vault(user_id):
-    """Ruta reservada e independiente para respaldos (carpeta oculta del servidor)."""
-    return os.path.join(CONFIG.DATA_DIR, "Cloud", user_id, ".backups")
+    """Ruta reservada e independiente para respaldos (carpeta oculta del servidor),
+    resuelta canónicamente sobre la raíz Cloud del usuario."""
+    root = _cloud_root(user_id)
+    if not root:
+        return None
+    return safe_join(root, ".backups")
 
 
 def load_backup_meta(user_id):
@@ -243,7 +251,9 @@ def _zip_entries(zip_path, entries, manifest_json, q=None, cancel_event=None, to
 
 # Resolución y recorrido de fuentes en Cloud (CWE-22).
 def _cloud_root(user_id):
-    return os.path.join(CONFIG.DATA_DIR, "Cloud", user_id)
+    """Raíz del Cloud del usuario a través de la resolución canónica
+    (core.cloud_paths), en lugar de reconstruir CONFIG.DATA_DIR/Cloud/<uid>."""
+    return user_root_for_uid(user_id)
 
 
 def resolve_cloud_sources(user_id, source_paths):
@@ -252,10 +262,13 @@ def resolve_cloud_sources(user_id, source_paths):
 
     Acepta rutas relativas y la cadena vacía '' (toda Mi unidad / la raíz).
     Rechaza: rutas absolutas, separadores alternativos, NUL, '~', '..' y
-    cualquier segmento oculto. Tras realpath() (que resuelve symlinks), se
-    vuelve a comprobar que el destino permanezca bajo el root asignado.
+    cualquier segmento oculto. El encadenamiento/containment final se delega
+    en safe_join (core.cloud_paths), que realpath y rechaza cualquier escape
+    fuera del root del usuario (incluidos symlinks).
     """
-    root = os.path.realpath(_cloud_root(user_id))
+    root = _cloud_root(user_id)
+    if not root:
+        return []
     resolved = []
     seen = set()
     for p in (source_paths or []):
@@ -264,7 +277,8 @@ def resolve_cloud_sources(user_id, source_paths):
             continue
         if p in seen:
             continue
-        # Rechazo explícito de rutas peligrosas o exóticas.
+        # Rechazo explícito de rutas peligrosas o exóticas (política de entrada
+        # más estricta que safe_join; no cubierta por el helper canónico).
         if (p.startswith("/") or "\\" in p or ":" in p
                 or "\x00" in p or "~" in p):
             continue
@@ -275,10 +289,8 @@ def resolve_cloud_sources(user_id, source_paths):
         if parts and any(part == ".." or part.startswith(".") for part in parts):
             continue
         try:
-            abs_path = os.path.realpath(os.path.join(root, *parts)) if parts else root
-        except (ValueError, OSError):
-            continue
-        if abs_path != root and not abs_path.startswith(root + os.sep):
+            abs_path = safe_join(root, *parts) if parts else root
+        except ValueError:
             continue
         if not os.path.exists(abs_path):
             continue
@@ -723,7 +735,10 @@ def create_backup_stream(file_names, upload_dir, dest_mode, user_id, backup_type
 
 
 def _automation_file(user_id):
-    return os.path.join(CONFIG.DATA_DIR, "Cloud", user_id, ".backups", "automation.json")
+    root = _cloud_root(user_id)
+    if not root:
+        return None
+    return safe_join(root, ".backups", "automation.json")
 
 
 def load_automations_config(user_id):

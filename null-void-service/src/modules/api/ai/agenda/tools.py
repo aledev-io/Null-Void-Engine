@@ -8,14 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from core.socket_ext import socketio
-from modules.api.events.services import (
-    get_user_events,
-    create_user_event,
-    update_user_event,
-    delete_user_event,
-    link_series,
-    series_count,
-)
 
 # ─── Configuración y Constantes ───────────────────────────────────────────────
 
@@ -708,6 +700,7 @@ def parse_user_event_request(text: str, lang: str = "es", uid: Optional[str] = N
 # ─── Ejecución de Herramientas y CRUD ─────────────────────────────────────────
 
 def _find_matching_series(uid: str, title: str, ev_type: str) -> Optional[Dict[str, Any]]:
+    from modules.api.events.services import get_user_events
     norm = _normalize_title(title)
     best = None
     for e in get_user_events(uid):
@@ -723,6 +716,7 @@ def _find_matching_series(uid: str, title: str, ev_type: str) -> Optional[Dict[s
 
 
 def _series_result(uid: str, event_id: str, ev_type: str, series: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    from modules.api.events.services import series_count
     if series:
         return {
             "ok": True, "id": event_id, "type": ev_type,
@@ -734,6 +728,7 @@ def _series_result(uid: str, event_id: str, ev_type: str, series: Optional[Dict[
 
 
 def _find_event_by_desc(uid: str, text: str, day: Optional[str] = None, is_destructive: bool = False) -> Optional[Dict[str, Any]]:
+    from modules.api.events.services import get_user_events
     if not text:
         return None
     events = get_user_events(uid)
@@ -768,6 +763,7 @@ def _find_event_by_desc(uid: str, text: str, day: Optional[str] = None, is_destr
 
 
 def _list_upcoming_events(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    from modules.api.events.services import get_user_events
     days = args.get("days")
     if days is not None:
         try:
@@ -902,6 +898,7 @@ def _list_upcoming_events(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _create_event(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    from modules.api.events.services import create_user_event, link_series
     title = str(args.get("title") or "").strip()
     if not title:
         raise ValueError("title es obligatorio")
@@ -950,6 +947,7 @@ def _create_reminder(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _update_event(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    from modules.api.events.services import get_user_events, update_user_event
     event_id = str(args.get("id") or "").strip()
     if not event_id and (args.get("title") or args.get("description")):
         try:
@@ -1012,6 +1010,7 @@ def _update_event(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _delete_event(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    from modules.api.events.services import delete_user_event
     event_id = str(args.get("id") or "").strip()
     if not event_id and (args.get("title") or args.get("description")):
         try:
@@ -1028,6 +1027,16 @@ def _delete_event(uid: str, args: Dict[str, Any]) -> Dict[str, Any]:
     if not affected:
         return {"ok": False, "error": "No se encontró ningún evento con ese id"}
     return {"ok": True}
+
+
+def get_user_events(uid):
+    """Re-export público perezoso de events.services.get_user_events.
+
+    Preserva la API de agenda sin arrastrar el dominio events en el import de
+    modules.api.ai; el dominio events solo se carga al llamar a esta función.
+    """
+    from modules.api.events.services import get_user_events as _get_user_events
+    return _get_user_events(uid)
 
 
 _ALLOWED_OPERATIONS = {

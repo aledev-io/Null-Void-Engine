@@ -867,6 +867,7 @@ function renderCloudFiles(files, isRecent = false) {
                 return `
                 <div class="cloud-folder-row"
                      data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="true" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
+                     data-protected-ancestor="${escAttr(f.protected_ancestor || '')}"
                      data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-is-mine="${d.isMine}"
                      onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, true, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)">
                     ${d.checkboxHtml}
@@ -887,6 +888,7 @@ function renderCloudFiles(files, isRecent = false) {
                 return `
                 <div class="cloud-file-card"
                      data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="false" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
+                     data-protected-ancestor="${escAttr(f.protected_ancestor || '')}"
                      data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-is-mine="${d.isMine}"
                      onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, false, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)">
                     <div class="cloud-file-card-header">
@@ -934,9 +936,9 @@ function renderCloudFiles(files, isRecent = false) {
             const isDir = row.getAttribute('data-is-dir') === 'true';
             const path = row.getAttribute('data-path');
 
-            // En móvil el drag&drop no aplica y puede interferir con el
+            // En táctil el drag&drop no aplica y puede interferir con el
             // long-press de selección: se desactiva por completo.
-            if (_cloudIsMobile()) return;
+            if (_cloudHasTouch()) return;
 
             row.setAttribute('draggable', 'true');
 
@@ -1107,6 +1109,7 @@ function renderListRow(f, isRecent, getFileTemplateData) {
     return `
     <div class="cloud-file-row" role="button" tabindex="0" aria-label="${esc(f.name)}"
          data-name="${escAttr(f.name)}" data-path="${escAttr(d.fpath)}" data-is-dir="${f.is_dir}" data-starred="${escAttr(f.starred)}" data-protected="${f.protected === true}"
+         data-protected-ancestor="${escAttr(f.protected_ancestor || '')}"
          data-trash-id="${escAttr(f.id || '')}" data-owner-id="${escAttr(f.owner_id || '')}" data-view="${escAttr(f.view || '')}" data-shared-with="${escAttr(f.shared_with || '')}" data-is-mine="${d.isMine}"
          onclick="handleCloudRowClick(event, \`${d.safeName}\`, \`${d.safePath}\`, ${f.is_dir}, '${jsStr(f.owner_id || '')}', ${f.trash === true}, \`${d.safeClickAction}\`)"
          onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); this.click(); }">
@@ -1985,7 +1988,18 @@ async function starSelectedItems() {
     fetchCloudFiles(currentCloudPath, currentCloudView);
 }
 
-async function toggleCloudProtect(name, path, fileView = null) {    try {
+async function toggleCloudProtect(name, path, fileView = null, isProtected = false, protectedAncestor = null) {
+    // Un archivo protegido por herencia (carpeta superior bloqueada) requiere
+    // confirmación antes de desprotegerlo; la carpeta seguirá protegida.
+    if (isProtected && protectedAncestor) {
+        const confirmed = await NV_Confirm(
+            window.t_cloud('cloud_unprotect_inherited', window.currentLang === 'en'
+                ? 'This file is protected by the folder "{0}". If you continue, it will stop inheriting its protection, but the folder will remain protected.'
+                : 'Este archivo está protegido por la carpeta «{0}». Si continúas, dejará de heredar su protección, pero la carpeta seguirá protegida.').replace('{0}', esc(protectedAncestor))
+        );
+        if (!confirmed) return; // Cancelar → no hace nada
+    }
+    try {
         const view = fileView || currentCloudView;
         const res = await fetch('/api/cloud/toggle_protect', {
             method: 'POST',
@@ -2140,7 +2154,7 @@ async function downloadCloudFile(name, overridePath = null, forceDownload = fals
         if (willPreview) {
             openCloudPreview(name, url, path, ownerId, fileView, ownerName, isShared);
         } else {
-            const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isMobile = _cloudIsMobileDevice();
             // En WebView/Android la navegación directa a un binario inline falla
             // (intenta renderizarlo). Forzar Content-Disposition: attachment
             // para que el download listener de la app lo capture.
@@ -2405,20 +2419,460 @@ function _renderCloudPreviewBody(ext, url, name, fileKey) {
         // Posición de reproducción: restaurar donde se dejó y guardar avance.
         _initVideoProgressTracking(fileKey || '');
     } else if (ext === 'pdf') {
-        const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (isMobile) {
-            body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 50vh; text-align: center; color: var(--text-muted);">
-                <div style="font-size: 4rem; margin-bottom: 20px; color: #f87171;">${getFileIcon('.pdf')}</div>
-                <h3 style="color: var(--text-main); margin-bottom: 10px; font-size: 1.2rem;">${window.t_cloud('mobile_preview_title', 'Visualización en Móvil')}</h3>
-                <p style="font-size: 0.95rem; max-width: 85%; line-height: 1.5; color: var(--text-muted);">${window.t_cloud('mobile_pdf_desc', 'Descarga este archivo si quieres usarlo o visualizarlo.')}</p>
-            </div>`;
+        if (_cloudIsMobileDevice()) {
+            // En navegadores móviles un <iframe> a application/pdf provoca una
+            // descarga en lugar de renderizar. Usamos el visor controlado por la
+            // aplicación (PDF.js) alimentado por la MISMA URL autenticada.
+            _renderMobilePdfPreview(url, name);
         } else {
             body.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 75vh; border: none; border-radius: 8px;"></iframe>`;
         }
     } else {
         body.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 75vh; border: none; background: #fff; border-radius: 8px;"></iframe>`;
     }
+}
+
+// Carga PDF.js bajo demanda (ya viene junto al módulo AI). No introduce una
+// ruta de archivos ni un endpoint: consume la URL HTTP autenticada existente.
+function _ensurePdfJs() {
+    return new Promise((resolve, reject) => {
+        if (window.pdfjsLib) return resolve();
+        const s = document.createElement('script');
+        s.src = '/static/js/ai/pdf.min.js';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('No se pudo cargar PDF.js'));
+        document.head.appendChild(s);
+    });
+}
+
+// Visor PDF completo construido sobre PDF.js Core (pdf.min.js ya vendorizado).
+// El proyecto NO incluye el viewer web oficial de PDF.js (viewer.html/css,
+// pdf_viewer.js), por lo que este visor usa los primitivos de Core
+// (getDocument, page.render y renderTextLayer) y construye el "chrome" del
+// visor (toolbar, navegación, zoom, búsqueda, rotación, enlaces) encima.
+// Consume exclusivamente la URL autenticada /api/cloud/download?t=... .
+let _pdfViewer = null;
+
+function _injectPdfViewerStyles() {
+    if (document.getElementById('nv-pdf-viewer-style')) return;
+    const s = document.createElement('style');
+    s.id = 'nv-pdf-viewer-style';
+    s.textContent = `
+#nv-pdf-viewer{display:flex;flex-direction:column;width:100%;height:78vh;background:#fff;border-radius:8px;overflow:hidden;font-size:14px;color:#1f2937}
+.nv-pdf-toolbar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px 8px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.nv-pdf-toolbar button,.nv-pdf-search button{min-width:32px;height:32px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0 6px;color:#1f2937}
+.nv-pdf-toolbar button:hover,.nv-pdf-search button:hover{background:#e5e7eb}
+.nv-pdf-pageinfo{display:inline-flex;align-items:center;gap:2px;margin:0 6px;color:#374151;white-space:nowrap}
+.nv-pdf-pageinfo input{width:38px;height:28px;text-align:center;border:1px solid #d1d5db;border-radius:4px;font-size:13px}
+#nv-pdf-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#e5e7eb;position:relative}
+.nv-pdf-pages{padding:10px}
+.nv-pdf-page{position:relative;margin:0 auto 12px;box-shadow:0 2px 8px rgba(0,0,0,0.3);background:#fff}
+.nv-pdf-page canvas{display:block}
+.nv-pdf-textlayer{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;opacity:0.25;line-height:1;mix-blend-mode:multiply;pointer-events:none}
+.nv-pdf-textlayer span{color:transparent}
+.nv-search-hit{background:rgba(255,235,59,0.8)!important;color:#000!important}
+.nv-pdf-loading{padding:40px;text-align:center;color:#6b7280}
+.nv-pdf-error{padding:32px;text-align:center;color:#6b7280}
+.nv-pdf-error button{margin-top:10px;padding:9px 18px;border-radius:8px;border:none;background:var(--indigo);color:#fff;cursor:pointer;font-size:.9rem;font-weight:600}
+.nv-pdf-search{display:flex;align-items:center;gap:4px;padding:6px 8px;background:#f9fafb;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.nv-pdf-search input{flex:1;min-width:60px;height:30px;border:1px solid #d1d5db;border-radius:4px;padding:0 8px;font-size:13px}
+.nv-pdf-search .nv-pdf-search-count{color:#6b7280;font-size:12px;white-space:nowrap}
+.nv-pdf-toolbar .nv-pdf-zoomlabel{color:#374151;font-size:12px;min-width:42px;text-align:center}
+[data-theme="dark"] #nv-pdf-viewer{background:#fff}
+@media (max-width:768px){.nv-pdf-toolbar{gap:2px}.nv-pdf-toolbar button{min-width:30px;height:30px}}`;
+    document.head.appendChild(s);
+}
+
+function _destroyPdfViewer() {
+    const v = _pdfViewer;
+    if (!v) return;
+    v.destroyed = true;
+    if (v.observer) { try { v.observer.disconnect(); } catch (e) {} v.observer = null; }
+    if (v.pdf && v.pdf.destroy) { try { v.pdf.destroy(); } catch (e) {} }
+    v.pdf = null;
+    v.container = null;
+    _pdfViewer = null;
+}
+
+class NvPdfViewer {
+    constructor(url, name, container) {
+        this.url = url;
+        this.name = name;
+        this.container = container;
+        this.pdf = null;
+        this.total = 0;
+        this.current = 1;
+        this.zoom = 1;
+        this.mode = 'width';
+        this.rotation = 0;
+        this.rendered = new Set();
+        this.destroyed = false;
+        this.observer = null;
+        this.searchTerm = '';
+        this.searchMatches = [];
+        this.searchIndex = -1;
+        this.el = {};
+    }
+
+    async load() {
+        const loading = this.container.querySelector('#nv-pdf-loading');
+        try {
+            await _ensurePdfJs();
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/js/ai/pdf.worker.min.js';
+            const resp = await fetch(this.url, { credentials: 'include' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            this.pdf = await pdfjsLib.getDocument({ data: await resp.arrayBuffer() }).promise;
+            if (this.destroyed) return;
+            this.total = this.pdf.numPages;
+            if (loading) loading.style.display = 'none';
+            const pagesEl = this.container.querySelector('#nv-pdf-pages');
+            pagesEl.style.display = 'block';
+            this.el.totalEl.textContent = this.total;
+            this.buildPages(pagesEl);
+            this.bindToolbar();
+            this.setupObserver();
+            this.updatePageInfo();
+            this.renderPage(this.current, true);
+        } catch (err) {
+            console.error('[Cloud] Error de previsualización PDF:', err);
+            this.showError();
+        }
+    }
+
+    buildPages(pagesEl) {
+        pagesEl.innerHTML = '';
+        this.pageEls = {};
+        for (let i = 1; i <= this.total; i++) {
+            const div = document.createElement('div');
+            div.className = 'nv-pdf-page';
+            div.setAttribute('data-page', String(i));
+            pagesEl.appendChild(div);
+            this.pageEls[i] = div;
+        }
+    }
+
+    setupObserver() {
+        if (!('IntersectionObserver' in window)) return;
+        this.observer = new IntersectionObserver((entries) => {
+            for (const en of entries) {
+                if (!en.isIntersecting) continue;
+                const n = parseInt(en.target.getAttribute('data-page'), 10);
+                if (n && !this.rendered.has(n) && !this.destroyed) this.renderPage(n);
+            }
+        }, { root: this.el.scrollEl, rootMargin: '400px 0px 400px 0px' });
+        for (const p in this.pageEls) this.observer.observe(this.pageEls[p]);
+    }
+
+    bindToolbar() {
+        this.container.addEventListener('click', (e) => {
+            const b = e.target.closest('button[data-act]');
+            if (!b) return;
+            this.act(b.getAttribute('data-act'));
+        });
+        const input = this.el.pageInput;
+        if (input) {
+            input.addEventListener('change', () => this.goToPage(parseInt(input.value, 10) || 1));
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.goToPage(parseInt(input.value, 10) || 1); } });
+        }
+        const searchInput = this.el.searchInput;
+        if (searchInput) {
+            searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.doSearch(searchInput.value); } });
+            searchInput.addEventListener('input', () => { if (!searchInput.value.trim()) this.clearSearch(); });
+        }
+    }
+
+    act(name) {
+        switch (name) {
+            case 'prev': this.goToPage(this.current - 1); break;
+            case 'next': this.goToPage(this.current + 1); break;
+            case 'zoomin': this.zoom = Math.min(4, +(this.zoom * 1.25).toFixed(2)); this.reRender(); break;
+            case 'zoomout': this.zoom = Math.max(0.25, +(this.zoom / 1.25).toFixed(2)); this.reRender(); break;
+            case 'fitwidth': this.mode = 'width'; this.zoom = 1; this.reRender(); break;
+            case 'fitpage': this.mode = 'page'; this.zoom = 1; this.reRender(); break;
+            case 'rotateleft': this.rotation = (this.rotation - 90) % 360; this.reRender(); break;
+            case 'rotateright': this.rotation = (this.rotation + 90) % 360; this.reRender(); break;
+            case 'search': this.toggleSearch(); break;
+            case 'searchprev': this.stepSearch(-1); break;
+            case 'searchnext': this.stepSearch(1); break;
+            case 'close': closeCloudPreview(); break;
+        }
+    }
+
+    goToPage(n) {
+        n = Math.max(1, Math.min(this.total || 1, n || 1));
+        this.current = n;
+        this.updatePageInfo();
+        this.scrollToPage(n);
+        this.renderPage(n, true);
+    }
+
+    scrollToPage(n) {
+        const el = this.pageEls && this.pageEls[n];
+        if (el && this.el.scrollEl) {
+            this.el.scrollEl.scrollTop = el.offsetTop - this.el.scrollEl.clientHeight * 0.05;
+        }
+    }
+
+    reRender() {
+        if (!this.total) return;
+        // Forzar re-render: limpiar páginas y volver a renderizar la actual.
+        for (const n in this.pageEls) {
+            this.pageEls[n].innerHTML = '';
+            this.rendered.delete(parseInt(n, 10));
+        }
+        this.updateZoomLabel();
+        this.renderPage(this.current, true);
+        this.renderNeighbors(this.current);
+    }
+
+    renderNeighbors(n) {
+        for (const d of [-1, 1, 2, -2]) {
+            const p = n + d;
+            if (p >= 1 && p <= this.total && !this.rendered.has(p)) this.renderPage(p);
+        }
+    }
+
+    computeCssScale(page) {
+        const base = page.getViewport({ scale: 1, rotation: this.rotation });
+        const sw = this.el.scrollEl ? this.el.scrollEl.clientWidth : (window.innerWidth - 32);
+        const sh = this.el.scrollEl ? this.el.scrollEl.clientHeight : 600;
+        let fit;
+        if (this.mode === 'page') {
+            fit = Math.min((sw || 600) / base.width, (sh || 800) / base.height);
+        } else {
+            fit = (sw || 600) / base.width;
+        }
+        return Math.max(0.1, fit * this.zoom);
+    }
+
+    async renderPage(n, force) {
+        if (this.destroyed || !this.pdf) return;
+        if (this.rendered.has(n) && !force) return;
+        this.rendered.add(n);
+        const pageEl = this.pageEls && this.pageEls[n];
+        if (!pageEl) return;
+        pageEl.innerHTML = '<div class="nv-pdf-loading" style="padding:16px;color:#9ca3af;">…</div>';
+        try {
+            const page = await this.pdf.getPage(n);
+            if (this.destroyed) return;
+            const outputScale = window.devicePixelRatio || 1;
+            const cssScale = this.computeCssScale(page);
+            const viewport = page.getViewport({ scale: cssScale, rotation: this.rotation });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = viewport.width + 'px';
+            canvas.style.height = viewport.height + 'px';
+            const textLayer = document.createElement('div');
+            textLayer.className = 'nv-pdf-textlayer';
+            pageEl.innerHTML = '';
+            pageEl.appendChild(canvas);
+            pageEl.appendChild(textLayer);
+            const ctx = canvas.getContext('2d');
+            const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+            await page.render({ canvasContext: ctx, viewport, transform }).promise;
+            if (this.destroyed) return;
+            try {
+                const textContent = await page.getTextContent();
+                const textDivs = [];
+                await pdfjsLib.renderTextLayer({
+                    textContent: textContent,
+                    container: textLayer,
+                    viewport,
+                    textDivs,
+                    textContentItemsStr: []
+                }).promise;
+                this.applySearchHighlight(n);
+            } catch (e) { /* el text layer es opcional */ }
+            this.renderLinks(page, pageEl, viewport);
+        } catch (err) {
+            console.error('[Cloud] Error renderizando página PDF', n, err);
+            this.rendered.delete(n);
+        }
+    }
+
+    renderLinks(page, pageEl, viewport) {
+        page.getAnnotations().then((annotations) => {
+            if (this.destroyed || !pageEl.isConnected) return;
+            for (const ann of annotations) {
+                if (!ann || ann.subtype !== 'Link') continue;
+                if (!Array.isArray(ann.rect) || ann.rect.length < 4) continue;
+                let rect;
+                try { rect = viewport.convertToViewportRectangle(ann.rect); } catch (e) { continue; }
+                const a = document.createElement('a');
+                a.style.cssText = `position:absolute;left:${rect[0]}px;top:${rect[1]}px;width:${Math.max(1, rect[2] - rect[0])}px;height:${Math.max(1, rect[3] - rect[1])}px;display:block;`;
+                if (ann.url) {
+                    if (/^https?:/i.test(ann.url)) {
+                        a.setAttribute('data-ext', '1');
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        a.href = ann.url;
+                    }
+                } else if (ann.dest) {
+                    a.style.cursor = 'pointer';
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.resolveDest(ann.dest);
+                    });
+                }
+                pageEl.appendChild(a);
+            }
+        }).catch(() => {});
+    }
+
+    resolveDest(dest) {
+        if (this.destroyed || !this.pdf) return;
+        this.pdf.getDestination(dest).then((ref) => {
+            if (!ref) return;
+            this.pdf.getPageIndex(ref).then((idx) => {
+                this.goToPage(idx + 1);
+            }).catch(() => {});
+        }).catch(() => {});
+    }
+
+    updatePageInfo() {
+        if (this.el.pageInput) this.el.pageInput.value = String(this.current);
+        if (this.el.totalEl) this.el.totalEl.textContent = String(this.total || 0);
+    }
+
+    updateZoomLabel() {
+        if (this.el.zoomLabel) this.el.zoomLabel.textContent = Math.round(this.zoom * 100) + '%';
+    }
+
+    toggleSearch() {
+        const bar = this.container.querySelector('#nv-pdf-searchbar');
+        if (!bar) return;
+        const show = bar.style.display === 'none';
+        bar.style.display = show ? 'flex' : 'none';
+        if (show && this.el.searchInput) this.el.searchInput.focus();
+    }
+
+    async doSearch(term) {
+        term = (term || '').trim().toLowerCase();
+        this.searchTerm = term;
+        this.searchMatches = [];
+        this.searchIndex = -1;
+        if (!term || !this.pdf) { this.updateSearchCount(); return; }
+        try {
+            for (let p = 1; p <= this.total; p++) {
+                if (this.destroyed) return;
+                const page = await this.pdf.getPage(p);
+                const tc = await page.getTextContent();
+                (tc.items || []).forEach((it, idx) => {
+                    const str = (it && it.str) || '';
+                    if (str.toLowerCase().includes(term)) this.searchMatches.push({ page: p, idx, str });
+                });
+            }
+        } catch (e) { /* noop */ }
+        if (this.searchMatches.length) this.goToSearchMatch(0);
+        this.updateSearchCount();
+        this.renderAllForSearch();
+    }
+
+    renderAllForSearch() {
+        for (let p = 1; p <= this.total; p++) {
+            if (!this.rendered.has(p)) this.renderPage(p);
+        }
+    }
+
+    goToSearchMatch(i) {
+        const len = this.searchMatches.length;
+        if (!len) return;
+        if (i < 0) i = len - 1;
+        if (i >= len) i = 0;
+        this.searchIndex = i;
+        const m = this.searchMatches[i];
+        this.goToPage(m.page);
+        this.updateSearchCount();
+    }
+
+    stepSearch(dir) {
+        const len = this.searchMatches.length;
+        if (!len) return;
+        this.goToSearchMatch(this.searchIndex + dir);
+    }
+
+    applySearchHighlight(n) {
+        if (!this.searchTerm || !this.pageEls[n]) return;
+        const spans = this.pageEls[n].querySelectorAll('.nv-pdf-textlayer span');
+        spans.forEach((sp) => {
+            const txt = (sp.textContent || '').toLowerCase();
+            if (txt.includes(this.searchTerm)) sp.classList.add('nv-search-hit');
+        });
+    }
+
+    clearSearch() {
+        this.searchTerm = '';
+        this.searchMatches = [];
+        this.searchIndex = -1;
+        for (const p in this.pageEls) {
+            const spans = this.pageEls[p].querySelectorAll('.nv-pdf-textlayer span.nv-search-hit');
+            spans.forEach((sp) => sp.classList.remove('nv-search-hit'));
+        }
+        this.updateSearchCount();
+    }
+
+    updateSearchCount() {
+        if (this.el.searchCount) {
+            this.el.searchCount.textContent = this.searchMatches.length
+                ? ((this.searchIndex + 1) + '/' + this.searchMatches.length)
+                : (this.searchTerm ? '0' : '');
+        }
+    }
+
+    showError() {
+        const loading = this.container.querySelector('#nv-pdf-loading');
+        if (loading) loading.style.display = 'none';
+        const err = this.container.querySelector('#nv-pdf-error');
+        if (err) err.style.display = 'block';
+    }
+}
+
+function _renderMobilePdfPreview(url, name) {
+    _destroyPdfViewer();
+    _injectPdfViewerStyles();
+    const body = document.getElementById('preview-body');
+    body.innerHTML = `
+        <div id="nv-pdf-viewer">
+            <div class="nv-pdf-toolbar">
+                <button type="button" data-act="close" title="${window.t_cloud('btn_close', 'Cerrar')}">✕</button>
+                <button type="button" data-act="prev" title="${window.t_cloud('pdf_prev', 'Página anterior')}">‹</button>
+                <span class="nv-pdf-pageinfo"><input id="nv-pdf-current" type="text" inputmode="numeric" value="1"> / <span id="nv-pdf-total">0</span></span>
+                <button type="button" data-act="next" title="${window.t_cloud('pdf_next', 'Página siguiente')}">›</button>
+                <button type="button" data-act="zoomout" title="${window.t_cloud('pdf_zoom_out', 'Alejar')}">−</button>
+                <span class="nv-pdf-zoomlabel" id="nv-pdf-zoomlabel">100%</span>
+                <button type="button" data-act="zoomin" title="${window.t_cloud('pdf_zoom_in', 'Acercar')}">+</button>
+                <button type="button" data-act="fitwidth" title="${window.t_cloud('pdf_fit_width', 'Ajustar ancho')}">W</button>
+                <button type="button" data-act="fitpage" title="${window.t_cloud('pdf_fit_page', 'Ajustar página')}">P</button>
+                <button type="button" data-act="rotateleft" title="${window.t_cloud('pdf_rotate_left', 'Rotar izquierda')}">↺</button>
+                <button type="button" data-act="rotateright" title="${window.t_cloud('pdf_rotate_right', 'Rotar derecha')}">↻</button>
+                <button type="button" data-act="search" title="${window.t_cloud('pdf_search', 'Buscar')}">🔍</button>
+            </div>
+            <div id="nv-pdf-searchbar" class="nv-pdf-search" style="display:none;">
+                <input id="nv-pdf-search-input" type="text" placeholder="${window.t_cloud('pdf_search_placeholder', 'Buscar en el PDF…')}">
+                <button type="button" data-act="searchprev" title="${window.t_cloud('pdf_search_prev', 'Anterior')}">‹</button>
+                <button type="button" data-act="searchnext" title="${window.t_cloud('pdf_search_next', 'Siguiente')}">›</button>
+                <span class="nv-pdf-search-count" id="nv-pdf-search-count"></span>
+            </div>
+            <div id="nv-pdf-scroll">
+                <div id="nv-pdf-loading" class="nv-pdf-loading">${window.t_cloud('pdf_loading', 'Cargando PDF…')}</div>
+                <div id="nv-pdf-pages" class="nv-pdf-pages" style="display:none;"></div>
+                <div id="nv-pdf-error" class="nv-pdf-error" style="display:none;">
+                    <div>${window.t_cloud('pdf_preview_error', 'No se ha podido previsualizar este PDF.')}</div>
+                    <button type="button" onclick="document.getElementById('preview-download-btn').click()">${window.t_cloud('btn_download', 'Descargar archivo')}</button>
+                </div>
+            </div>
+        </div>`;
+
+    const viewer = new NvPdfViewer(url, name, body.querySelector('#nv-pdf-viewer'));
+    viewer.el.scrollEl = document.getElementById('nv-pdf-scroll');
+    viewer.el.pageInput = document.getElementById('nv-pdf-current');
+    viewer.el.totalEl = document.getElementById('nv-pdf-total');
+    viewer.el.zoomLabel = document.getElementById('nv-pdf-zoomlabel');
+    viewer.el.searchInput = document.getElementById('nv-pdf-search-input');
+    viewer.el.searchCount = document.getElementById('nv-pdf-search-count');
+    _pdfViewer = viewer;
+    viewer.load();
 }
 
 // Posición de reproducción de vídeo: se guarda en localStorage por ruta de
@@ -2488,7 +2942,9 @@ function _initVideoProgressTracking(fileKey, restore) {
     });
 }
 
-function closeCloudPreview() {
+ function closeCloudPreview() {
+    // Liberar el visor PDF (EventBus/observer/páginas/render tasks).
+    _destroyPdfViewer();
     // Guardar la posición antes de destruir el reproductor.
     const video = document.getElementById('preview-video-player');
     if (video && video.currentTime) {
@@ -3091,7 +3547,7 @@ document.addEventListener('contextmenu', function (e) {
             const row = e.target.closest('.cloud-file-row') || e.target.closest('.cloud-folder-row') || e.target.closest('.cloud-file-card') || e.target.closest('.cloud-suggested-card');
             const isTrashView = currentCloudView === 'trash';
 
-            const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isMobile = _cloudHasTouch();
 
             if (isMobile) {
                 if (row) {
@@ -3218,7 +3674,7 @@ document.addEventListener('contextmenu', function (e) {
                         const isStarred = row.getAttribute('data-starred') === 'true';
                         const fileView = row.getAttribute('data-view');
                         const sharedWith = row.getAttribute('data-shared-with');
-                        currentCloudContextItem = { name, path, isDir, starred: isStarred, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), sharedWith: sharedWith };
+                        currentCloudContextItem = { name, path, isDir, starred: isStarred, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), sharedWith: sharedWith, protected: itemProtected, protectedAncestor: row.getAttribute('data-protected-ancestor') };
                         itemActions.style.display = 'block';
 
                         const _multi = _ctxMultiSelectionState();
@@ -3356,7 +3812,7 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
             if (inMultiSelection) {
                 protectSelectedItems();
             } else {
-                toggleCloudProtect(name, path, currentCloudContextItem.view || null);
+                toggleCloudProtect(name, path, currentCloudContextItem.view || null, currentCloudContextItem.protected, currentCloudContextItem.protectedAncestor || null);
             }
             break;
         }
@@ -4335,8 +4791,14 @@ let multiMoveItems = [];
 let _cloudLongPress = null;
 const CLOUD_LONG_PRESS_MS = 340;
 
-function _cloudIsMobile() {
-    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+function _cloudHasTouch() {
+    return navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+}
+
+function _cloudIsMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+    ) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
 }
 
 function _cloudRowFrom(el) {
@@ -4392,7 +4854,7 @@ function initCloudMobileSelection() {
     if (!list) return;
 
     list.addEventListener('pointerdown', (e) => {
-        if (!_cloudIsMobile()) return;
+        if (!_cloudHasTouch()) return;
         if (e.pointerType !== 'touch') return;
         if (e.target.closest('button, input, label, .cloud-file-actions')) return;
         const row = _cloudRowFrom(e.target);
@@ -4617,8 +5079,6 @@ function handleCloudRowClick(event, name, path, isDir, ownerId, isTrash, default
     if (event.target.closest('.cloud-checkbox-hit')) return;
     if (event.target.tagName === 'BUTTON' || event.target.closest('button') || event.target.closest('.cloud-file-actions')) return;
     if (event.target.tagName === 'INPUT') return;
-
-    const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (currentCloudView === 'home') {
         new Function(defaultActionString)();

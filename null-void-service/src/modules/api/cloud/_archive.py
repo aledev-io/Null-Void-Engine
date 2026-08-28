@@ -166,7 +166,7 @@ def unzip_item(view, name, subpath, token):
 
     MAX_ZIP_FILES = 10000
     MAX_ZIP_RATIO = 100
-    RESERVED_NAMES = ('.activity.json', '.trash.json', '.starred.json', '.protected.json')
+    RESERVED_NAMES = ('.activity.json', '.trash.json', '.starred.json', '.protected.json', '.unprotected.json')
 
     try:
         with zipfile.ZipFile(target_path, 'r') as zf:

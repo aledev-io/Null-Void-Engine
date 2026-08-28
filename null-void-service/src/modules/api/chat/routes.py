@@ -1,6 +1,4 @@
 import os
-import uuid
-import shutil
 import sys
 import mimetypes
 from functools import wraps
@@ -113,25 +111,11 @@ def _send_message_impl():
                         if sender_data and receiver_data:
                             sender_username = sender_data['username']
                             receiver_username = receiver_data['username']
-                            
-                            from modules.api.cloud.services import BASE_CLOUD_ROOT
-                            def sanitize_uid(uid):
-                                return "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip() or "unknown"
-                            
-                            sender_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(user_id), "Mensajeria", receiver_username)
-                            receiver_cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(receiver_id), "Mensajeria", sender_username)
-                            
-                            os.makedirs(sender_cloud_dir, exist_ok=True)
-                            os.makedirs(receiver_cloud_dir, exist_ok=True)
-                            
-                            def link_or_copy(src, dst):
-                                try:
-                                    os.link(src, dst)
-                                except OSError:
-                                    shutil.copy2(src, dst)
-                                    
-                            link_or_copy(save_path, os.path.join(sender_cloud_dir, file_name))
-                            link_or_copy(save_path, os.path.join(receiver_cloud_dir, file_name))
+                            # La carpeta Mensajeria se escribe vía StorageContract
+                            # (contabilidad de tamaño y saneado canónico de rutas).
+                            from modules.storage import store
+                            store.save_user_file(user_id, f"Mensajeria/{receiver_username}", file_name, save_path)
+                            store.save_user_file(receiver_id, f"Mensajeria/{sender_username}", file_name, save_path)
                 except Exception as ex:
                     sys.stderr.write(f"[CHAT][CLOUD_SYNC_ERROR] {ex}\n")
                     
@@ -552,27 +536,25 @@ def save_message_to_cloud():
     cloud_root = store.get_view_root('drive', token)
     if not cloud_root:
         return jsonify(error="No se pudo acceder a tu almacenamiento en la nube"), 403
-        
+
     dest_name = os.path.basename(msg['file_name'])
-    dest_path = os.path.join(cloud_root, dest_name)
-    
+
     file_size = os.path.getsize(source_file_path)
     limit_gb = store.get_user_quota(token)
     limit_bytes = limit_gb * 1024 * 1024 * 1024
     current_usage = store.get_dir_size(store.get_user_root(token))
-    
+
     if current_usage + file_size > limit_bytes:
         return jsonify(error="Espacio insuficiente en Null-Void Cloud"), 400
-        
+
     base, ext = os.path.splitext(dest_name)
     counter = 1
-    while os.path.exists(dest_path):
+    while os.path.exists(os.path.join(cloud_root, dest_name)):
         dest_name = f"{base} ({counter}){ext}"
-        dest_path = os.path.join(cloud_root, dest_name)
         counter += 1
-        
+
     try:
-        shutil.copy2(source_file_path, dest_path)
+        store.save_user_file(user_id, "", dest_name, source_file_path)
         username = sess.get_user(token)
         cloud_services.add_activity(username, user_id, "Guardaste desde chat", dest_name, "")
         return jsonify(ok=True, name=dest_name)

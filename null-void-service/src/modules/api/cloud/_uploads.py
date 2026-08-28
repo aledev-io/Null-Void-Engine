@@ -49,7 +49,7 @@ def _validate_filename(filename):
     safe = os.path.basename(raw)
     safe = "".join(c for c in safe if c.isprintable()).strip()
     invalid_chars = '<>:"/\\|?*'
-    if not safe or any(c in invalid_chars for c in safe) or safe.startswith('.') or safe in ('.activity.json', '.trash.json', '.starred.json', '.protected.json'):
+    if not safe or any(c in invalid_chars for c in safe) or safe.startswith('.') or safe in ('.activity.json', '.trash.json', '.starred.json', '.protected.json', '.unprotected.json'):
         return None
     return safe
 

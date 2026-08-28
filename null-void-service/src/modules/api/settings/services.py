@@ -1,6 +1,6 @@
 import os
 import json
-from src.config.config import CONFIG
+from config.config import CONFIG
 
 def get_user_config_path(user_id):
     return os.path.join(CONFIG.DATA_DIR, f"config_{user_id}.json")

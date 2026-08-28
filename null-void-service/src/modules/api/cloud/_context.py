@@ -126,28 +126,64 @@ def _resolve_shared_or_recent_path(current_uid, owner_id, name, subpath, view):
     return resolve_shared_path(current_uid, owner_id, name, subpath)
 
 
-def find_protected_ancestor(protected_data, view, subpath, name):
-    """ Devuelve la carpeta protegida más cercana que contiene al elemento (o None). """
+def find_protected_ancestor(protected_data, view, subpath, name, unprotected_data=None):
+    """ Devuelve la carpeta protegida efectiva más cercana que contiene al
+    elemento (o None).
+
+    Regla: se evalúa desde el elemento hacia la raíz; el primer marcador
+    (override o protección) gana. Un override neutraliza la herencia para el
+    elemento y sus descendientes, por lo que un ancestro protegido "bajo" un
+    override no se reporta.
+    """
     if not protected_data:
         return None
+    unprotected_data = unprotected_data or []
     subpath = (subpath or '').strip('/')
     parts = (subpath.split('/') if subpath else []) + [name]
-    for i in range(len(parts)):
+    for i in range(len(parts) - 1, -1, -1):
         entry = {"name": parts[i], "path": '/'.join(parts[:i]), "view": view}
+        if entry in unprotected_data:
+            return None
         if entry in protected_data:
             return entry
     return None
 
 
-def is_item_protected(protected_data, view, subpath, name):
-    """ Un elemento está protegido si lo está él mismo o cualquiera de sus carpetas padre. """
-    if not protected_data:
-        return False
+def find_protected_ancestor_name(protected_data, view, subpath, name, unprotected_data=None):
+    """ Devuelve el nombre de la carpeta protegida efectiva más cercana
+    ESTRICTAMENTE por encima del elemento (excluye al propio elemento), o None.
+
+    Útil para que la UI informe de qué carpeta hereda un hijo su protección.
+    Un override en un ancestro neutraliza la herencia para los descendientes.
+    """
+    unprotected_data = unprotected_data or []
+    subpath = (subpath or '').strip('/')
+    parts = (subpath.split('/') if subpath else [])
+    for i in range(len(parts) - 1, -1, -1):
+        entry = {"name": parts[i], "path": '/'.join(parts[:i]), "view": view}
+        if entry in unprotected_data:
+            return None
+        if entry in protected_data:
+            return entry['name']
+    return None
+
+
+def is_item_protected(protected_data, view, subpath, name, unprotected_data=None):
+    """ Un elemento está protegido si lo está él mismo o cualquiera de sus
+    carpetas padre, salvo que un override (unprotected_data) lo excluya.
+
+    Regla: se evalúa desde el elemento hacia la raíz; el primer marcador
+    (override o protección) gana. Un override en el elemento o en un ancestro
+    más profundo que cualquier protección lo deja desprotegido.
+    """
+    unprotected_data = unprotected_data or []
     subpath = (subpath or '').strip('/')
     parts = (subpath.split('/') if subpath else []) + [name]
-    for i in range(len(parts)):
-        ancestor = {"name": parts[i], "path": '/'.join(parts[:i]), "view": view}
-        if ancestor in protected_data:
+    for i in range(len(parts) - 1, -1, -1):
+        entry = {"name": parts[i], "path": '/'.join(parts[:i]), "view": view}
+        if entry in unprotected_data:
+            return False
+        if entry in protected_data:
             return True
     return False
 
@@ -192,7 +228,7 @@ def resolve_agent_scope(token):
     Si es de sesión web (o inválido), devuelve (None, None)."""
     if not token:
         return None, None
-    from src.core.database import get_db
+    from core.database import get_db
     try:
         with get_db() as conn:
             row = conn.execute(

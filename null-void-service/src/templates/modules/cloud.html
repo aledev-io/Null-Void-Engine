@@ -110,7 +110,8 @@
                     style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem;">✕</button>
             </div>
 
-            <p data-i18n="move_select_dest" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+            <p data-i18n="move_select_dest"
+                style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
                 Selecciona la carpeta de
                 destino para este elemento:</p>
 
@@ -145,27 +146,35 @@
         <div class="modal-content bkp-source-modal-content" onclick="event.stopPropagation()"
             style="max-width: 600px; width: min(92%, calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);" data-i18n="bkp_src_modal_multi_title">
+                <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);"
+                    data-i18n="bkp_src_modal_multi_title">
                     Seleccionar elementos de la Nube</h2>
                 <button onclick="closeBkpSourceModal()"
                     style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem; padding: 4px;">✕</button>
             </div>
-            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;" data-i18n="bkp_src_modal_multi_desc">
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;"
+                data-i18n="bkp_src_modal_multi_desc">
                 Marca los archivos y carpetas que deseas respaldar. Puedes combinar elementos de diferentes rutas.</p>
             <div id="bkp-source-tree-container"
                 style="max-height: 40vh; overflow-y: auto; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
             </div>
-            <div style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+            <div
+                style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
                 <span data-i18n="bkp_src_modal_include_title">Lista de elementos a respaldar</span>
-                <span style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: var(--indigo); color: #fff;" id="bkp-source-selected-count">0</span>
+                <span
+                    style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: var(--indigo); color: #fff;"
+                    id="bkp-source-selected-count">0</span>
             </div>
             <div id="bkp-source-inclusion-list"
                 style="max-height: 132px; overflow-y: auto; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
             </div>
             <div id="bkp-source-excluded-block" style="display: none; margin-bottom: 16px;">
-                <div style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #f87171; display: flex; align-items: center; gap: 8px;">
+                <div
+                    style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 700; color: #f87171; display: flex; align-items: center; gap: 8px;">
                     <span data-i18n="bkp_src_modal_excluded_title">Elementos excluidos</span>
-                    <span style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: rgba(248,113,113,0.15); color: #f87171;" id="bkp-source-excluded-count">0</span>
+                    <span
+                        style="font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: rgba(248,113,113,0.15); color: #f87171;"
+                        id="bkp-source-excluded-count">0</span>
                 </div>
                 <div id="bkp-source-excluded-list"
                     style="max-height: 110px; overflow-y: auto; padding: 10px 12px; background: var(--surface); border: 1px solid rgba(248,113,113,0.3); border-radius: 10px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
@@ -197,7 +206,12 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2
                     style="font-size: 1.35rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; margin: 0;">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
                     <span data-i18n="link_modal_title">¿Cómo vincular una carpeta local?</span>
                 </h2>
                 <button onclick="closeLinkDeviceModal()"
@@ -247,7 +261,14 @@
 
                 <div class="link-device-instructions">
                     <strong data-i18n="link_modal_instructions" style="display: flex; align-items: center; gap: 6px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.55.63 2.89 1.63 3.82.64.6 1.33 2.18"></path></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 18h6"></path>
+                            <path d="M10 22h4"></path>
+                            <path
+                                d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.55.63 2.89 1.63 3.82.64.6 1.33 2.18">
+                            </path>
+                        </svg>
                         Instrucciones de Vinculación:
                     </strong>
                     <ol style="margin: 8px 0 0 16px; padding: 0;">
@@ -583,6 +604,169 @@
                 display: none;
             }
 
+            /* ============ UNIBODY COMMAND PALETTE ============ */
+            #cloud-search-wrapper {
+                position: relative;
+                width: 280px;
+                max-width: 320px;
+                z-index: 50;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            #cloud-search-wrapper .cloud-search-input {
+                width: 100%;
+                height: 42px;
+                padding: 0 40px 0 44px;
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                color: var(--text-main);
+                font-size: 0.9rem;
+                backdrop-filter: blur(12px);
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                outline: none;
+            }
+
+            #cloud-search-wrapper .cloud-search-input::placeholder {
+                color: var(--text-muted);
+                opacity: 0.7;
+            }
+
+            #cloud-search-wrapper .cloud-search-input:focus {
+                background: var(--bg-card);
+                border-color: rgba(99, 102, 241, 0.4);
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            }
+
+            #cloud-search-wrapper.is-active .cloud-search-input {
+                background: #182032 !important;
+                border-color: #6366f1 !important;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.4);
+            }
+
+            #cloud-search-wrapper #cloud-mobile-search-history {
+                position: absolute;
+                top: calc(100% + 6px);
+                left: 0;
+                right: 0;
+                background: #182032 !important;
+                border: 1px solid #6366f1 !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+                border-radius: 12px;
+                padding: 6px 0;
+                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(99, 102, 241, 0.3), 0 4px 16px rgba(99, 102, 241, 0.25);
+                display: none;
+                z-index: 1010;
+                max-height: 260px;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            #cloud-mobile-search-history .cloud-search-history-row {
+                transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+            }
+
+            #cloud-mobile-search-history .cloud-search-history-row:hover {
+                background: rgba(99, 102, 241, 0.18) !important;
+                color: #ffffff !important;
+            }
+
+            #cloud-mobile-search-history .cloud-search-history-row:active {
+                background: rgba(99, 102, 241, 0.28) !important;
+                color: #ffffff !important;
+                transform: scale(0.99);
+            }
+
+            .cloud-search-kbd {
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                display: flex;
+                align-items: center;
+                gap: 2px;
+                pointer-events: none;
+                z-index: 10;
+                transition: opacity 0.15s;
+            }
+
+            .cloud-search-kbd kbd {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 22px;
+                height: 20px;
+                padding: 0 5px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                font-family: inherit;
+                font-size: 0.68rem;
+                font-weight: 500;
+                color: var(--text-muted);
+                line-height: 1;
+            }
+
+            #cloud-search-wrapper.is-active .cloud-search-kbd,
+            #cloud-search-wrapper:focus-within .cloud-search-kbd {
+                opacity: 0;
+            }
+
+            /* Backdrop overlay */
+            #cloud-search-backdrop {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.4);
+                z-index: 49;
+                display: none;
+                opacity: 0;
+                transition: opacity 0.2s ease;
+            }
+
+            #cloud-search-backdrop.visible {
+                display: block;
+                opacity: 1;
+            }
+
+            /* Light theme overrides */
+            [data-theme="light"] #cloud-search-wrapper .cloud-search-input {
+                background: #f1f3f4;
+                border-color: #dadce0;
+                color: #202124;
+            }
+
+            [data-theme="light"] #cloud-search-wrapper .cloud-search-input:focus,
+            [data-theme="light"] #cloud-search-wrapper.is-active .cloud-search-input {
+                background: #ffffff;
+                border-color: rgba(99, 102, 241, 0.4);
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            }
+
+            [data-theme="light"] #cloud-search-wrapper #cloud-mobile-search-history {
+                background: #ffffff;
+                border-color: rgba(99, 102, 241, 0.3);
+                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+            }
+
+            [data-theme="light"] #cloud-mobile-search-history .cloud-search-history-row {
+                color: #202124 !important;
+            }
+
+            [data-theme="light"] #cloud-mobile-search-history .cloud-search-history-row:hover,
+            [data-theme="light"] #cloud-mobile-search-history .cloud-search-history-row:active {
+                color: #ffffff !important;
+            }
+
+            [data-theme="light"] .cloud-search-kbd kbd {
+                background: rgba(0, 0, 0, 0.05);
+                border-color: rgba(0, 0, 0, 0.12);
+                color: #6b7280;
+            }
+
+            [data-theme="light"] #cloud-search-backdrop {
+                background: rgba(0, 0, 0, 0.2);
+            }
+
             @keyframes slideInRight {
                 from {
                     transform: translateX(100%);
@@ -745,8 +929,8 @@
                     margin-right: 12px !important;
                 }
 
-                .cloud-header>div:last-child>div:has(#cloud-search) {
-                    max-width: 160px !important;
+                #cloud-search-wrapper {
+                    max-width: 200px !important;
                 }
 
                 #btn-link-device-topbar {
@@ -754,15 +938,7 @@
                     height: 36px !important;
                 }
 
-                /* FIX colisión: el grupo derecho debe poder comprimirse,
-                   y el buscador encoge antes de que el breadcrumb desaparezca */
-                .cloud-header>div:last-child {
-                    flex-shrink: 1 !important;
-                    min-width: 0;
-                    gap: 10px !important;
-                }
-
-                .cloud-header>div:last-child>div:has(#cloud-search) {
+                #cloud-search-wrapper {
                     flex: 1 1 120px;
                     min-width: 100px;
                 }
@@ -782,17 +958,13 @@
                     min-width: 0;
                 }
 
-                .cloud-header>div:first-child>div[style*="width: 1px"] {
-                    display: none !important;
-                }
-
                 #cloud-breadcrumbs {
                     font-size: 0.8rem !important;
                     margin-right: 8px !important;
                 }
 
-                .cloud-header>div:last-child>div:has(#cloud-search) {
-                    max-width: 130px !important;
+                #cloud-search-wrapper {
+                    max-width: 160px !important;
                 }
 
                 #cloud-layout-toggle-group {
@@ -912,10 +1084,6 @@
                     width: auto !important;
                 }
 
-                .cloud-header>div:first-child>div[style*="width: 1px"] {
-                    display: none !important;
-                }
-
                 #cloud-breadcrumbs {
                     font-size: 0.85rem !important;
                     flex: 1;
@@ -940,6 +1108,18 @@
                     display: none !important;
                 }
 
+                /* Buscador móvil abierto: ocupa todo el ancho disponible sin
+                   desbordar (el ancho 280px de escritorio NO debe aplicarse aquí) */
+                #cloud-search-wrapper[data-mobile-open] {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+
+                /* En móvil no se muestra el badge de atajo de teclado Ctrl+K */
+                .cloud-search-kbd {
+                    display: none !important;
+                }
+
                 #btn-mobile-search {
                     display: flex !important;
                     width: 36px !important;
@@ -947,7 +1127,6 @@
                     flex-shrink: 0;
                 }
 
-                /* === FIX PRINCIPAL: evitar desbordamiento horizontal === */
                 #cloud-explorer-main,
                 #cloud-file-list,
                 #cloud-file-list>* {
@@ -1346,6 +1525,7 @@
                     opacity: 0;
                     transform: translateY(10px);
                 }
+
                 to {
                     opacity: 1;
                     transform: translateY(0);
@@ -1447,6 +1627,7 @@
             }
 
             @media (max-width: 480px) {
+
                 /* Acciones del modal en columnas, botones a ancho completo. */
                 .bkp-modal-actions {
                     flex-direction: column;
@@ -1476,31 +1657,34 @@
             }
         </style>
         <div class="cloud-header"
-            style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; min-height: 60px;">
+            style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; min-height: 60px; gap: 16px;">
             <div style="display: flex; align-items: center; flex: 1; min-width: 0;">
                 <div class="cloud-header-brand" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
                     <button onclick="handleCloudBack()" title="Volver" data-i18n-title="back" aria-label="Volver"
                         style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
                     </button>
                     <button id="btn-cloud-sidebar-toggle" onclick="toggleCloudSidebar()" aria-label="Abrir menú"
                         style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="3" y1="12" x2="21" y2="12"></line>
                             <line x1="3" y1="6" x2="21" y2="6"></line>
                             <line x1="3" y1="18" x2="21" y2="18"></line>
                         </svg>
                     </button>
                 </div>
-                <div style="width: 1px; height: 24px; background: var(--border); margin: 0 16px 0 0;"
-                    class="hide-mobile">
-                </div>
                 <div id="cloud-breadcrumbs" role="status" aria-live="polite"
-                    style="display: flex; align-items: center; justify-content: flex-end; gap: 4px 8px; flex-wrap: wrap; overflow: hidden; flex: 1; min-width: 0; margin-right: 20px; color: var(--text-main); font-weight: 600; font-size: 1.1rem;">
+                    style="display: flex; align-items: center; justify-content: flex-start; gap: 4px 8px; flex-wrap: wrap; overflow: hidden; flex: 1; min-width: 0; margin-left: 12px; margin-right: 16px; color: var(--text-main); font-weight: 600; font-size: 1.1rem;">
                     <!-- Se llena con JS -->
                 </div>
             </div>
-            <div style="display: flex; gap: 15px; align-items: center; justify-content: flex-end; flex-shrink: 0;">
+            <!-- === DERECHA: BUSCADOR Y CONTROLES === -->
+            <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-shrink: 0;">
                 <!-- Botón Vincular Dispositivo -->
                 <button onclick="openLinkDeviceModal()" id="btn-link-device-topbar"
                     title="¿Cómo vincular una carpeta local?" data-i18n-title="link_modal_title"
@@ -1517,18 +1701,20 @@
                         <circle cx="12" cy="11.5" r="1.2" fill="currentColor" stroke="none" />
                     </svg>
                 </button>
-                <div id="cloud-search-wrapper" style="position: relative; flex: 1; max-width: 300px; min-width: 100px;">
 
+                <!-- Barra de búsqueda a la derecha -->
+                <div id="cloud-search-wrapper" style="width: 280px; max-width: 320px;">
                     <span id="cloud-search-live" class="cloud-sr-only" aria-live="polite"></span>
                     <input type="search" id="cloud-search" placeholder="Buscar en Drive..."
                         data-i18n-placeholder="search_drive" class="cloud-search-input"
-                        style="background: var(--surface-hi); border: 1px solid var(--border); border-radius: 24px; padding: 8px 40px 8px 44px; color: var(--text-main); font-size: 0.85rem; width: 100%; outline: none;"
-                        onkeydown="if(event.key === 'Enter') submitMobileSearch()">
+                        onkeydown="if(event.key === 'Enter') submitMobileSearch()"
+                        oninput="if(typeof handleCloudSearchInput === 'function') handleCloudSearchInput(this.value); if(typeof filterCloudFiles === 'function') filterCloudFiles()"
+                        onfocus="openSearchPalette()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                        stroke-linecap="round" stroke-linejoin="round" onclick="submitMobileSearch()"
-                        style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.6; pointer-events: auto; cursor: pointer; color: var(--text-main); z-index: 10; transition: all 0.2s;"
+                        stroke-linecap="round" stroke-linejoin="round" onpointerdown="submitMobileSearch(event)"
+                        style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; pointer-events: auto; cursor: pointer; color: var(--text-main); z-index: 10; transition: all 0.2s;"
                         onmouseover="this.style.opacity='1'; this.style.color='var(--indigo)';"
-                        onmouseout="this.style.opacity='0.6'; this.style.color='var(--text-main)';">
+                        onmouseout="this.style.opacity='0.5'; this.style.color='var(--text-main)';">
                         <circle cx="10" cy="10" r="7" />
                         <path d="M15 15L21 21" stroke-width="2" />
                         <path d="M10 6a4 4 0 0 0-4 4" stroke-width="1" opacity="0.4" />
@@ -1543,12 +1729,22 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
+                    <div class="cloud-search-kbd">
+                        <kbd>Ctrl</kbd><kbd>K</kbd>
+                    </div>
+                    <!-- Historial de búsquedas (popover unibody) -->
+                    <div id="cloud-mobile-search-history"></div>
                 </div>
+
                 <!-- Selector de Diseño (Lista / Cuadrícula) -->
-                <div id="cloud-layout-toggle-group"
-                    {% if request.args.get('view', 'home') in ['home', 'computers', 'backups'] %}style="display: none; background: var(--bg-secondary); padding: 4px; border-radius: 20px; border: 1px solid var(--border); margin-right: 5px; gap: 2px;"{% else %}style="display: flex; background: var(--bg-secondary); padding: 4px; border-radius: 20px; border: 1px solid var(--border); margin-right: 5px; gap: 2px;"{% endif %}>
-                    <button onclick="setCloudLayout('list')" id="btn-cloud-layout-list" title="Diseño de lista" data-i18n-title="title_layout_list"
-                        data-i18n-title="layout_list"
+                <div id="cloud-layout-toggle-group" {% if request.args.get('view', 'home' ) in ['home', 'computers'
+                    , 'backups' ]
+                    %}style="display: none; background: var(--bg-secondary); padding: 4px; border-radius: 20px; border: 1px solid var(--border); gap: 2px;"
+                    {% else
+                    %}style="display: flex; background: var(--bg-secondary); padding: 4px; border-radius: 20px; border: 1px solid var(--border); gap: 2px;"
+                    {% endif %}>
+                    <button onclick="setCloudLayout('list')" id="btn-cloud-layout-list" title="Diseño de lista"
+                        data-i18n-title="title_layout_list" data-i18n-title="layout_list"
                         style="width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--indigo); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1560,8 +1756,8 @@
                             <line x1="3" y1="18" x2="3.01" y2="18"></line>
                         </svg>
                     </button>
-                    <button onclick="setCloudLayout('grid')" id="btn-cloud-layout-grid" title="Diseño de cuadrícula" data-i18n-title="title_layout_grid"
-                        data-i18n-title="layout_grid"
+                    <button onclick="setCloudLayout('grid')" id="btn-cloud-layout-grid" title="Diseño de cuadrícula"
+                        data-i18n-title="title_layout_grid" data-i18n-title="layout_grid"
                         style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1589,24 +1785,6 @@
                     </script>
                 </div>
 
-                <button class="btn-icon" id="btn-toggle-lang" onclick="toggleLanguage()" title="Cambiar idioma"
-                    data-i18n-title="lang_title" style="width: 32px; height: 32px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="2" y1="12" x2="22" y2="12"></line>
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
-                        </path>
-                    </svg>
-                </button>
-                <button class="btn-icon" id="btn-toggle-theme" onclick="toggleTheme()" title="Cambiar tema"
-                    data-i18n-title="theme_title" style="width: 32px; height: 32px;">
-                    <svg id="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                    </svg>
-                </button>
                 <button id="btn-mobile-search" onclick="toggleMobileSearch()"
                     style="display: none; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
                     onmouseover="this.style.background='rgba(66,133,244,0.15)'; this.style.borderColor='rgba(66,133,244,0.5)';"
@@ -1620,6 +1798,7 @@
                 </button>
             </div>
         </div>
+        <div id="cloud-search-backdrop"></div>
         <div style="display: flex; gap: 0; flex: 1; overflow: hidden; position: relative;">
             <div id="cloud-sidebar-overlay" class="sidebar-overlay" onclick="toggleCloudSidebar()"></div>
             <div class="cloud-sidebar"
@@ -1637,7 +1816,8 @@
                 {% set current_view = request.args.get('view', 'home') %}
                 <div id="cloud-sidebar-nav"
                     style="flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 150px; flex-shrink: 0;">
-                    <div class="cloud-nav-item {{ 'active' if current_view in ['home', ''] else '' }}" onclick="handleCloudNavClick(this, 'home')">
+                    <div class="cloud-nav-item {{ 'active' if current_view in ['home', ''] else '' }}"
+                        onclick="handleCloudNavClick(this, 'home')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -1645,7 +1825,8 @@
                         </svg>
                         <span data-i18n="nav_home">Página principal</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'drive' else '' }}" onclick="handleCloudNavClick(this, 'drive')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'drive' else '' }}"
+                        onclick="handleCloudNavClick(this, 'drive')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
@@ -1653,7 +1834,8 @@
                         </svg>
                         <span data-i18n="nav_drive">Mi unidad</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'computers' else '' }}" onclick="handleCloudNavClick(this, 'computers')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'computers' else '' }}"
+                        onclick="handleCloudNavClick(this, 'computers')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -1662,7 +1844,8 @@
                         </svg>
                         <span data-i18n="nav_computers">Computadoras</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'backups' else '' }}" onclick="handleCloudNavClick(this, 'backups')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'backups' else '' }}"
+                        onclick="handleCloudNavClick(this, 'backups')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
@@ -1671,7 +1854,8 @@
                         </svg>
                         <span data-i18n="nav_backups">Backups</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'business' else '' }}" onclick="handleCloudNavClick(this, 'business')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'business' else '' }}"
+                        onclick="handleCloudNavClick(this, 'business')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1682,7 +1866,8 @@
                         </svg>
                         <span data-i18n="nav_billing">Facturación</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'ai' else '' }}" onclick="handleCloudNavClick(this, 'ai')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'ai' else '' }}"
+                        onclick="handleCloudNavClick(this, 'ai')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="4" y="4" width="16" height="16" rx="3"></rect>
@@ -1694,7 +1879,8 @@
                         <span data-i18n="nav_ai">IA</span>
                     </div>
                     <div class="context-divider" style="margin: 8px 0;"></div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'shared' else '' }}" onclick="handleCloudNavClick(this, 'shared')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'shared' else '' }}"
+                        onclick="handleCloudNavClick(this, 'shared')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -1704,7 +1890,8 @@
                         </svg>
                         <span data-i18n="nav_shared">Compartidos conmigo</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'shared_by_me' else '' }}" onclick="handleCloudNavClick(this, 'shared_by_me')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'shared_by_me' else '' }}"
+                        onclick="handleCloudNavClick(this, 'shared_by_me')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1713,7 +1900,8 @@
                         </svg>
                         <span data-i18n="nav_shared_by_me">Compartidos</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'recent' else '' }}" onclick="handleCloudNavClick(this, 'recent')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'recent' else '' }}"
+                        onclick="handleCloudNavClick(this, 'recent')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="10"></circle>
@@ -1721,7 +1909,8 @@
                         </svg>
                         <span data-i18n="nav_recent">Recientes</span>
                     </div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'starred' else '' }}" onclick="handleCloudNavClick(this, 'starred')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'starred' else '' }}"
+                        onclick="handleCloudNavClick(this, 'starred')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon
@@ -1731,7 +1920,8 @@
                         <span data-i18n="nav_starred">Destacados</span>
                     </div>
                     <div class="context-divider" style="margin: 8px 0;"></div>
-                    <div class="cloud-nav-item {{ 'active' if current_view == 'trash' else '' }}" onclick="handleCloudNavClick(this, 'trash')">
+                    <div class="cloud-nav-item {{ 'active' if current_view == 'trash' else '' }}"
+                        onclick="handleCloudNavClick(this, 'trash')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="3 6 5 6 21 6"></polyline>
@@ -1745,8 +1935,10 @@
                     style="margin-top: 20px; padding: 16px 8px; border-top: 1px solid var(--border);">
                     <div id="cloud-storage-title"
                         style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--text-main); margin-bottom: 8px; font-weight: 800;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg> <span class="storage-label-text"
-                            data-i18n="storage">Almacenamiento</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                        </svg> <span class="storage-label-text" data-i18n="storage">Almacenamiento</span>
                     </div>
                     <div id="cloud-quota-bg"
                         style="height: 4px; background: var(--border-hi); border-radius: 2px; margin-bottom: 8px; overflow: hidden;">
@@ -1847,7 +2039,8 @@
                             style="width: 38px; height: 38px; background: rgba(99, 102, 241, 0.15); border: none; color: var(--indigo); cursor: pointer; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(99, 102, 241, 0.25)';"
                             onmouseout="this.style.background='rgba(99, 102, 241, 0.15)';">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
@@ -1856,62 +2049,87 @@
                             style="font-weight: 700; color: var(--indigo); font-size: 1rem;">0 seleccionados</span>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button id="btn-cloud-multi-restore" onclick="restoreSelectedItems()" class="btn-primary" title="Restaurar" data-i18n-title="btn_restore"
+                        <button id="btn-cloud-multi-restore" onclick="restoreSelectedItems()" class="btn-primary"
+                            title="Restaurar" data-i18n-title="btn_restore"
                             style="display: none; width: 38px; height: 38px; border-radius: 8px; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(99,102,241,0.3); transition: all 0.2s;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <polyline points="1 4 1 10 7 10"></polyline>
                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                             </svg>
                         </button>
-                        <button id="btn-cloud-multi-preview" onclick="openCloudMultiPreview()" class="btn-secondary" title="Previsualizar" data-i18n-title="ctx_preview"
+                        <button id="btn-cloud-multi-preview" onclick="openCloudMultiPreview()" class="btn-secondary"
+                            title="Previsualizar" data-i18n-title="ctx_preview"
                             style="display: none; width: 38px; height: 38px; border-radius: 8px; background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
-                            onmouseover="this.style.background='rgba(16,185,129,0.2)'" onmouseout="this.style.background='rgba(16,185,129,0.1)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            onmouseover="this.style.background='rgba(16,185,129,0.2)'"
+                            onmouseout="this.style.background='rgba(16,185,129,0.1)'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
                             </svg>
                         </button>
-                        <button id="btn-cloud-multi-download" onclick="downloadSelectedItems()" class="btn-secondary" title="Descargar" data-i18n-title="btn_download"
+                        <button id="btn-cloud-multi-download" onclick="downloadSelectedItems()" class="btn-secondary"
+                            title="Descargar" data-i18n-title="btn_download"
                             style="width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
-                            onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                 <polyline points="7 10 12 15 17 10"></polyline>
                                 <line x1="12" y1="15" x2="12" y2="3"></line>
                             </svg>
                         </button>
-                        <button id="btn-cloud-multi-zip" onclick="downloadSelectedAsZip()" class="btn-secondary" title="Descargar ZIP" data-i18n-title="btn_download_zip"
+                        <button id="btn-cloud-multi-zip" onclick="downloadSelectedAsZip()" class="btn-secondary"
+                            title="Descargar ZIP" data-i18n-title="btn_download_zip"
                             style="width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
-                            onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                                </path>
                                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                                 <line x1="12" y1="22.08" x2="12" y2="12"></line>
                             </svg>
                         </button>
-                        <button id="btn-cloud-multi-move" onclick="moveSelectedItems()" class="btn-secondary" title="Mover" data-i18n-title="btn_move"
+                        <button id="btn-cloud-multi-move" onclick="moveSelectedItems()" class="btn-secondary"
+                            title="Mover" data-i18n-title="btn_move"
                             style="width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
-                            onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                </path>
                                 <line x1="12" y1="11" x2="12" y2="17"></line>
                                 <line x1="9" y1="14" x2="15" y2="14"></line>
                             </svg>
                         </button>
-                        <button id="btn-cloud-multi-protect" onclick="protectSelectedItems()" class="btn-secondary" title="Proteger" data-i18n-title="ctx_protect"
+                        <button id="btn-cloud-multi-protect" onclick="protectSelectedItems()" class="btn-secondary"
+                            title="Proteger" data-i18n-title="ctx_protect"
                             style="display: none; width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
-                            onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect x="3" y="11" width="18" height="11" rx="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
                         </button>
-                        <button id="btn-cloud-multi-delete" onclick="deleteSelectedItems()" class="btn-danger" title="Eliminar" data-i18n-title="btn_delete"
+                        <button id="btn-cloud-multi-delete" onclick="deleteSelectedItems()" class="btn-danger"
+                            title="Eliminar" data-i18n-title="btn_delete"
                             style="width: 38px; height: 38px; border-radius: 8px; background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
-                            onmouseover="this.style.background='rgba(248,113,113,0.2)'" onmouseout="this.style.background='rgba(248,113,113,0.1)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            onmouseover="this.style.background='rgba(248,113,113,0.2)'"
+                            onmouseout="this.style.background='rgba(248,113,113,0.1)'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                </path>
                             </svg>
                         </button>
                     </div>
@@ -1938,22 +2156,30 @@
                         } catch (e) { }
                     })();
                 </script>
-                <div id="cloud-backups-container" style="display: none; flex: 1; overflow-y: auto; padding: 20px 24px 32px; box-sizing: border-box; width: 100%; max-width: 100%;">
+                <div id="cloud-backups-container"
+                    style="display: none; flex: 1; overflow-y: auto; padding: 20px 24px 32px; box-sizing: border-box; width: 100%; max-width: 100%;">
                     <div style="max-width: 900px; width: 100%; margin: 0 auto;">
                         <!-- Selector de modo: manual vs automatización (Tabs) -->
-                        <div class="bkp-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 14px; box-sizing: border-box; width: 100%;">
-                            <button type="button" class="bkp-mode-card active" id="bkp-mode-manual" onclick="switchBkpMode('manual')"
+                        <div class="bkp-mode-tabs"
+                            style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 14px; box-sizing: border-box; width: 100%;">
+                            <button type="button" class="bkp-mode-card active" id="bkp-mode-manual"
+                                onclick="switchBkpMode('manual')"
                                 style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--indigo); background: rgba(99, 102, 241, 0.12); color: var(--indigo); font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                    </path>
                                     <line x1="12" y1="11" x2="12" y2="17"></line>
                                     <line x1="9" y1="14" x2="15" y2="14"></line>
                                 </svg>
                                 <span data-i18n="bkp_mode_manual">Backup Manual / Único</span>
                             </button>
-                            <button type="button" class="bkp-mode-card" id="bkp-mode-auto" onclick="switchBkpMode('auto')"
+                            <button type="button" class="bkp-mode-card" id="bkp-mode-auto"
+                                onclick="switchBkpMode('auto')"
                                 style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 10px; border: 2px solid transparent; background: var(--surface-hi); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <circle cx="12" cy="12" r="10"></circle>
                                     <polyline points="12 6 12 12 16 14"></polyline>
                                 </svg>
@@ -1991,403 +2217,443 @@
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                             stroke-linejoin="round">
-                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                            <path
+                                                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                            </path>
                                             <polyline points="9 14 11 16 15 11"></polyline>
                                         </svg>
                                         <span style="font-size: 0.88rem; font-weight: 600;"
-                                            data-i18n="bkp_src_mode_custom">Seleccionar elementos específicos (archivos y carpetas)</span>
+                                            data-i18n="bkp_src_mode_custom">Seleccionar elementos específicos (archivos
+                                            y carpetas)</span>
                                     </label>
                                 </div>
 
                                 <!-- Modo 'toda Mi unidad' -->
                                 <div id="bkp-src-all-hint"
                                     style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; font-size: 0.82rem; color: var(--text-secondary); box-sizing: border-box; width: 100%;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                        style="flex-shrink: 0;">
                                         <circle cx="12" cy="12" r="10"></circle>
                                         <path d="M12 16v-4"></path>
                                         <path d="M12 8h.01"></path>
                                     </svg>
-                                    <span data-i18n="bkp_src_all_hint">Se respaldará todo el contenido de tu unidad en un
+                                    <span data-i18n="bkp_src_all_hint">Se respaldará todo el contenido de tu unidad en
+                                        un
                                         único ZIP.</span>
                                 </div>
 
                                 <!-- Modo 'elementos específicos' -->
                                 <div id="bkp-custom-source" style="display: none;">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="font-size: 0.84rem; font-weight: 600; color: var(--text-main);" data-i18n="bkp_src_modal_include_title">Elementos a respaldar</span>
+                                    <div
+                                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="font-size: 0.84rem; font-weight: 600; color: var(--text-main);"
+                                            data-i18n="bkp_src_modal_include_title">Elementos a respaldar</span>
                                     </div>
                                     <div id="bkp-source-list"
                                         style="margin-top: 4px; display: flex; flex-direction: column; gap: 8px;">
                                         <div id="bkp-source-none-hint"
                                             style="padding: 14px 16px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--text-secondary); font-size: 0.82rem; box-sizing: border-box; width: 100%; cursor: pointer;"
-                                            onclick="openBkpSourceModal('manual')"
-                                            data-i18n="bkp_source_none">Sin elementos seleccionados. Haz clic aquí para elegir archivos o carpetas.</div>
+                                            onclick="openBkpSourceModal('manual')" data-i18n="bkp_source_none">Sin
+                                            elementos seleccionados. Haz clic aquí para elegir archivos o carpetas.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                        <!-- Destino del backup -->
-                        <div style="margin-bottom: 24px;">
-                            <div class="bkp-section-label" data-i18n="bkp_dest_title">
-                                Destino del Backup</div>
-                            <div class="bkp-dest-grid">
-                                <label class="dest-card-option active" id="bkp-lbl-download"
-                                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; padding: 18px 16px; border-radius: 12px; border: 2px solid var(--indigo); background: rgba(99, 102, 241, 0.12); color: var(--indigo);"
-                                    onclick="document.querySelector('input[name=bkp_dest_mode][value=download]').checked=true; toggleBkpDestMode()">
-                                    <input type="radio" name="bkp_dest_mode" value="download" checked
-                                        autocomplete="off" style="display: none;">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
+                            <!-- Destino del backup -->
+                            <div style="margin-bottom: 24px;">
+                                <div class="bkp-section-label" data-i18n="bkp_dest_title">
+                                    Destino del Backup</div>
+                                <div class="bkp-dest-grid">
+                                    <label class="dest-card-option active" id="bkp-lbl-download"
+                                        style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; padding: 18px 16px; border-radius: 12px; border: 2px solid var(--indigo); background: rgba(99, 102, 241, 0.12); color: var(--indigo);"
+                                        onclick="document.querySelector('input[name=bkp_dest_mode][value=download]').checked=true; toggleBkpDestMode()">
+                                        <input type="radio" name="bkp_dest_mode" value="download" checked
+                                            autocomplete="off" style="display: none;">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="7 10 12 15 17 10"></polyline>
+                                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                                        </svg>
+                                        <span style="font-size: 0.88rem; font-weight: 600;"
+                                            data-i18n="bkp_dest_download">Descargar a tu
+                                            dispositivo</span>
+                                    </label>
+                                    <label class="dest-card-option inactive" id="bkp-lbl-cloud"
+                                        style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; padding: 18px 16px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface-hi); color: var(--text-secondary);"
+                                        onclick="document.querySelector('input[name=bkp_dest_mode][value=cloud]').checked=true; toggleBkpDestMode()">
+                                        <input type="radio" name="bkp_dest_mode" value="cloud" autocomplete="off"
+                                            style="display: none;">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path
+                                                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                            </path>
+                                            <path d="M12 10v6"></path>
+                                            <path d="M9 13l3 3 3-3"></path>
+                                        </svg>
+                                        <span style="font-size: 0.88rem; font-weight: 600;"
+                                            data-i18n="bkp_dest_cloud">Guardar en Nube</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Aviso de guardado automático en el búnker de respaldos -->
+                            <div id="bkp-cloud-auto-dest-hint"
+                                style="display: none; margin-bottom: 24px; padding: 14px 16px; background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 10px; font-size: 0.82rem; color: var(--text-secondary); box-sizing: border-box; width: 100%;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                        style="flex-shrink: 0;">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                         <polyline points="7 10 12 15 17 10"></polyline>
                                         <line x1="12" y1="15" x2="12" y2="3"></line>
                                     </svg>
-                                    <span style="font-size: 0.88rem; font-weight: 600;"
-                                        data-i18n="bkp_dest_download">Descargar a tu
-                                        dispositivo</span>
-                                </label>
-                                <label class="dest-card-option inactive" id="bkp-lbl-cloud"
-                                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; padding: 18px 16px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface-hi); color: var(--text-secondary);"
-                                    onclick="document.querySelector('input[name=bkp_dest_mode][value=cloud]').checked=true; toggleBkpDestMode()">
-                                    <input type="radio" name="bkp_dest_mode" value="cloud" autocomplete="off"
-                                        style="display: none;">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path
-                                            d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
-                                        </path>
-                                        <path d="M12 10v6"></path>
-                                        <path d="M9 13l3 3 3-3"></path>
-                                    </svg>
-                                    <span style="font-size: 0.88rem; font-weight: 600;"
-                                        data-i18n="bkp_dest_cloud">Guardar en Nube</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Aviso de guardado automático en el búnker de respaldos -->
-                        <div id="bkp-cloud-auto-dest-hint" style="display: none; margin-bottom: 24px; padding: 14px 16px; background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 10px; font-size: 0.82rem; color: var(--text-secondary); box-sizing: border-box; width: 100%;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="7 10 12 15 17 10"></polyline>
-                                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                                </svg>
-                                <span data-i18n="bkp_dest_cloud_auto">El ZIP se guardará automáticamente en tu búnker de respaldos del servidor, una carpeta oculta e independiente de tu nube de archivos.</span>
-                            </div>
-                        </div>
-
-                        <!-- Selector de carpeta en la nube -->
-                        <div id="bkp-cloud-dest" style="display: none; margin-bottom: 24px;">
-                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;"
-                                data-i18n="bkp_cloud_select_folder">Selecciona
-                                la carpeta de destino para el backup:</p>
-
-                            <div id="bkp-folder-tree-container"
-                                style="max-height: 300px; overflow-y: auto; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
-                            </div>
-
-                            <div style="margin-bottom: 16px;">
-                                <button type="button" onclick="bkpCreateFolder()"
-                                    style="padding: 8px 16px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                        stroke="var(--indigo)" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg>
-                                    <span data-i18n="bkp_create_folder">Crear carpeta</span>
-                                </button>
-                            </div>
-
-                            <div
-                                style="padding: 10px 14px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; box-sizing: border-box; width: 100%;">
-                                <span style="color: var(--text-secondary);"
-                                    data-i18n="bkp_dest_selected">Destino seleccionado: </span>
-                                <span id="bkp-selected-path-display"
-                                    style="font-weight: 600; color: var(--indigo);">/ (Mi unidad)</span>
-                            </div>
-                        </div>
-
-                        <!-- Acción principal -->
-                        <button class="btn-primary" id="btn-backup" onclick="doBackup()"
-                            style="height: 48px; padding: 0 24px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #fff; font-size: 0.95rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35); display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box;">
-                            <span id="btn-backup-icon" style="display: inline-flex; align-items: center;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="7 10 12 15 17 10"></polyline>
-                                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                                </svg>
-                            </span>
-                            <span id="btn-backup-label" data-i18n="bkp_btn_create_download">Crear y Descargar ZIP</span>
-                        </button>
-                        <div id="backup-progress-wrap" style="display: none; margin-top: 16px;">
-                            <div
-                                style="height: 8px; background: rgba(99,102,241,0.12); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); box-sizing: border-box;">
-                                <div id="backup-progress-bar"
-                                    style="height: 100%; width: 0%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 4px; transition: width 0.25s ease;">
+                                    <span data-i18n="bkp_dest_cloud_auto">El ZIP se guardará automáticamente en tu
+                                        búnker de respaldos del servidor, una carpeta oculta e independiente de tu nube
+                                        de archivos.</span>
                                 </div>
                             </div>
-                            <div id="backup-progress-text"
-                                style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 8px; text-align: center;">
-                            </div>
-                        </div>
-                        <div id="backup-result" style="margin-top: 16px; text-align: center;"></div>
 
-                        <!-- Nota al pie -->
-                        <div
-                            style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-secondary);">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                            </svg>
-                            <span data-i18n="bkp_compress_note">La compresión puede tardar dependiendo del volumen de
-                                archivos.</span>
-                        </div>
+                            <!-- Selector de carpeta en la nube -->
+                            <div id="bkp-cloud-dest" style="display: none; margin-bottom: 24px;">
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;"
+                                    data-i18n="bkp_cloud_select_folder">Selecciona
+                                    la carpeta de destino para el backup:</p>
+
+                                <div id="bkp-folder-tree-container"
+                                    style="max-height: 300px; overflow-y: auto; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; box-sizing: border-box; width: 100%;">
+                                </div>
+
+                                <div style="margin-bottom: 16px;">
+                                    <button type="button" onclick="bkpCreateFolder()"
+                                        style="padding: 8px 16px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="var(--indigo)" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        <span data-i18n="bkp_create_folder">Crear carpeta</span>
+                                    </button>
+                                </div>
+
+                                <div
+                                    style="padding: 10px 14px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; box-sizing: border-box; width: 100%;">
+                                    <span style="color: var(--text-secondary);" data-i18n="bkp_dest_selected">Destino
+                                        seleccionado: </span>
+                                    <span id="bkp-selected-path-display"
+                                        style="font-weight: 600; color: var(--indigo);">/ (Mi unidad)</span>
+                                </div>
+                            </div>
+
+                            <!-- Acción principal -->
+                            <button class="btn-primary" id="btn-backup" onclick="doBackup()"
+                                style="height: 48px; padding: 0 24px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #fff; font-size: 0.95rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35); display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box;">
+                                <span id="btn-backup-icon" style="display: inline-flex; align-items: center;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                </span>
+                                <span id="btn-backup-label" data-i18n="bkp_btn_create_download">Crear y Descargar
+                                    ZIP</span>
+                            </button>
+                            <div id="backup-progress-wrap" style="display: none; margin-top: 16px;">
+                                <div
+                                    style="height: 8px; background: rgba(99,102,241,0.12); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); box-sizing: border-box;">
+                                    <div id="backup-progress-bar"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 4px; transition: width 0.25s ease;">
+                                    </div>
+                                </div>
+                                <div id="backup-progress-text"
+                                    style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 8px; text-align: center;">
+                                </div>
+                            </div>
+                            <div id="backup-result" style="margin-top: 16px; text-align: center;"></div>
+
+                            <!-- Nota al pie -->
+                            <div
+                                style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-secondary);">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                <span data-i18n="bkp_compress_note">La compresión puede tardar dependiendo del volumen
+                                    de
+                                    archivos.</span>
+                            </div>
                         </div>
 
                         <div id="bkp-auto-panel" class="bkp-panel" style="display: none;">
                             <div id="bkp-auto-list-view">
-                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;">
-                                <div class="bkp-section-label" style="margin: 0;" data-i18n="bkp_auto_title">
-                                    Automatización de Respaldos</div>
-                                <button type="button" onclick="newBkpAuto()"
-                                    style="padding: 8px 14px; border-radius: 8px; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35); color: var(--indigo); cursor: pointer; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                    <span data-i18n="bkp_new_auto">Nueva automatización</span>
-                                </button>
-                            </div>
+                                <div
+                                    style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;">
+                                    <div class="bkp-section-label" style="margin: 0;" data-i18n="bkp_auto_title">
+                                        Automatización de Respaldos</div>
+                                    <button type="button" onclick="newBkpAuto()"
+                                        style="padding: 8px 14px; border-radius: 8px; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35); color: var(--indigo); cursor: pointer; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        <span data-i18n="bkp_new_auto">Nueva automatización</span>
+                                    </button>
+                                </div>
 
-                            <div id="bkp-task-list"
-                                style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
-                            </div>
+                                <div id="bkp-task-list"
+                                    style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
+                                </div>
 
-                            <div
-                                style="display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; padding: 0 4px;">
-                                <span id="bkp-meta-full-line"><span data-i18n="bkp_last_full">Último respaldo <b>Completo</b>:</span>
-                                    <span id="bkp-last-full" style="color: var(--text-secondary); font-weight: 600;">—</span></span>
-                                <span id="bkp-meta-snap-line"><span data-i18n="bkp_last_snapshot">Último respaldo:</span> <span
-                                        id="bkp-last-snapshot"
-                                        style="color: var(--text-secondary); font-weight: 600;">—</span></span>
-                                <span id="bkp-meta-single-line" style="display: none;"><span data-i18n="bkp_last_single">Último respaldo (Completo):</span>
-                                    <span id="bkp-last-single"
-                                        style="color: var(--text-secondary); font-weight: 600;">—</span></span>
-                            </div>
+                                <div
+                                    style="display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; padding: 0 4px;">
+                                    <span id="bkp-meta-full-line"><span data-i18n="bkp_last_full">Último respaldo
+                                            <b>Completo</b>:</span>
+                                        <span id="bkp-last-full"
+                                            style="color: var(--text-secondary); font-weight: 600;">—</span></span>
+                                    <span id="bkp-meta-snap-line"><span data-i18n="bkp_last_snapshot">Último
+                                            respaldo:</span> <span id="bkp-last-snapshot"
+                                            style="color: var(--text-secondary); font-weight: 600;">—</span></span>
+                                    <span id="bkp-meta-single-line" style="display: none;"><span
+                                            data-i18n="bkp_last_single">Último respaldo (Completo):</span>
+                                        <span id="bkp-last-single"
+                                            style="color: var(--text-secondary); font-weight: 600;">—</span></span>
+                                </div>
                             </div>
 
                             <div id="bkp-auto-form-view" style="display: none;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
-                                <div class="bkp-section-label" style="margin: 0;" id="bkp-auto-form-title"
-                                    data-i18n="bkp_new_auto">Nueva automatización</div>
-                                <button type="button" onclick="cancelBkpAutoEdit()"
-                                    style="padding: 8px 14px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                    <span data-i18n="bkp_btn_back">Volver</span>
-                                </button>
-                            </div>
-                            <div
-                                style="background: var(--surface-hi); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-sizing: border-box; width: 100%;">
                                 <div
-                                    style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap;">
-                                    <div style="flex: 1; min-width: 200px;">
-                                        <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-main);"
-                                            data-i18n="bkp_auto_enable">Activar respaldos automáticos</div>
-                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;"
-                                            data-i18n="bkp_auto_enable_desc">Se generará un backup en el horario
-                                            configurado.</div>
-                                    </div>
-                                    <label class="bkp-switch">
-                                        <input type="checkbox" id="bkp-auto-enabled">
-                                        <span class="bkp-switch-slider"></span>
-                                    </label>
+                                    style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                                    <div class="bkp-section-label" style="margin: 0;" id="bkp-auto-form-title"
+                                        data-i18n="bkp_new_auto">Nueva automatización</div>
+                                    <button type="button" onclick="cancelBkpAutoEdit()"
+                                        style="padding: 8px 14px; border-radius: 8px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <polyline points="15 18 9 12 15 6"></polyline>
+                                        </svg>
+                                        <span data-i18n="bkp_btn_back">Volver</span>
+                                    </button>
                                 </div>
-
-                                <div style="margin-bottom: 16px;">
-                                    <label
-                                        style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
-                                        data-i18n="bkp_auto_name">Nombre</label>
-                                    <input type="text" id="bkp-auto-name" maxlength="60" autocomplete="off" spellcheck="false"
-                                        placeholder="Ej: Respaldo semanal de documentos"
-                                        data-i18n-placeholder="bkp_auto_name_ph"
-                                        style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
-                                    <div id="bkp-auto-name-error"
-                                        style="display: none; font-size: 0.75rem; color: #f87171; font-weight: 600; margin-top: 6px;">
+                                <div
+                                    style="background: var(--surface-hi); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-sizing: border-box; width: 100%;">
+                                    <div
+                                        style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap;">
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-main);"
+                                                data-i18n="bkp_auto_enable">Activar respaldos automáticos</div>
+                                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;"
+                                                data-i18n="bkp_auto_enable_desc">Se generará un backup en el horario
+                                                configurado.</div>
+                                        </div>
+                                        <label class="bkp-switch">
+                                            <input type="checkbox" id="bkp-auto-enabled">
+                                            <span class="bkp-switch-slider"></span>
+                                        </label>
                                     </div>
-                                </div>
 
-                                <div class="bkp-dest-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                                    <div>
+                                    <div style="margin-bottom: 16px;">
                                         <label
                                             style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
-                                            data-i18n="bkp_frequency">Frecuencia</label>
-                                        <select id="bkp-auto-frequency" onchange="bkpFrequencyChanged()"
+                                            data-i18n="bkp_auto_name">Nombre</label>
+                                        <input type="text" id="bkp-auto-name" maxlength="60" autocomplete="off"
+                                            spellcheck="false" placeholder="Ej: Respaldo semanal de documentos"
+                                            data-i18n-placeholder="bkp_auto_name_ph"
                                             style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
-                                            <option value="daily" data-i18n="bkp_freq_daily">Diario</option>
-                                            <option value="weekly" data-i18n="bkp_freq_weekly">Semanal</option>
-                                            <option value="monthly" data-i18n="bkp_freq_monthly">Mensual</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label
-                                            style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
-                                            data-i18n="bkp_time">Hora
-                                            del respaldo</label>
-                                        <input type="time" id="bkp-auto-time" value="02:00"
-                                            style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box; color-scheme: dark;">
-                                    </div>
-                                    <div>
-                                        <label
-                                            style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
-                                            data-i18n="bkp_copies_limit">Límite
-                                            de copias</label>
-                                        <input type="number" id="bkp-auto-limit" value="5" min="1" max="50"
-                                            style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
-                                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 6px;"
-                                            data-i18n="bkp_copies_limit_desc">Las copias más antiguas se eliminan
-                                            automáticamente al superar este límite.
+                                        <div id="bkp-auto-name-error"
+                                            style="display: none; font-size: 0.75rem; color: #f87171; font-weight: 600; margin-top: 6px;">
                                         </div>
                                     </div>
-                                </div>
 
-                                <div style="margin-top: 16px;">
-                                    <div class="bkp-section-label" style="margin-bottom: 10px;"
-                                        data-i18n="bkp_type_title">Tipo de Respaldo</div>
-                                    <div class="bkp-type-grid">
-                                        <label class="bkp-type-card active" data-bkp-type="full"
-                                            onclick="document.querySelector('input[name=bkp_type][value=full]').checked=true; toggleBkpType()">
-                                            <input type="radio" name="bkp_type" value="full" checked autocomplete="off"
-                                                style="display: none;">
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                                                <polyline points="2 17 12 22 22 17"></polyline>
-                                                <polyline points="2 12 12 17 22 12"></polyline>
-                                            </svg>
-                                            <span class="bkp-type-name" data-i18n="bkp_type_full">Completo</span>
-                                            <span class="bkp-type-desc"
-                                                data-i18n="bkp_type_full_desc">Todos los archivos, siempre.</span>
-                                            <span class="bkp-tip" data-i18n-tip="bkp_tip_full"
-                                                data-tip="Crea una copia íntegra de todos los archivos seleccionados. Es el respaldo más seguro, pero el más lento y pesado. Se recomienda realizarlo periódicamente como base de los demás tipos."
-                                                onclick="event.stopPropagation()">?</span>
-                                        </label>
-                                        <label class="bkp-type-card" data-bkp-type="differential"
-                                            onclick="document.querySelector('input[name=bkp_type][value=differential]').checked=true; toggleBkpType()">
-                                            <input type="radio" name="bkp_type" value="differential" autocomplete="off"
-                                                style="display: none;">
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <div class="bkp-dest-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                                        <div>
+                                            <label
+                                                style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
+                                                data-i18n="bkp_frequency">Frecuencia</label>
+                                            <select id="bkp-auto-frequency" onchange="bkpFrequencyChanged()"
+                                                style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
+                                                <option value="daily" data-i18n="bkp_freq_daily">Diario</option>
+                                                <option value="weekly" data-i18n="bkp_freq_weekly">Semanal</option>
+                                                <option value="monthly" data-i18n="bkp_freq_monthly">Mensual</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label
+                                                style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
+                                                data-i18n="bkp_time">Hora
+                                                del respaldo</label>
+                                            <input type="time" id="bkp-auto-time" value="02:00"
+                                                style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box; color-scheme: dark;">
+                                        </div>
+                                        <div>
+                                            <label
+                                                style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;"
+                                                data-i18n="bkp_copies_limit">Límite
+                                                de copias</label>
+                                            <input type="number" id="bkp-auto-limit" value="5" min="1" max="50"
+                                                style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
+                                            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 6px;"
+                                                data-i18n="bkp_copies_limit_desc">Las copias más antiguas se eliminan
+                                                automáticamente al superar este límite.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-top: 16px;">
+                                        <div class="bkp-section-label" style="margin-bottom: 10px;"
+                                            data-i18n="bkp_type_title">Tipo de Respaldo</div>
+                                        <div class="bkp-type-grid">
+                                            <label class="bkp-type-card active" data-bkp-type="full"
+                                                onclick="document.querySelector('input[name=bkp_type][value=full]').checked=true; toggleBkpType()">
+                                                <input type="radio" name="bkp_type" value="full" checked
+                                                    autocomplete="off" style="display: none;">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                                                    <polyline points="2 17 12 22 22 17"></polyline>
+                                                    <polyline points="2 12 12 17 22 12"></polyline>
+                                                </svg>
+                                                <span class="bkp-type-name" data-i18n="bkp_type_full">Completo</span>
+                                                <span class="bkp-type-desc" data-i18n="bkp_type_full_desc">Todos los
+                                                    archivos, siempre.</span>
+                                                <span class="bkp-tip" data-i18n-tip="bkp_tip_full"
+                                                    data-tip="Crea una copia íntegra de todos los archivos seleccionados. Es el respaldo más seguro, pero el más lento y pesado. Se recomienda realizarlo periódicamente como base de los demás tipos."
+                                                    onclick="event.stopPropagation()">?</span>
+                                            </label>
+                                            <label class="bkp-type-card" data-bkp-type="differential"
+                                                onclick="document.querySelector('input[name=bkp_type][value=differential]').checked=true; toggleBkpType()">
+                                                <input type="radio" name="bkp_type" value="differential"
+                                                    autocomplete="off" style="display: none;">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="10"></circle>
+                                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                                </svg>
+                                                <span class="bkp-type-name" data-i18n="bkp_type_diff">Diferencial</span>
+                                                <span class="bkp-type-desc" data-i18n="bkp_type_diff_desc">Solo lo
+                                                    modificado desde el último Completo.</span>
+                                                <span class="bkp-tip" data-i18n-tip="bkp_tip_diff"
+                                                    data-tip="Incluye únicamente los archivos modificados desde el último respaldo Completo. Es más rápido y ligero que el Completo. Para restaurar necesitas el último Completo y el último Diferencial."
+                                                    onclick="event.stopPropagation()">?</span>
+                                            </label>
+                                            <label class="bkp-type-card" data-bkp-type="incremental"
+                                                onclick="document.querySelector('input[name=bkp_type][value=incremental]').checked=true; toggleBkpType()">
+                                                <input type="radio" name="bkp_type" value="incremental"
+                                                    autocomplete="off" style="display: none;">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                                </svg>
+                                                <span class="bkp-type-name" data-i18n="bkp_type_incr">Incremental</span>
+                                                <span class="bkp-type-desc" data-i18n="bkp_type_incr_desc">Solo lo
+                                                    modificado desde el último respaldo.</span>
+                                                <span class="bkp-tip" data-i18n-tip="bkp_tip_incr"
+                                                    data-tip="Incluye únicamente los archivos modificados desde el último respaldo (sea Completo, Diferencial o Incremental). Es el más rápido y ligero. Para restaurar necesitas el último Completo y todos los respaldos posteriores."
+                                                    onclick="event.stopPropagation()">?</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Origen del respaldo automático -->
+                                    <div style="margin-top: 16px;">
+                                        <div class="bkp-section-label" style="margin-bottom: 8px;"
+                                            data-i18n="bkp_source_title">Origen del Respaldo</div>
+                                        <button type="button" onclick="openBkpSourceModal('auto')" class="btn-secondary"
+                                            style="padding: 12px 20px; border-radius: 10px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; width: 100%; box-sizing: border-box; justify-content: center;"
+                                            onmouseover="this.style.borderColor='rgba(99,102,241,0.45)'; this.style.background='rgba(99,102,241,0.04)';"
+                                            onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface-hi)';">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                                stroke="var(--indigo)" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
                                                 <circle cx="12" cy="12" r="10"></circle>
-                                                <polyline points="12 6 12 12 16 14"></polyline>
+                                                <line x1="12" y1="8" x2="12" y2="16"></line>
+                                                <line x1="8" y1="12" x2="16" y2="12"></line>
                                             </svg>
-                                            <span class="bkp-type-name" data-i18n="bkp_type_diff">Diferencial</span>
-                                            <span class="bkp-type-desc" data-i18n="bkp_type_diff_desc">Solo lo
-                                                modificado desde el último Completo.</span>
-                                            <span class="bkp-tip" data-i18n-tip="bkp_tip_diff"
-                                                data-tip="Incluye únicamente los archivos modificados desde el último respaldo Completo. Es más rápido y ligero que el Completo. Para restaurar necesitas el último Completo y el último Diferencial."
-                                                onclick="event.stopPropagation()">?</span>
-                                        </label>
-                                        <label class="bkp-type-card" data-bkp-type="incremental"
-                                            onclick="document.querySelector('input[name=bkp_type][value=incremental]').checked=true; toggleBkpType()">
-                                            <input type="radio" name="bkp_type" value="incremental" autocomplete="off"
-                                                style="display: none;">
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                                            </svg>
-                                            <span class="bkp-type-name" data-i18n="bkp_type_incr">Incremental</span>
-                                            <span class="bkp-type-desc" data-i18n="bkp_type_incr_desc">Solo lo
-                                                modificado desde el último respaldo.</span>
-                                            <span class="bkp-tip" data-i18n-tip="bkp_tip_incr"
-                                                data-tip="Incluye únicamente los archivos modificados desde el último respaldo (sea Completo, Diferencial o Incremental). Es el más rápido y ligero. Para restaurar necesitas el último Completo y todos los respaldos posteriores."
-                                                onclick="event.stopPropagation()">?</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <!-- Origen del respaldo automático -->
-                                <div style="margin-top: 16px;">
-                                    <div class="bkp-section-label" style="margin-bottom: 8px;" data-i18n="bkp_source_title">Origen del Respaldo</div>
-                                    <button type="button" onclick="openBkpSourceModal('auto')"
-                                        class="btn-secondary"
-                                        style="padding: 12px 20px; border-radius: 10px; background: var(--surface-hi); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; font-weight: 600; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; width: 100%; box-sizing: border-box; justify-content: center;"
-                                        onmouseover="this.style.borderColor='rgba(99,102,241,0.45)'; this.style.background='rgba(99,102,241,0.04)';"
-                                        onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface-hi)';">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <line x1="12" y1="8" x2="12" y2="16"></line>
-                                            <line x1="8" y1="12" x2="16" y2="12"></line>
-                                        </svg>
-                                        <span data-i18n="bkp_src_select_elements">Seleccionar elementos de la Nube…</span>
-                                    </button>
-                                    <div id="bkp-auto-source-list"
-                                        style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div id="bkp-auto-source-none-hint"
-                                            style="padding: 12px 16px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--text-secondary); font-size: 0.8rem;"
-                                            data-i18n="bkp_source_none">Sin elementos seleccionados. Elige archivos o carpetas de tu nube para respaldar.</div>
-                                    </div>
-                                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px;"
-                                        data-i18n="bkp_source_auto_note">La tarea automática respaldará únicamente los elementos seleccionados.</div>
-                                    <div id="bkp-auto-source-error"
-                                        style="display: none; font-size: 0.75rem; color: #f87171; font-weight: 600; margin-top: 6px;">
-                                    </div>
-                                </div>
-
-                                <div id="bkp-auto-days" style="display: none; margin-top: 16px; flex-wrap: wrap; gap: 8px; align-items: center;">
-                                    <span
-                                        style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.05em;"
-                                        data-i18n="bkp_days">Días:</span>
-                                    <button type="button" class="bkp-day-btn" data-day="1" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_1">L</button>
-                                    <button type="button" class="bkp-day-btn" data-day="2" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_2">M</button>
-                                    <button type="button" class="bkp-day-btn" data-day="3" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_3">X</button>
-                                    <button type="button" class="bkp-day-btn" data-day="4" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_4">J</button>
-                                    <button type="button" class="bkp-day-btn" data-day="5" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_5">V</button>
-                                    <button type="button" class="bkp-day-btn" data-day="6" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_6">S</button>
-                                    <button type="button" class="bkp-day-btn" data-day="0" onclick="toggleBkpDay(this)"
-                                        data-i18n="bkp_day_0">D</button>
-                                </div>
-
-                                <div
-                                    style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
-                                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                        <button type="button" id="bkp-auto-delete-btn" onclick="deleteBkpAutoById()"
-                                            style="display: none; padding: 10px 18px; border-radius: 8px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.35); color: #f87171; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                stroke-linejoin="round">
-                                                <polyline points="3 6 5 6 21 6"></polyline>
-                                                <path
-                                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
-                                                </path>
-                                            </svg>
-                                            <span data-i18n="bkp_btn_delete">Eliminar</span>
+                                            <span data-i18n="bkp_src_select_elements">Seleccionar elementos de la
+                                                Nube…</span>
                                         </button>
-                                        <button type="button" onclick="saveBkpAutomation()"
-                                            style="padding: 10px 18px; border-radius: 8px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none; color: #fff; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3); transition: all 0.2s;">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                stroke-linejoin="round">
-                                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z">
-                                                </path>
-                                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                                                <polyline points="7 3 7 8 15 8"></polyline>
-                                            </svg>
-                                            <span data-i18n="bkp_save_config">Guardar configuración</span>
-                                        </button>
+                                        <div id="bkp-auto-source-list"
+                                            style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                                            <div id="bkp-auto-source-none-hint"
+                                                style="padding: 12px 16px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--text-secondary); font-size: 0.8rem;"
+                                                data-i18n="bkp_source_none">Sin elementos seleccionados. Elige archivos
+                                                o carpetas de tu nube para respaldar.</div>
+                                        </div>
+                                        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px;"
+                                            data-i18n="bkp_source_auto_note">La tarea automática respaldará únicamente
+                                            los elementos seleccionados.</div>
+                                        <div id="bkp-auto-source-error"
+                                            style="display: none; font-size: 0.75rem; color: #f87171; font-weight: 600; margin-top: 6px;">
+                                        </div>
                                     </div>
-                                    <div id="bkp-automation-status" style="font-size: 0.78rem;"></div>
+
+                                    <div id="bkp-auto-days"
+                                        style="display: none; margin-top: 16px; flex-wrap: wrap; gap: 8px; align-items: center;">
+                                        <span
+                                            style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.05em;"
+                                            data-i18n="bkp_days">Días:</span>
+                                        <button type="button" class="bkp-day-btn" data-day="1"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_1">L</button>
+                                        <button type="button" class="bkp-day-btn" data-day="2"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_2">M</button>
+                                        <button type="button" class="bkp-day-btn" data-day="3"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_3">X</button>
+                                        <button type="button" class="bkp-day-btn" data-day="4"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_4">J</button>
+                                        <button type="button" class="bkp-day-btn" data-day="5"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_5">V</button>
+                                        <button type="button" class="bkp-day-btn" data-day="6"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_6">S</button>
+                                        <button type="button" class="bkp-day-btn" data-day="0"
+                                            onclick="toggleBkpDay(this)" data-i18n="bkp_day_0">D</button>
+                                    </div>
+
+                                    <div
+                                        style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+                                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                            <button type="button" id="bkp-auto-delete-btn" onclick="deleteBkpAutoById()"
+                                                style="display: none; padding: 10px 18px; border-radius: 8px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.35); color: #f87171; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                                    <path
+                                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                    </path>
+                                                </svg>
+                                                <span data-i18n="bkp_btn_delete">Eliminar</span>
+                                            </button>
+                                            <button type="button" onclick="saveBkpAutomation()"
+                                                style="padding: 10px 18px; border-radius: 8px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none; color: #fff; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3); transition: all 0.2s;">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <path
+                                                        d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z">
+                                                    </path>
+                                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                                </svg>
+                                                <span data-i18n="bkp_save_config">Guardar configuración</span>
+                                            </button>
+                                        </div>
+                                        <div id="bkp-automation-status" style="font-size: 0.78rem;"></div>
+                                    </div>
                                 </div>
-                            </div>
                             </div>
                         </div>
                     </div>
@@ -2408,7 +2674,8 @@
                 <div class="info-panel-tabs">
                     <div class="info-tab active" onclick="switchCloudInfoTab(this, 'details')" data-i18n="tab_details">
                         Detalles</div>
-                    <div class="info-tab" onclick="switchCloudInfoTab(this, 'versions')" data-i18n="tab_versions" id="info-tab-versions" style="display:none;">
+                    <div class="info-tab" onclick="switchCloudInfoTab(this, 'versions')" data-i18n="tab_versions"
+                        id="info-tab-versions" style="display:none;">
                         Versiones</div>
                     <div class="info-tab" onclick="switchCloudInfoTab(this, 'activity')" data-i18n="tab_activity">
                         Actividad</div>
@@ -2416,7 +2683,8 @@
                 <div id="info-panel-body" class="info-content">
                     <div style="text-align: center; opacity: 0.3; margin-top: 50px;">
                         <span style="font-size: 4rem;">ℹ️</span>
-                        <p data-i18n="cloud_empty_info">Haz clic derecho en un archivo y selecciona "Información" para ver sus detalles</p>
+                        <p data-i18n="cloud_empty_info">Haz clic derecho en un archivo y selecciona "Información" para
+                            ver sus detalles</p>
                     </div>
                 </div>
             </div>
@@ -2434,7 +2702,10 @@
                 <div class="cloud-drop-overlay-text" data-i18n="drop_to_upload">Suelta los archivos para subirlos a
                 </div>
                 <div class="cloud-drop-overlay-target" id="cloud-drop-target-name">
-                    <span class="cloud-drop-target-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></span> <span data-i18n="nav_drive">Mi unidad</span>
+                    <span class="cloud-drop-target-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                        </svg></span> <span data-i18n="nav_drive">Mi unidad</span>
                 </div>
             </div>
         </div>
@@ -2442,74 +2713,164 @@
         <div id="cloud-context-menu" class="cloud-context-menu">
             <div id="ctx-item-actions" style="display: none;">
                 <div class="context-item" id="ctx-download-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <span data-i18n="ctx_download">Descargar</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg> <span data-i18n="ctx_download">Descargar</span>
                 </div>
-<div class="context-item" id="ctx-rename-btn" style="display: none;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> <span data-i18n="ctx_rename">Renombrar</span>
+                <div class="context-item" id="ctx-rename-btn" style="display: none;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg> <span data-i18n="ctx_rename">Renombrar</span>
                 </div>
                 <div class="context-item" id="ctx-share-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> <span data-i18n="ctx_share">Compartir</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg> <span data-i18n="ctx_share">Compartir</span>
                 </div>
                 <div class="context-item" id="ctx-unshare-btn" style="display: none; color: #f87171;"
                     onclick="handleUnshareItem()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.84 12.25 1.72-1.71a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"></path><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"></path><line x1="8" x2="8" y1="2" y2="5"></line><line x1="2" x2="5" y1="8" y2="8"></line><line x1="16" x2="16" y1="19" y2="22"></line><line x1="19" x2="22" y1="16" y2="16"></line></svg> <span id="ctx-unshare-text" data-i18n="ctx_unshare">Dejar
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m18.84 12.25 1.72-1.71a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71">
+                        </path>
+                        <path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71">
+                        </path>
+                        <line x1="8" x2="8" y1="2" y2="5"></line>
+                        <line x1="2" x2="5" y1="8" y2="8"></line>
+                        <line x1="16" x2="16" y1="19" y2="22"></line>
+                        <line x1="19" x2="22" y1="16" y2="16"></line>
+                    </svg> <span id="ctx-unshare-text" data-i18n="ctx_unshare">Dejar
                         de compartir</span>
                 </div>
                 <div class="context-item has-submenu" id="ctx-organize-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="ctx_organize">Organizar</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg> <span data-i18n="ctx_organize">Organizar</span>
                     <span style="margin-left: auto; opacity: 0.5;">›</span>
                     <div class="cloud-submenu">
                         <div class="context-item" id="ctx-star-btn">
-                            <span id="ctx-star-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span> <span id="ctx-star-text"
-                                data-i18n="ctx_star">Destacar</span>
+                            <span id="ctx-star-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polygon
+                                        points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2">
+                                    </polygon>
+                                </svg></span> <span id="ctx-star-text" data-i18n="ctx_star">Destacar</span>
                         </div>
                         <div class="context-item" id="ctx-move-btn" style="display: none;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg> <span data-i18n="ctx_move">Mover</span>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg> <span data-i18n="ctx_move">Mover</span>
                         </div>
                         <div class="context-item" id="ctx-copy-btn">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> <span data-i18n="ctx_copy">Guardar copia</span>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg> <span data-i18n="ctx_copy">Guardar copia</span>
                         </div>
                         <div class="context-item" id="ctx-zip-btn" onclick="handleZipItem()">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> <span data-i18n="ctx_zip">Comprimir (.zip)</span>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                                </path>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                            </svg> <span data-i18n="ctx_zip">Comprimir (.zip)</span>
                         </div>
                         <div class="context-item" id="ctx-unzip-btn" style="display: none;" onclick="handleUnzipItem()">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"></path><polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline><polyline points="7.5 19.79 7.5 14.6 3 12"></polyline><polyline points="21 12 16.5 14.6 16.5 19.79"></polyline><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> <span data-i18n="ctx_unzip">Descomprimir aquí</span>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z">
+                                </path>
+                                <polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline>
+                                <polyline points="7.5 19.79 7.5 14.6 3 12"></polyline>
+                                <polyline points="21 12 16.5 14.6 16.5 19.79"></polyline>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                            </svg> <span data-i18n="ctx_unzip">Descomprimir aquí</span>
                         </div>
                     </div>
                 </div>
-                <div class="context-item" id="ctx-token-btn" style="display: none; color: #818cf8;" onclick="handleGenerateLinkToken()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> <span data-i18n="ctx_generate_link_token">Generar Token de Enlace</span>
+                <div class="context-item" id="ctx-token-btn" style="display: none; color: #818cf8;"
+                    onclick="handleGenerateLinkToken()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg> <span data-i18n="ctx_generate_link_token">Generar Token de Enlace</span>
                 </div>
                 <div class="context-item" id="ctx-info-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg> <span data-i18n="ctx_info">Información</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg> <span data-i18n="ctx_info">Información</span>
                 </div>
                 <div class="context-item" id="ctx-protect-btn">
-                    <span id="ctx-protect-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span> <span id="ctx-protect-text"
-                        data-i18n="ctx_protect">Proteger</span>
+                    <span id="ctx-protect-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg></span> <span id="ctx-protect-text" data-i18n="ctx_protect">Proteger</span>
                 </div>
                 <div class="context-sep" id="ctx-sep-item"></div>
                 <div class="context-item" id="ctx-delete-btn" style="color: #f87171;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> <span id="ctx-delete-text" data-i18n="ctx_delete">Mover
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg> <span id="ctx-delete-text" data-i18n="ctx_delete">Mover
                         a la
                         papelera</span>
                 </div>
                 <div class="context-item" id="ctx-restore-btn" style="display: none;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg> <span data-i18n="ctx_restore">Restaurar</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    </svg> <span data-i18n="ctx_restore">Restaurar</span>
                 </div>
                 <div class="context-item" id="ctx-empty-trash-btn" style="display: none; color: #f87171;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> <span data-i18n="ctx_empty_trash">Vaciar papelera</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg> <span data-i18n="ctx_empty_trash">Vaciar papelera</span>
                 </div>
             </div>
             <div id="ctx-creation-actions" style="display: none;">
                 <div class="context-item" onclick="handleCreateFolder()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="ctx_new_folder">Carpeta nueva</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg> <span data-i18n="ctx_new_folder">Carpeta nueva</span>
                 </div>
                 <div class="context-sep"></div>
                 <div class="context-item" onclick="triggerNewItemAction('file')">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> <span data-i18n="new_upload_file">Subir archivo</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg> <span data-i18n="new_upload_file">Subir archivo</span>
                 </div>
                 <div class="context-item" onclick="triggerNewItemAction('folder')">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="new_upload_folder">Subir carpeta</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg> <span data-i18n="new_upload_folder">Subir carpeta</span>
                 </div>
             </div>
         </div>
@@ -2532,18 +2893,31 @@
         <div id="cloud-new-menu"
             style="display: none; position: fixed; z-index: 10000; background: var(--surface-hi); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); padding: 8px; min-width: 180px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
             <div class="context-item" onclick="triggerNewItemAction('file')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> <span data-i18n="new_upload_file">Subir archivos</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg> <span data-i18n="new_upload_file">Subir archivos</span>
             </div>
             <div class="context-item" onclick="triggerNewItemAction('folder')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="new_upload_folder">Subir carpeta</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg> <span data-i18n="new_upload_folder">Subir carpeta</span>
             </div>
             <div class="context-item" onclick="triggerNewItemAction('mkdir')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> <span data-i18n="ctx_new_folder">Carpeta nueva</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg> <span data-i18n="ctx_new_folder">Carpeta nueva</span>
             </div>
         </div>
-        <input type="file" id="cloud-upload-input" style="display: none;" multiple accept="*/*" onchange="handleCloudUpload(event)">
-        <button id="cloud-fab" class="cloud-fab" onclick="showCloudNewMenu(event, document.getElementById('cloud-fab'))" title="Nuevo" data-i18n-title="btn_new" aria-label="Nuevo">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+        <input type="file" id="cloud-upload-input" style="display: none;" multiple accept="*/*"
+            onchange="handleCloudUpload(event)">
+        <button id="cloud-fab" class="cloud-fab" onclick="showCloudNewMenu(event, document.getElementById('cloud-fab'))"
+            title="Nuevo" data-i18n-title="btn_new" aria-label="Nuevo">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                stroke-linecap="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
@@ -2557,7 +2931,8 @@
                 width: 60px;
                 height: 60px;
                 border-radius: 50%;
-                background: #0f172a; /* Dark navy para modo oscuro */
+                background: #0f172a;
+                /* Dark navy para modo oscuro */
                 border: 1px solid rgba(255, 255, 255, 0.15);
                 color: #fff;
                 display: flex;
@@ -2572,29 +2947,54 @@
                 -webkit-tap-highlight-color: transparent;
                 touch-action: manipulation;
             }
+
             .cloud-fab:hover {
                 background: #1e293b;
                 box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
             }
-            
+
             [data-theme="light"] .cloud-fab {
-                background: #6366f1; /* Indigo vibrante para modo claro */
+                background: #6366f1;
+                /* Indigo vibrante para modo claro */
                 border: 1px solid rgba(0, 0, 0, 0.1);
                 box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
             }
+
             [data-theme="light"] .cloud-fab:hover {
                 background: #4f46e5;
                 box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
             }
-            .cloud-fab:active { transform: scale(0.92); }
-            .cloud-fab.open { transform: rotate(45deg); }
-            .cloud-fab.hidden { opacity: 0; pointer-events: none; transform: scale(0.4); }
-            @keyframes cloud-fab-pop {
-                from { transform: scale(0) rotate(-120deg); opacity: 0; }
-                to { transform: scale(1) rotate(0deg); opacity: 1; }
+
+            .cloud-fab:active {
+                transform: scale(0.92);
             }
+
+            .cloud-fab.open {
+                transform: rotate(45deg);
+            }
+
+            .cloud-fab.hidden {
+                opacity: 0;
+                pointer-events: none;
+                transform: scale(0.4);
+            }
+
+            @keyframes cloud-fab-pop {
+                from {
+                    transform: scale(0) rotate(-120deg);
+                    opacity: 0;
+                }
+
+                to {
+                    transform: scale(1) rotate(0deg);
+                    opacity: 1;
+                }
+            }
+
             @media (min-width: 769px) {
-                .cloud-fab { display: none; }
+                .cloud-fab {
+                    display: none;
+                }
             }
 
             /* === MOBILE: precisión de selección y respuesta táctil === */
@@ -2605,15 +3005,20 @@
                 flex-shrink: 0;
                 cursor: pointer;
             }
+
             @media (max-width: 768px) {
                 .cloud-file-row {
                     min-height: 60px;
                 }
-                .cloud-file-row, .cloud-folder-row, .cloud-file-card {
+
+                .cloud-file-row,
+                .cloud-folder-row,
+                .cloud-file-card {
                     touch-action: manipulation;
                     -webkit-user-select: none;
                     user-select: none;
                 }
+
                 .cloud-file-row .cloud-file-checkbox,
                 .cloud-folder-row .cloud-file-checkbox,
                 .cloud-file-card .cloud-file-checkbox {
@@ -2621,16 +3026,19 @@
                     width: 18px;
                     height: 18px;
                 }
+
                 .cloud-checkbox-hit {
                     padding: 12px;
                     margin: -12px;
                 }
+
                 .cloud-file-actions button,
                 .cloud-file-card-menu,
                 .cloud-folder-row-menu {
                     min-width: 40px;
                     min-height: 40px;
                 }
+
                 .cloud-row-pressed {
                     background: rgba(99, 102, 241, 0.12) !important;
                 }
@@ -2689,6 +3097,7 @@
                 border-radius: 3px;
                 padding: 0 1px;
             }
+
             [data-theme="light"] .cloud-search-hit {
                 background: #fef3c7;
                 color: #92400e;
@@ -3050,10 +3459,14 @@
         </div>
     </div>
     <button id="btn-empty-trash-fab" onclick="emptyCloudTrash()" title="Vaciar papelera"
-            data-i18n-title="ctx_empty_trash"
-            style="display: none; position: fixed; bottom: 24px; right: 24px; z-index: 9800; width: 56px; height: 56px; border-radius: 50%; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: transform 0.2s, box-shadow 0.2s, background 0.2s;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-        </button>
+        data-i18n-title="ctx_empty_trash"
+        style="display: none; position: fixed; bottom: 24px; right: 24px; z-index: 9800; width: 56px; height: 56px; border-radius: 50%; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: transform 0.2s, box-shadow 0.2s, background 0.2s;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+    </button>
     <style>
         @keyframes slideUpPanel {
             from {
@@ -3134,6 +3547,168 @@
                 }
             }
         }
+        function getCloudSearchHistory() {
+            try {
+                const user = window.CURRENT_USER || 'default';
+                const raw = localStorage.getItem(`nv_cloud_search_history_${user}`);
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveCloudSearchHistory(query) {
+            const q = String(query || '').trim();
+            if (!q) return;
+            try {
+                const user = window.CURRENT_USER || 'default';
+                let history = getCloudSearchHistory();
+                history = history.filter(item => item.toLowerCase() !== q.toLowerCase());
+                history.unshift(q);
+                if (history.length > 3) history = history.slice(0, 3);
+                localStorage.setItem(`nv_cloud_search_history_${user}`, JSON.stringify(history));
+            } catch (e) {
+                console.error("[Cloud] Error al guardar historial de búsqueda:", e);
+            }
+        }
+
+        function deleteCloudSearchHistory(e, query) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            try {
+                const user = window.CURRENT_USER || 'default';
+                let history = getCloudSearchHistory();
+                history = history.filter(item => item !== query);
+                localStorage.setItem(`nv_cloud_search_history_${user}`, JSON.stringify(history));
+                renderMobileSearchHistory();
+            } catch (err) {
+                console.error("[Cloud] Error al eliminar búsqueda del historial:", err);
+            }
+        }
+
+        function clearAllCloudSearchHistory(e) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            try {
+                const user = window.CURRENT_USER || 'default';
+                localStorage.removeItem(`nv_cloud_search_history_${user}`);
+                renderMobileSearchHistory();
+            } catch (err) {
+                console.error("[Cloud] Error al vaciar historial de búsqueda:", err);
+            }
+        }
+
+        function selectMobileSearchHistory(e, query) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const search = document.getElementById('cloud-search');
+            if (search) {
+                search.value = query;
+                const wrap = document.getElementById('cloud-search-wrapper');
+                if (wrap && wrap.hasAttribute('data-mobile-open')) {
+                    search.blur();
+                } else {
+                    search.focus();
+                }
+            }
+            saveCloudSearchHistory(query);
+            hideMobileSearchHistory();
+            closeSearchPalette();
+            const overlay = document.getElementById('mobile-search-overlay');
+            if (overlay) overlay.style.display = 'none';
+            const closeBtn = document.getElementById('btn-close-mobile-search');
+            if (closeBtn) closeBtn.style.display = 'flex';
+            if (typeof filterCloudFiles === 'function') {
+                filterCloudFiles();
+            }
+        }
+
+        function handleCloudSearchInput(val) {
+            if (!val || val.trim() === '') {
+                renderMobileSearchHistory();
+            } else {
+                hideMobileSearchHistory();
+            }
+        }
+
+        function hideMobileSearchHistory() {
+            const container = document.getElementById('cloud-mobile-search-history');
+            if (container) container.style.display = 'none';
+            const wrap = document.getElementById('cloud-search-wrapper');
+            if (wrap) wrap.classList.remove('is-active');
+        }
+
+        function renderMobileSearchHistory() {
+            const container = document.getElementById('cloud-mobile-search-history');
+            if (!container) return;
+            const history = getCloudSearchHistory().slice(0, 3);
+            if (!history || history.length === 0) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                const wrap = document.getElementById('cloud-search-wrapper');
+                if (wrap) wrap.classList.remove('is-active');
+                return;
+            }
+
+            const wrap = document.getElementById('cloud-search-wrapper');
+            if (wrap) wrap.classList.add('is-active');
+
+            const headerTitle = (window.I18n && typeof window.I18n.t === 'function') ? window.I18n.t('search_history') : 'Búsquedas recientes';
+            const deleteTitle = (window.I18n && typeof window.I18n.t === 'function') ? window.I18n.t('search_history_delete') : 'Eliminar';
+
+            let html = `
+                <div style="padding: 8px 16px 6px; font-size: 0.7rem; color: #94a3b8; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.85;">${headerTitle}</div>
+            `;
+
+            history.forEach(item => {
+                const escapedItem = item.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const jsItem = JSON.stringify(item);
+                html += `
+                    <div class="cloud-search-history-row" onpointerdown="selectMobileSearchHistory(event, ${jsItem.replace(/"/g, '&quot;')})" style="display: flex; align-items: center; padding: 10px 16px; cursor: pointer; gap: 10px; color: #e2e8f0; user-select: none;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.85; flex-shrink: 0; color: #818cf8; pointer-events: none;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        <span style="font-size: 0.88rem; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;">${escapedItem}</span>
+                        <button type="button" title="${deleteTitle}" onpointerdown="event.stopPropagation(); deleteCloudSearchHistory(event, ${jsItem.replace(/"/g, '&quot;')})" style="background: none; border: none; color: #94a3b8; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; padding: 0; flex-shrink: 0; transition: all 0.15s; opacity: 0.7;" onmouseover="this.style.opacity='1'; this.style.color='#f87171'; this.style.background='rgba(239, 68, 68, 0.2)';" onmouseout="this.style.opacity='0.7'; this.style.color='#94a3b8'; this.style.background='transparent';">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            container.style.display = 'block';
+        }
+
+        /* === COMMAND PALETTE: open/close === */
+        function openSearchPalette() {
+            const search = document.getElementById('cloud-search');
+            const backdrop = document.getElementById('cloud-search-backdrop');
+            if (!search) return;
+
+            if (!search.value.trim()) {
+                renderMobileSearchHistory();
+            }
+            // En móvil el backdrop lo proporciona #mobile-search-overlay, así
+            // que aquí solo mostramos el backdrop de escritorio para no
+            // oscurecer dos veces.
+            const wrap = document.getElementById('cloud-search-wrapper');
+            const isMobile = wrap && wrap.hasAttribute('data-mobile-open');
+            if (backdrop && !isMobile) backdrop.classList.add('visible');
+        }
+
+        function closeSearchPalette() {
+            hideMobileSearchHistory();
+            const wrap = document.getElementById('cloud-search-wrapper');
+            if (wrap) wrap.classList.remove('is-active');
+            const backdrop = document.getElementById('cloud-search-backdrop');
+            if (backdrop) backdrop.classList.remove('visible');
+        }
+
         function clearMobileSearch() {
             const search = document.getElementById('cloud-search');
             const closeBtn = document.getElementById('btn-close-mobile-search');
@@ -3141,33 +3716,35 @@
                 search.value = '';
                 search.focus();
                 if (closeBtn) closeBtn.style.display = 'none';
+                renderMobileSearchHistory();
                 if (typeof filterCloudFiles === 'function') filterCloudFiles();
             }
         }
 
         function closeMobileSearch() {
-            const wrap = document.querySelector('.cloud-header > div:last-child > div:has(#cloud-search)');
+            const wrap = document.getElementById('cloud-search-wrapper');
             const search = document.getElementById('cloud-search');
             const overlay = document.getElementById('mobile-search-overlay');
             const header = document.querySelector('.cloud-header');
 
+            hideMobileSearchHistory();
+            closeSearchPalette();
+
             if (!wrap) return;
             wrap.removeAttribute('data-mobile-open');
             wrap.style.cssText = 'display: none !important;';
-            search.value = '';
+            if (search) search.value = '';
 
             if (header) {
                 header.style.zIndex = '';
             }
 
-            // Revertir estilos del input sin borrar los originales
             if (search) {
-                search.style.width = '300px';
+                search.style.width = '';
                 search.style.boxSizing = '';
-                search.style.fontSize = '0.85rem';
+                search.style.fontSize = '';
             }
 
-            // Restaurar padding en el contenedor correcto
             const explorerMain = document.getElementById('cloud-explorer-main');
             if (explorerMain) explorerMain.style.paddingTop = '';
             const fileList = document.getElementById('cloud-file-list');
@@ -3180,14 +3757,26 @@
             if (typeof filterCloudFiles === 'function') filterCloudFiles();
         }
 
-        function submitMobileSearch() {
+        function submitMobileSearch(e) {
+            if (e && typeof e.preventDefault === 'function') {
+                e.preventDefault();
+                e.stopPropagation();
+            }
             const search = document.getElementById('cloud-search');
-            if (search) search.blur(); // Solo ocultar teclado
+            const query = search ? search.value.trim() : '';
+            if (query) {
+                saveCloudSearchHistory(query);
+            }
+            hideMobileSearchHistory();
+            closeSearchPalette();
+            if (search) search.blur();
+            const overlay = document.getElementById('mobile-search-overlay');
+            if (overlay) overlay.style.display = 'none';
             if (typeof filterCloudFiles === 'function') filterCloudFiles();
         }
 
         function toggleMobileSearch() {
-            const wrap = document.querySelector('.cloud-header > div:last-child > div:has(#cloud-search)');
+            const wrap = document.getElementById('cloud-search-wrapper');
             const search = document.getElementById('cloud-search');
 
             if (!wrap) return;
@@ -3199,7 +3788,6 @@
                 return;
             }
 
-            // Calcular top real del header
             const header = document.querySelector('.cloud-header');
             const headerBottom = header ? header.getBoundingClientRect().bottom : 52;
 
@@ -3215,10 +3803,10 @@
                 'z-index: 1000 !important',
                 'display: block !important',
                 'box-shadow: 0 8px 16px rgba(0,0,0,0.5) !important',
-                'box-sizing: border-box !important'
+                'box-sizing: border-box !important',
+                'max-width: 100% !important'
             ].join(';');
 
-            // Modificar propiedades individuales para no borrar el padding/border original
             if (search) {
                 search.style.width = '100%';
                 search.style.boxSizing = 'border-box';
@@ -3229,17 +3817,19 @@
             const btnClose = document.getElementById('btn-close-mobile-search');
             if (btnClose) btnClose.style.display = 'flex';
 
-            // Empujar el contenido: padding en cloud-explorer-main (el flex container)
-            const SEARCH_BAR_HEIGHT = 56; // padding 10+10 + input ~36px
+            renderMobileSearchHistory();
+
+            const SEARCH_BAR_HEIGHT = 68; // padding 10+10 + input ~44px + margen visual
             const explorerMain = document.getElementById('cloud-explorer-main');
             if (explorerMain) explorerMain.style.paddingTop = SEARCH_BAR_HEIGHT + 'px';
 
-            // Overlay transparente debajo de la barra para cerrar al tocar fuera
             let overlay = document.getElementById('mobile-search-overlay');
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.id = 'mobile-search-overlay';
-                overlay.onclick = closeMobileSearch;
+                overlay.onclick = function () {
+                    closeMobileSearch();
+                };
                 document.body.appendChild(overlay);
             }
             overlay.style.cssText = [
@@ -3254,16 +3844,41 @@
                 'backdrop-filter: blur(2px) !important'
             ].join(';');
 
-            // Aumentar el z-index del header para que esté por encima del overlay
             if (header) {
                 if (!header.style.position) header.style.position = 'relative';
                 header.style.zIndex = '1001';
             }
         }
 
+        // Cerrar popover de búsqueda al hacer clic fuera.
+        // Se usa pointerdown (válido para ratón y táctil) y se ignora la
+        // interacción dentro del overlay móvil, que se cierra con su propio
+        // onclick para no cerrar el buscador antes de tiempo.
+        document.addEventListener('pointerdown', function (e) {
+            const wrap = document.getElementById('cloud-search-wrapper');
+            if (!wrap) return;
+            const overlay = document.getElementById('mobile-search-overlay');
+            const insideWrap = wrap.contains(e.target);
+            const insideOverlay = !!overlay && overlay.contains(e.target);
+            if (insideWrap || insideOverlay) return;
+            if (!wrap.hasAttribute('data-mobile-open')) {
+                closeSearchPalette();
+            }
+        });
+
         document.addEventListener('keydown', function (e) {
+            // Ctrl+K / ⌘K → focus search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                const search = document.getElementById('cloud-search');
+                if (search) {
+                    search.focus();
+                    search.select();
+                }
+                return;
+            }
             if (e.key === 'Escape') {
-                const wrap = document.querySelector('.cloud-header > div:last-child > div:has(#cloud-search)');
+                const wrap = document.getElementById('cloud-search-wrapper');
                 if (wrap && wrap.hasAttribute('data-mobile-open')) {
                     closeMobileSearch();
                     return;
@@ -3272,6 +3887,7 @@
                 if (search && document.activeElement === search) {
                     search.value = '';
                     search.blur();
+                    closeSearchPalette();
                     if (typeof filterCloudFiles === 'function') filterCloudFiles();
                 }
             }

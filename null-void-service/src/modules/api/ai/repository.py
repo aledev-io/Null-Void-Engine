@@ -64,7 +64,13 @@ def _migrate_v1_attachments():
     <DATA_DIR>/ai/<uid>/ con metadata en ai_attachment_files y
     ai_messages.attachments queda solo con la FK [{id}]. Las escrituras se
     hacen con conexiones cerradas para no bloquear al módulo cloud."""
-    from modules.api.cloud import services as cloud_services
+    # Las operaciones de storage (ai_save_file_uid, ai_root_for_uid, safe_join)
+    # pasan por el StorageContract. La metadata de ai_attachment_files (get/add)
+    # pertenece al subsistema de almacenamiento de IA de Cloud y solo se usa aquí,
+    # en la migración legacy v1, para reconstruir metadata de archivos ya en disco;
+    # se accede vía cloud.repository como excepción documentada (no se traslada a
+    # StorageContract, que debe seguir siendo pequeño y no un repositorio).
+    from modules.storage import store
     from modules.api.cloud import repository as cloud_repo
     import base64
     import os as _os
@@ -99,7 +105,7 @@ def _migrate_v1_attachments():
                             payload = data.encode("utf-8")
                     except Exception:
                         continue
-                    ref = cloud_services.ai_save_file_uid(uid, name, payload, check_quota=False)
+                    ref = store.ai_save_file_uid(uid, name, payload, check_quota=False)
                     if isinstance(ref, dict) and ref.get("id"):
                         new_atts.append({"id": ref["id"]})
                     continue
@@ -107,19 +113,19 @@ def _migrate_v1_attachments():
                     continue
                 # Refs legacy (id = nombre en disco) o ya uuid: asegurar metadata
                 if not cloud_repo.get_ai_attachment(uid, file_id):
-                    root = cloud_services.ai_root_for_uid(uid)
+                    root = store.ai_root_for_uid(uid)
                     safe_name = _os.path.basename(str(file_id))
                     exists = False
                     if root:
                         try:
-                            exists = _os.path.isfile(cloud_services.safe_join(root, safe_name))
+                            exists = _os.path.isfile(store.safe_join(root, safe_name))
                         except ValueError:
                             exists = False
                     if not exists:
                         continue
-                    flags = cloud_services._ai_ext_flags(safe_name)
+                    flags = store.ai_ext_flags(safe_name)
                     try:
-                        with open(cloud_services.safe_join(root, safe_name), 'rb') as fh:
+                        with open(store.safe_join(root, safe_name), 'rb') as fh:
                             size = len(fh.read())
                     except Exception:
                         size = 0
@@ -141,7 +147,7 @@ def _migrate_v2_workspace_files():
     """v2: el contenido de los archivos de workspace (ai_workspace_files)
     pasa a <DATA_DIR>/ai/<uid>/ con metadata en ai_attachment_files; la fila
     conserva solo la FK (file_id)."""
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     with get_db() as conn:
         conn.execute(_AI_ATTACHMENT_TABLE_DDL)
         _ensure_column(conn, "ai_workspace_files", "file_id", "TEXT")
@@ -168,7 +174,7 @@ def _migrate_v2_workspace_files():
                 ).fetchone()
             if not owner:
                 continue
-            ref = cloud_services.ai_save_file_uid(owner['user_id'], filename or "archivo",
+            ref = store.ai_save_file_uid(owner['user_id'], filename or "archivo",
                                                   content.encode("utf-8"), check_quota=False)
             if isinstance(ref, dict) and ref.get("id"):
                 updates.append((ref["id"], fid))
@@ -184,7 +190,7 @@ def _migrate_v3_notes():
     """v3: el contenido de las notas de IA (ai_notes) pasa a
     <DATA_DIR>/ai/<uid>/ con metadata en ai_attachment_files; la nota
     conserva solo la FK (file_id)."""
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     with get_db() as conn:
         conn.execute(_AI_ATTACHMENT_TABLE_DDL)
         _ensure_column(conn, "ai_notes", "file_id", "TEXT")
@@ -207,7 +213,7 @@ def _migrate_v3_notes():
                 continue
             if not isinstance(content, str):
                 content = str(content)
-            ref = cloud_services.ai_save_file_uid(uid, _note_filename(title),
+            ref = store.ai_save_file_uid(uid, _note_filename(title),
                                                   content.encode("utf-8"), check_quota=False)
             if isinstance(ref, dict) and ref.get("id"):
                 updates.append((ref["id"], nid))
@@ -285,8 +291,8 @@ def _resolve_attachment_refs(uid, atts):
             ids.append(a)
     if not ids:
         return []
-    from modules.api.cloud import services as cloud_services
-    return cloud_services.ai_get_refs_by_uid(uid, ids)
+    from modules.storage import store
+    return store.ai_get_refs_by_uid(uid, ids)
 
 
 def get_session_messages(uid: str, session_id: str) -> list[dict]:
@@ -422,7 +428,7 @@ def _cleanup_orphan_attachments(orphan_attachments):
     """Borra metadata + archivo físico de adjuntos huérfanos (sesiones eliminadas)."""
     if not orphan_attachments:
         return
-    from modules.api.cloud import services as cloud_services
+    from modules.storage import store
     seen = set()
     for owner, ids in orphan_attachments:
         key = (owner, tuple(sorted(ids)))
@@ -430,7 +436,7 @@ def _cleanup_orphan_attachments(orphan_attachments):
             continue
         seen.add(key)
         try:
-            cloud_services.ai_cleanup_attachments(owner, ids)
+            store.ai_cleanup_attachments(owner, ids)
         except Exception:
             pass
 
@@ -712,8 +718,8 @@ def get_user_notes(user_id: str) -> list:
             content = r['content'] or ""
             if r['file_id']:
                 # El contenido vive en disco (gestionado por el módulo cloud)
-                from modules.api.cloud import services as cloud_services
-                data = cloud_services.ai_read_file_by_uid(r['user_id'], r['file_id'])
+                from modules.storage import store
+                data = store.ai_read_file_by_uid(r['user_id'], r['file_id'])
                 if data is not None:
                     content = data.decode("utf-8", errors="replace")
                 else:

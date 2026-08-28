@@ -292,5 +292,5 @@ def download_file(dl_token):
                         headers={'Content-Disposition': f'attachment; filename="{safe_zip_name}.zip"'}), None
 
     ext = os.path.splitext(clean_single_name)[1].lower()
-    is_attachment = force_dl or (ext not in ('.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt'))
+    is_attachment = force_dl or (ext not in ('.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt', '.md', '.json'))
     return send_file(target, as_attachment=is_attachment, download_name=clean_single_name), None

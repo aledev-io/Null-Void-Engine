@@ -29,7 +29,7 @@ def init_user_cloud(user_id):
     os.makedirs(user_root, exist_ok=True)
     os.makedirs(os.path.join(user_root, '.computers'), exist_ok=True)
     os.makedirs(os.path.join(user_root, '.trash'), exist_ok=True)
-    for f in ('.activity.json', '.starred.json', '.protected.json', '.trash.json'):
+    for f in ('.activity.json', '.starred.json', '.protected.json', '.unprotected.json', '.trash.json'):
         p = os.path.join(user_root, f)
         if not os.path.exists(p):
             _save_json(user_root, f, [])

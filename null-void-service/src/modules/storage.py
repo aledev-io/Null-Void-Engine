@@ -110,6 +110,22 @@ class StorageContract(Protocol):
         """Mueve adjuntos huérfanos de IA a la papelera (borrado de sesiones)."""
         ...
 
+    def ai_ext_flags(self, filename):
+        """Clasifica un archivo de IA (mime, es_imagen/texto/audio) por su nombre."""
+        ...
+
+    # ── Archivos gestionados bajo la raíz del usuario (subcarpetas) ──
+    def save_user_file(self, uid, subpath, filename, src_path):
+        """Guarda <src_path> como <user_root>/<subpath>/<filename> del usuario
+        (copia o enlace) y ajusta la contabilidad de tamaño. Devuelve la ruta
+        destino, o None si no se pudo resolver la raíz del usuario."""
+        ...
+
+    def delete_user_path(self, uid, subpath):
+        """Elimina <user_root>/<subpath> (archivo o árbol) del usuario y ajusta
+        la contabilidad de tamaño. Devuelve True si existía y se eliminó."""
+        ...
+
 
 class CloudStorageAdapter:
     """Adapter pasamuros sobre la implementación actual de Cloud.
@@ -188,6 +204,54 @@ class CloudStorageAdapter:
     def ai_cleanup_attachments(self, uid, ids):
         from modules.api.cloud import services as cs
         return cs.ai_cleanup_attachments(uid, ids)
+
+    def ai_ext_flags(self, filename):
+        from modules.api.cloud import services as cs
+        return cs._ai_ext_flags(filename)
+
+    # ── Archivos gestionados bajo la raíz del usuario ─────────────
+    def save_user_file(self, uid, subpath, filename, src_path):
+        import os
+        import shutil
+        from modules.api.cloud import services as cs
+        root = cs.user_root_for_uid(uid)
+        if not root:
+            return None
+        target_dir = cs.safe_join(root, subpath)
+        os.makedirs(target_dir, exist_ok=True)
+        dest = cs.safe_join(target_dir, filename)
+        size = os.path.getsize(src_path)
+        existing = os.path.getsize(dest) if os.path.exists(dest) else 0
+        cs.get_dir_size(root)  # primar el caché de tamaño (uso previo a la escritura)
+        try:
+            if os.path.exists(dest):
+                os.unlink(dest)
+            os.link(src_path, dest)
+        except OSError:
+            if os.path.exists(dest):
+                os.unlink(dest)
+            shutil.copy2(src_path, dest)
+        cs.bump_size_cache(uid, size - existing)
+        return dest
+
+    def delete_user_path(self, uid, subpath):
+        import os
+        import shutil
+        from modules.api.cloud import services as cs
+        root = cs.user_root_for_uid(uid)
+        if not root:
+            return False
+        target = cs.safe_join(root, subpath)
+        if not os.path.exists(target):
+            return False
+        cs.get_dir_size(root)  # primar el caché (incluye el destino a borrar)
+        freed = cs._path_size(target)
+        if os.path.isdir(target):
+            shutil.rmtree(target)
+        else:
+            os.remove(target)
+        cs.bump_size_cache(uid, -freed)
+        return True
 
 
 # Instancia singleton consumida por AI / Chat / Invoices.

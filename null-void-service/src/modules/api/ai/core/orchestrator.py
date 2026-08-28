@@ -356,9 +356,13 @@ def _write_confirmation(executed_tool_calls, lang="es"):
 
 def _persist_attachments(uid, attachments):
     """Guarda los adjuntos con payload en el almacenamiento de cloud."""
-    from modules.api.cloud import services as cloud_services
+    # El storage de IA pasa por el StorageContract. get_token() es acceso al
+    # token de la petición (infraestructura neutral), no una operación de
+    # almacenamiento, por lo que se toma de _infra (no de cloud.services).
+    from modules.storage import store
+    from modules.api.cloud import _infra
     from modules.session import session as sess
-    token = cloud_services.get_token()
+    token = _infra.get_token()
     if not token or not uid:
         return attachments
     username = sess.get_user(token)
@@ -380,7 +384,7 @@ def _persist_attachments(uid, attachments):
             except Exception:
                 out.append(att)
                 continue
-            ref = cloud_services.ai_save_file(token, filename, payload, username, uid)
+            ref = store.ai_save_file(token, filename, payload, username, uid)
             if "error" in ref:
                 out.append(att)
                 continue
@@ -554,11 +558,11 @@ def stream_chat(uid: Optional[str], data: dict):
 
                         if not att_text and att_id:
                             try:
-                                from modules.api.cloud import services as cloud_services
-                                file_path = cloud_services.ai_download_file_by_uid(uid, att_id)
+                                from modules.storage import store
+                                file_path = store.ai_download_file_by_uid(uid, att_id)
                                 if file_path and os.path.exists(file_path):
                                     ext = os.path.splitext(file_path)[1].lower()
-                                    flags = cloud_services._ai_ext_flags(file_path)
+                                    flags = store.ai_ext_flags(file_path)
                                     if flags.get("is_text"):
                                         with open(file_path, "r", encoding="utf-8", errors="replace") as af:
                                             att_text = af.read()
@@ -922,7 +926,8 @@ def stream_chat(uid: Optional[str], data: dict):
             if not agenda_disabled and re.search(r"borra(?:r)?|elimina(?:r)?|quita(?:r)?|quitar|\bdelete\b|\bremove\b", last_user_text, re.IGNORECASE):
                 skip_model = True
                 if re.search(r"\btod[oa]s?\b|\b(all|everything)\b|\btodo\s+el\s+historial\b", last_user_text, re.IGNORECASE):
-                    _all_events = tools.get_user_events(uid)
+                    from modules.api.events.services import get_user_events
+                    _all_events = get_user_events(uid)
                     _target_type = None
                     if re.search(r"\btareas?\b|\btasks?\b", last_user_text, re.IGNORECASE):
                         _target_type = "task"

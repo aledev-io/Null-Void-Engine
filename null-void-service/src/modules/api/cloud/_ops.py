@@ -43,7 +43,8 @@ def rename_item(view, old_name, new_name, subpath, token):
     base_root = get_user_root(token)
     view = resolve_protect_view(base_root, view, subpath, old_name)
     protected_data = _load_json(base_root, '.protected.json')
-    if is_item_protected(protected_data, view, subpath, old_name):
+    unprotected_data = _load_json(base_root, '.unprotected.json')
+    if is_item_protected(protected_data, view, subpath, old_name, unprotected_data):
         return "Este elemento está protegido: no puede renombrarse"
 
     # Limpiar el nuevo nombre de caracteres de control
@@ -152,8 +153,9 @@ def move_item(view, name, old_subpath, new_subpath, token):
     base_root = get_user_root(token)
     if view not in ('computers', 'backups', 'business', 'trash'):
         protected_data = _load_json(base_root, '.protected.json')
+        unprotected_data = _load_json(base_root, '.unprotected.json')
         resolved_view = resolve_protect_view(base_root, view, old_subpath, name)
-        if is_item_protected(protected_data, resolved_view, old_subpath, name):
+        if is_item_protected(protected_data, resolved_view, old_subpath, name, unprotected_data):
             return "Este elemento está protegido: no puede moverse"
 
     try:

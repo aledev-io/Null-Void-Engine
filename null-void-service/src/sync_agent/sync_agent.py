@@ -11,7 +11,7 @@ AGENT_TOKENS = {}
 
 def _db_store_link_token(token, original_token, username, expires, target_device=""):
     """Persiste un token de enlace en la base de datos."""
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         conn.execute("DELETE FROM agent_link_tokens WHERE expires < ?", (time.time(),))
         try:
@@ -37,7 +37,7 @@ def _db_store_link_token(token, original_token, username, expires, target_device
 
 def _db_get_device_for_token(token):
     """Fila de cloud_devices del token, o None si no es un token de dispositivo."""
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         return conn.execute(
             "SELECT d.id, d.name, d.user_id FROM cloud_device_tokens t "
@@ -47,7 +47,7 @@ def _db_get_device_for_token(token):
 
 def _db_get_link_token(token, consume=False):
     """Obtiene y opcionalmente consume (elimina) un token de enlace de la DB."""
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         row = None
         try:
@@ -106,21 +106,18 @@ def get_agent_token():
     token = request.headers.get('Authorization')
     if token and token.startswith('Bearer '):
         return token.split(' ')[1]
-    from src.modules.api.cloud.services import get_token as _get_flask_token
+    from modules.api.cloud.services import get_token as _get_flask_token
     return _get_flask_token()
 
 
 def _get_user_root_by_username(username):
-    from src.core.database import get_db
-    from src.modules.api.cloud.services import BASE_CLOUD_ROOT
-    from werkzeug.security import safe_join
+    from core.database import get_db
+    from core.cloud_paths import user_root_for_uid
     with get_db() as conn:
         user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (username,)).fetchone()
         if not user_row: return None
         uid = user_row['user_id']
-        safe_uid = "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-        if not safe_uid: safe_uid = "unknown"
-        return safe_join(BASE_CLOUD_ROOT, safe_uid)
+        return user_root_for_uid(uid)
 
 
 def handle_ping(token, username, data):
@@ -145,7 +142,7 @@ def handle_ping(token, username, data):
     client_ver = data.get('version', '1.0.0')
     latest_ver = "1.0.0"
 
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         conn.execute("UPDATE cloud_devices SET last_seen = ?, os = ?, ip_address = ?, version = ? WHERE id = ?",
                      (time.time(), os_name, ip, client_ver, device_id))
@@ -164,7 +161,7 @@ def handle_disconnect(token, username, data):
     if not dev:
         return jsonify(error="Acceso denegado: token de dispositivo inválido"), 403
 
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         conn.execute("UPDATE cloud_devices SET last_seen = 0 WHERE id = ?", (dev['id'],))
         conn.commit()
@@ -247,7 +244,7 @@ def handle_list_devices(data):
 
     username = token_data["username"]
     target_device = token_data.get("target_device", "")
-    from src.core.database import get_db
+    from core.database import get_db
     try:
         with get_db() as conn:
             user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (username,)).fetchone()
@@ -267,7 +264,7 @@ def handle_list_devices(data):
 
 def _db_get_user_from_device_token(token):
     """Resuelve (user_id, username) desde el token Bearer de un dispositivo vinculado."""
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         return conn.execute(
             "SELECT u.user_id, u.username FROM cloud_device_tokens t "
@@ -290,7 +287,7 @@ def handle_my_devices(bearer_token):
     if not row:
         return jsonify(error="No autorizado"), 401
     uid, username = row["user_id"], row["username"]
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         rows = conn.execute(
             "SELECT name, os, last_seen FROM cloud_devices WHERE user_id = ? ORDER BY last_seen DESC",
@@ -301,7 +298,7 @@ def handle_my_devices(bearer_token):
 
 
 def handle_generate_token(token, username, target_device=""):
-    from src.core.database import get_db
+    from core.database import get_db
     now = time.time()
     
     # Buscar si ya existe un token activo vigente para este usuario y target_device
@@ -385,7 +382,7 @@ def handle_register(data):
 
     device_token = secrets.token_urlsafe(32)
     
-    from src.core.database import get_db
+    from core.database import get_db
     with get_db() as conn:
         user_row = conn.execute("SELECT user_id FROM users WHERE username = ?", (user_name,)).fetchone()
         if user_row:
@@ -427,7 +424,7 @@ def _server_tls_fingerprint():
     la confianza (pinning) y detectar suplantaciones (MITM)."""
     try:
         import hashlib
-        from src.config.config import CONFIG
+        from config.config import CONFIG
         from cryptography import x509
         from cryptography.hazmat.primitives import serialization
         if not os.path.exists(CONFIG.CERT_FILE):

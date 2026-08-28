@@ -123,7 +123,6 @@ def delete_conversation(user_id, contact_id):
     ok = repository.delete_conversation(user_id, contact_id)
     return ok, "Conversación eliminada" if ok else "No se pudo eliminar"
 
-import shutil
 import sys
 def clear_conversation(user_id, contact_id, delete_files=False):
     if delete_files:
@@ -131,12 +130,8 @@ def clear_conversation(user_id, contact_id, delete_files=False):
             # Eliminar la carpeta del usuario en Cloud -> Mensajeria -> contact_username
             contact_data = repository.get_contact_by_id(contact_id)
             if contact_data:
-                from modules.api.cloud.services import BASE_CLOUD_ROOT
-                def sanitize_uid(uid):
-                    return "".join([c for c in str(uid) if c.isalnum() or c in (' ', '.', '_', '-')]).strip() or "unknown"
-                cloud_dir = os.path.join(BASE_CLOUD_ROOT, sanitize_uid(user_id), "Mensajeria", contact_data['username'])
-                if os.path.exists(cloud_dir):
-                    shutil.rmtree(cloud_dir)
+                from modules.storage import store
+                store.delete_user_path(user_id, f"Mensajeria/{contact_data['username']}")
         except Exception as e:
             sys.stderr.write(f"[CHAT][ERROR] Error al vaciar archivos en cloud: {e}\n")
 
