@@ -1,81 +1,89 @@
-.venv/
-venv/
-ENV/
-env/
+# ============================================================
+# Android / Gradle
+# ============================================================
+.gradle/
+.cxx/
+local.properties
+*.hprof
+captures/
+.externalNativeBuild/
+
+# ============================================================
+# Python
+# ============================================================
 __pycache__/
-**/__pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
-**/.pytest_cache/
-
-# Configs y secretos
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+*.whl
+*.tmp
+*.temp
+*.bak
+*.enc
+# ============================================================
+# Entorno y secretos
+# ============================================================
 .env
 .secrets/
+certs/
+apps/null-void-app/android/app/google-services.json
 
-# Bases de datos y datos
+# ============================================================
+# Datos y bases de datos
+# ============================================================
 data/
 *.db
-*.csv
+*.db-shm
+*.db-wal
 notifications_*.json
 
-# Certificados
-certs/
+# ============================================================
+# Builds y artefactos
+# ============================================================
+dist/
+build/
+*.spec
+*.exe
+*.bin
+*_release.py
+apps/client_agent/.build.lock
 
-# IDEs
+# ============================================================
+# Node / npm
+# ============================================================
+node_modules/
+
+# ============================================================
+# Logs y datos de ejecución
+# ============================================================
+logs
+*.log
+*.jsonl
+*.pkl
+*.gguf
+
+# ============================================================
+# Tests y documentación interna (no publicar)
+# ============================================================
+tests/
+docs/
+
+# ============================================================
+# IDEs y herramientas
+# ============================================================
 .vscode/
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
 *.swp
 *.iml
 
-# Binarios y Builds Python
-*.bin
-dist/
-build/
-**/dist/
-**/build/
-**/venv/
-*.spec
-*.exe
-agent_release.py
-*_release.py
-docs
-null-void-app/android/.gradle/
-null-void-app/android/build/
-null-void-app/android/app/build/
-null-void-app/android/local.properties
-null-void-app/android/app/google-services.json
-.cxx/
-.externalNativeBuild/
+# ============================================================
+# Herramientas de desarrollo (IA)
+# ============================================================
 .opencode
-
-client_agent/.build.lock
-tests/
-logs
 .agents
 .ignore
-node_modules/
-**/node_modules/
-*.whl
-*.egg-info/
-*.map
-*.bundle.js
-*.chunk.js
-*.log
-*.jsonl
-*.parquet
-*.avro
-*.pkl
-*.apk
-*.aab
-*.dex
-*.gguf
-.cache/
-**/.cache/
-docs/ARCHITECTURE_DEPENDENCY_AUDIT.md
-null-void-service/src/modules/logs/ai_conversations_audit.txt
-null-void-service/src/modules/logs/ai_conversations_audit.txt

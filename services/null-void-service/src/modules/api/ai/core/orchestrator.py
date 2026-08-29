@@ -399,7 +399,7 @@ def _persist_attachments(uid, attachments):
 def _log_ai_conversation_audit(uid, model_name, privacy_mode, original_msgs, sent_msgs):
     """Registra en logs el mensaje original y el procesado enviado a la IA."""
     try:
-        log_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "logs")
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "logs")
         os.makedirs(log_dir, exist_ok=True)
         file_path = os.path.join(log_dir, "ai_conversations_audit.txt")
 

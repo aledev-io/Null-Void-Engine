@@ -1,13 +1,13 @@
 services:
   nullvoid-engine:
-    build: ./null-void-service
+    build: ./services/null-void-service
     container_name: nullvoid-engine
     network_mode: "host"
     volumes:
       - ${DATA_HOST_DIR:-./data/app}:/app/data
       - ${SCRAPER_HOST_DIR:-./data/scraper}:/app/scraper_data
-      - ./null-void-service/src:/app/src
-      - ./client_agent:/app/client_agent
+      - ./services/null-void-service/src:/app/src
+      - ./apps/client_agent:/app/client_agent
       - ${SECRETS_HOST_DIR:-./.secrets}:/app/.secrets:ro
       - ${CERTS_HOST_DIR:-./certs}:/app/certs:ro
       # Socket de Docker para que la app arranque/pare el contenedor de
@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     environment:
-      - DEBUG=true
+      - DEBUG=${DEBUG:-false}
       - FLASK_PORT=5000
       - HOST=0.0.0.0
       - OLLAMA_HOST=http://127.0.0.1:11434
@@ -59,7 +59,7 @@ services:
 
   nullvoid-scraper:
     build:
-      context: ./scraper_service
+      context: ./services/scraper_service
     profiles: ["scraper"]
     network_mode: "host"
     container_name: nullvoid-scraper

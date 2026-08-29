@@ -35,5 +35,5 @@ dist/
 build/
 tests/
 .opencode/
-client_agent/dist/
-client_agent/venv/
+apps/client_agent/dist/
+apps/client_agent/venv/
