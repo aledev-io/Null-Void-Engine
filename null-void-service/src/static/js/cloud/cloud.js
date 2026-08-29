@@ -2459,6 +2459,8 @@ function _injectPdfViewerStyles() {
     s.id = 'nv-pdf-viewer-style';
     s.textContent = `
 #nv-pdf-viewer{display:flex;flex-direction:column;width:100%;height:78vh;background:#fff;border-radius:8px;overflow:hidden;font-size:14px;color:#1f2937}
+#nv-pdf-viewer.nv-pdf-mobile-mode{height:100%;border-radius:0}
+#nv-pdf-viewer.nv-pdf-mobile-mode .nv-pdf-toolbar{display:none}
 .nv-pdf-toolbar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px 8px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;flex-shrink:0}
 .nv-pdf-toolbar button,.nv-pdf-search button{min-width:32px;height:32px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0 6px;color:#1f2937}
 .nv-pdf-toolbar button:hover,.nv-pdf-search button:hover{background:#e5e7eb}
@@ -2479,7 +2481,17 @@ function _injectPdfViewerStyles() {
 .nv-pdf-search .nv-pdf-search-count{color:#6b7280;font-size:12px;white-space:nowrap}
 .nv-pdf-toolbar .nv-pdf-zoomlabel{color:#374151;font-size:12px;min-width:42px;text-align:center}
 [data-theme="dark"] #nv-pdf-viewer{background:#fff}
-@media (max-width:768px){.nv-pdf-toolbar{gap:2px}.nv-pdf-toolbar button{min-width:30px;height:30px}}`;
+@media (max-width:768px){.nv-pdf-toolbar{gap:2px}.nv-pdf-toolbar button{min-width:30px;height:30px}}
+.btn-minimal{background:transparent;border:none;outline:none;-webkit-tap-highlight-color:transparent;cursor:pointer;padding:0;color:#fff;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border-radius:50%;transition:transform .1s ease,opacity .1s ease}
+.btn-minimal:active{transform:scale(0.95);opacity:0.7}
+.btn-minimal:focus{outline:none}
+.btn-minimal svg{width:22px;height:22px;pointer-events:none}
+.nv-pdf-mobile-toolbar{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:999px;background:rgba(30,30,30,0.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 4px 20px rgba(0,0,0,0.35);z-index:10001}
+.nv-pdf-mobile-page-panel{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom));transform:translateX(-50%);display:none;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:rgba(30,30,30,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:10001;color:#fff;font-size:14px}
+.nv-pdf-mobile-page-panel.open{display:flex}
+.nv-pdf-mobile-page-panel input{width:42px;height:30px;text-align:center;border:1px solid rgba(255,255,255,0.25);border-radius:6px;background:rgba(255,255,255,0.12);color:#fff;font-size:14px}
+.nv-pdf-mobile-page-panel button{background:transparent;border:none;color:#fff;font-size:20px;min-width:36px;min-height:36px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border-radius:50%;-webkit-tap-highlight-color:transparent}
+.nv-pdf-mobile-page-panel button:active{transform:scale(0.95);opacity:0.7}`;
     document.head.appendChild(s);
 }
 
@@ -2595,6 +2607,7 @@ class NvPdfViewer {
             case 'searchprev': this.stepSearch(-1); break;
             case 'searchnext': this.stepSearch(1); break;
             case 'close': closeCloudPreview(); break;
+            case 'mobilepages': this.toggleMobilePages(); break;
         }
     }
 
@@ -2747,6 +2760,12 @@ class NvPdfViewer {
         if (show && this.el.searchInput) this.el.searchInput.focus();
     }
 
+    toggleMobilePages() {
+        const panel = this.container.querySelector('#nv-pdf-page-panel');
+        if (!panel) return;
+        panel.classList.toggle('open');
+    }
+
     async doSearch(term) {
         term = (term || '').trim().toLowerCase();
         this.searchTerm = term;
@@ -2833,21 +2852,7 @@ function _renderMobilePdfPreview(url, name) {
     _injectPdfViewerStyles();
     const body = document.getElementById('preview-body');
     body.innerHTML = `
-        <div id="nv-pdf-viewer">
-            <div class="nv-pdf-toolbar">
-                <button type="button" data-act="close" title="${window.t_cloud('btn_close', 'Cerrar')}">✕</button>
-                <button type="button" data-act="prev" title="${window.t_cloud('pdf_prev', 'Página anterior')}">‹</button>
-                <span class="nv-pdf-pageinfo"><input id="nv-pdf-current" type="text" inputmode="numeric" value="1"> / <span id="nv-pdf-total">0</span></span>
-                <button type="button" data-act="next" title="${window.t_cloud('pdf_next', 'Página siguiente')}">›</button>
-                <button type="button" data-act="zoomout" title="${window.t_cloud('pdf_zoom_out', 'Alejar')}">−</button>
-                <span class="nv-pdf-zoomlabel" id="nv-pdf-zoomlabel">100%</span>
-                <button type="button" data-act="zoomin" title="${window.t_cloud('pdf_zoom_in', 'Acercar')}">+</button>
-                <button type="button" data-act="fitwidth" title="${window.t_cloud('pdf_fit_width', 'Ajustar ancho')}">W</button>
-                <button type="button" data-act="fitpage" title="${window.t_cloud('pdf_fit_page', 'Ajustar página')}">P</button>
-                <button type="button" data-act="rotateleft" title="${window.t_cloud('pdf_rotate_left', 'Rotar izquierda')}">↺</button>
-                <button type="button" data-act="rotateright" title="${window.t_cloud('pdf_rotate_right', 'Rotar derecha')}">↻</button>
-                <button type="button" data-act="search" title="${window.t_cloud('pdf_search', 'Buscar')}">🔍</button>
-            </div>
+        <div id="nv-pdf-viewer" class="nv-pdf-mobile-mode">
             <div id="nv-pdf-searchbar" class="nv-pdf-search" style="display:none;">
                 <input id="nv-pdf-search-input" type="text" placeholder="${window.t_cloud('pdf_search_placeholder', 'Buscar en el PDF…')}">
                 <button type="button" data-act="searchprev" title="${window.t_cloud('pdf_search_prev', 'Anterior')}">‹</button>
@@ -2862,13 +2867,34 @@ function _renderMobilePdfPreview(url, name) {
                     <button type="button" onclick="document.getElementById('preview-download-btn').click()">${window.t_cloud('btn_download', 'Descargar archivo')}</button>
                 </div>
             </div>
+            <div class="nv-pdf-mobile-page-panel" id="nv-pdf-page-panel">
+                <button type="button" data-act="prev" aria-label="${window.t_cloud('pdf_prev', 'Página anterior')}">‹</button>
+                <input id="nv-pdf-current" type="text" inputmode="numeric" value="1" aria-label="${window.t_cloud('pdf_pages', 'Páginas')}">
+                <span>/</span>
+                <span id="nv-pdf-total">0</span>
+                <button type="button" data-act="next" aria-label="${window.t_cloud('pdf_next', 'Página siguiente')}">›</button>
+            </div>
+            <div class="nv-pdf-mobile-toolbar">
+                <button type="button" class="btn-minimal" data-act="mobilepages" aria-label="${window.t_cloud('pdf_pages', 'Páginas')}" title="${window.t_cloud('pdf_pages', 'Páginas')}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </button>
+                <button type="button" class="btn-minimal" data-act="search" aria-label="${window.t_cloud('pdf_search', 'Buscar')}" title="${window.t_cloud('pdf_search', 'Buscar')}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+                <button type="button" class="btn-minimal" data-act="fitwidth" aria-label="${window.t_cloud('pdf_fit_width', 'Ajustar ancho')}" title="${window.t_cloud('pdf_fit_width', 'Ajustar ancho')}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                </button>
+                <button type="button" class="btn-minimal" aria-label="${window.t_cloud('pdf_download', 'Descargar')}" title="${window.t_cloud('pdf_download', 'Descargar')}" onclick="var d=document.getElementById('preview-download-btn');if(d)d.click();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+            </div>
         </div>`;
 
     const viewer = new NvPdfViewer(url, name, body.querySelector('#nv-pdf-viewer'));
     viewer.el.scrollEl = document.getElementById('nv-pdf-scroll');
     viewer.el.pageInput = document.getElementById('nv-pdf-current');
     viewer.el.totalEl = document.getElementById('nv-pdf-total');
-    viewer.el.zoomLabel = document.getElementById('nv-pdf-zoomlabel');
+    viewer.el.zoomLabel = null;
     viewer.el.searchInput = document.getElementById('nv-pdf-search-input');
     viewer.el.searchCount = document.getElementById('nv-pdf-search-count');
     _pdfViewer = viewer;

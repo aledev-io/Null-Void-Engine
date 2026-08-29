@@ -43,17 +43,82 @@ export async function initNotes(userId) {
 }
 
 let syncTimeouts = {};
-export function syncNote(noteId) {
+
+export function setNoteSaveStatus(status) {
+    const el = document.getElementById('note-save-indicator');
+    if (!el) return;
+    el.className = `note-save-indicator ${status}`;
+    if (status === 'saving') {
+        el.innerHTML = `
+            <svg class="save-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
+            <span class="save-status-text">Guardando...</span>`;
+    } else if (status === 'error') {
+        el.innerHTML = `
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span class="save-status-text">Error al guardar</span>`;
+    } else {
+        el.innerHTML = `
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span class="save-status-text">Guardado</span>`;
+    }
+}
+
+export function syncNote(noteId, immediate = false) {
     const note = notes.find(n => n.id === noteId);
     if (!note) return;
     if (syncTimeouts[noteId]) clearTimeout(syncTimeouts[noteId]);
-    syncTimeouts[noteId] = setTimeout(() => {
+    setNoteSaveStatus('saving');
+    
+    const executeSync = () => {
         fetch('/api/ai/notes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(note)
-        }).catch(e => console.error("Error syncing note:", e));
-    }, 1000); // 1-second debounce per note
+        })
+        .then(res => {
+            if (res.ok) {
+                setNoteSaveStatus('saved');
+            } else {
+                setNoteSaveStatus('error');
+            }
+        })
+        .catch(e => {
+            console.error("Error syncing note:", e);
+            setNoteSaveStatus('error');
+        });
+    };
+
+    if (immediate) {
+        executeSync();
+    } else {
+        syncTimeouts[noteId] = setTimeout(executeSync, 1000);
+    }
+}
+
+export function manualSaveNote() {
+    if (!currentNoteId) return;
+    const note = notes.find(n => n.id === currentNoteId);
+    if (!note) return;
+
+    const newTitle = document.getElementById('note-title-input')?.value ?? '';
+    const newContent = document.getElementById('note-content-input')?.value ?? '';
+
+    note.title = newTitle;
+    note.content = newContent;
+    note.updatedAt = Date.now();
+    note.updated = note.updatedAt;
+
+    syncNote(currentNoteId, true);
+    if (window.showToast) window.showToast('Nota guardada', 'success');
 }
 
 export function deleteNoteOnServer(noteId) {
@@ -278,6 +343,7 @@ export function openNoteEditor(noteId) {
             noteHistoryIdx = -1;
             saveToNoteHistory();
 
+            setNoteSaveStatus('saved');
             window.updateEditorMeta(false);
             const isMobile = window.innerWidth <= 768 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
             if (!isMobile) {
@@ -531,4 +597,16 @@ export function toggleShareNote(id, friendId, friendName) {
     }
     syncNote(id);
     return isNowShared;
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+            const editor = document.getElementById('note-editor');
+            if (editor && editor.classList.contains('active')) {
+                e.preventDefault();
+                manualSaveNote();
+            }
+        }
+    });
 }

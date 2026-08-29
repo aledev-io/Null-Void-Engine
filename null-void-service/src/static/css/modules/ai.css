@@ -1612,6 +1612,41 @@ html {
     align-items: center;
 }
 
+.note-save-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-right: 6px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    transition: color 0.2s ease, background 0.2s ease;
+    user-select: none;
+}
+
+.note-save-indicator.saving {
+    color: #818cf8;
+}
+
+.note-save-indicator.saved {
+    color: #34d399;
+}
+
+.note-save-indicator.error {
+    color: #f87171;
+}
+
+.save-spinner {
+    animation: saveSpin 1s linear infinite;
+}
+
+@keyframes saveSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .note-editor-body {
     flex: 1;
     overflow-y: auto;

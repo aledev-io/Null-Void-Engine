@@ -783,8 +783,21 @@
                     <span class="note-editor-title-text" style="font-size:0.85rem;color:var(--text-dim);">Notas</span>
                     <div class="note-editor-actions">
                         <div id="active-collaborators" class="active-collaborators-list"></div>
+                        <div id="note-save-indicator" class="note-save-indicator saved" title="Estado de sincronización">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span class="save-status-text">Guardado</span>
+                        </div>
                         <span id="editor-wordcount"
                             style="font-size:0.75rem;color:var(--text-dim);margin-right:8px;white-space:nowrap;"></span>
+                        <button class="btn-icon" id="btn-save-note" title="Guardar cambios (Ctrl+S)" onclick="manualSaveNote()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                        </button>
                         <button class="btn-icon" title="Deshacer" onclick="undoNote()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">

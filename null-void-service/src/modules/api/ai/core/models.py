@@ -331,13 +331,21 @@ def _resolve_requested_model(model: Optional[str]) -> str:
             if raw:
                 _MODELS_CACHE["ts"] = time.time()
                 _MODELS_CACHE["models"] = raw
+                _save_disk_catalog("ollama_models.json", raw)
+        if not raw:
+            raw = _load_disk_catalog("ollama_models.json")
         if raw:
             for m in raw:
                 name = (m.get("name") if isinstance(m, dict) else str(m)) or ""
                 if name.strip():
                     return name.strip()
     except Exception:
-        pass
+        raw = _load_disk_catalog("ollama_models.json")
+        if raw:
+            for m in raw:
+                name = (m.get("name") if isinstance(m, dict) else str(m)) or ""
+                if name.strip():
+                    return name.strip()
     return "llama3"
 
 
@@ -384,11 +392,9 @@ def get_available_models(uid: Optional[str] = None) -> Tuple[List[dict], Optiona
             if raw_models:
                 _MODELS_CACHE["ts"] = time.time()
                 _MODELS_CACHE["models"] = raw_models
-        except Exception as e:
-            if _MODELS_CACHE["models"] is not None:
-                raw_models = _MODELS_CACHE["models"]
-            else:
-                return [], str(e)
+                _save_disk_catalog("ollama_models.json", raw_models)
+        except Exception:
+            raw_models = _MODELS_CACHE.get("models") or _load_disk_catalog("ollama_models.json") or []
 
     models = []
     if raw_models:
