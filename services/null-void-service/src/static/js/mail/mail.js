@@ -1,5 +1,3 @@
-// State
-
 let FOLDERS = [
     { id: 'inbox', name: 'Recibidos', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>', section: 'principal' },
     { id: 'starred', name: 'Destacados', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>', section: 'principal' },
@@ -28,8 +26,6 @@ const emailCache = {};
 const knownContacts = new Set();
 let currentPage = 1;
 let currentHasMore = false;
-
-// Utilities
 
 export function formatMailDate(dateStr) {
     if (!dateStr) return '';
@@ -93,8 +89,6 @@ export function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Theme
-
 export function toggleTheme() {
     const html = document.documentElement;
     const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -111,8 +105,6 @@ function updateThemeIcon() {
         ? '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>'
         : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
 }
-
-// Mode toggle
 
 export async function setMailMode(targetMode, targetEmail = null) {
     if (targetMode === 'google') {
@@ -154,8 +146,6 @@ export async function setMailMode(targetMode, targetEmail = null) {
     loadFolders();
     loadCurrentFolder();
 }
-
-// Google config
 
 export async function checkGoogleConfig() {
     try {
@@ -262,8 +252,6 @@ export async function saveGoogleConfig() {
     }
 }
 
-// Folders
-
 export async function loadFolders(forceRefresh = false) {
     try {
         let url = `/api/mail/folders?mode=${mailMode}${forceRefresh ? '&refresh=true' : ''}`;
@@ -349,8 +337,6 @@ export function switchFolder(folderId) {
     loadCurrentFolder();
 }
 
-// Loading helpers
-
 function setFolderLoading(state) {
     document.getElementById('btn-refresh').classList.toggle('spinning', state);
 }
@@ -364,8 +350,6 @@ function setAppLock(locked) {
     topbar.style.pointerEvents = locked ? 'none' : 'auto';
     document.body.style.cursor = locked ? 'wait' : 'default';
 }
-
-// Email list
 
 export async function loadCurrentFolder(silent = false, forceRefresh = false, loadMore = false) {
     if (loadMore) currentPage++;
@@ -503,8 +487,6 @@ export function loadMoreEmails(btn) {
     }
     loadCurrentFolder(false, false, true);
 }
-
-// Selection / Bulk
 
 export function markAllAsRead() {
     const unreadItems = Array.from(document.querySelectorAll('.email-item.unread'));
@@ -659,8 +641,6 @@ export async function singleAction(action) {
     }
 }
 
-// Star
-
 export async function toggleStar(folder, id, element) {
     const newStarred = !element.classList.contains('starred');
     element.classList.toggle('starred', newStarred);
@@ -684,8 +664,6 @@ export async function toggleStar(folder, id, element) {
         element.querySelector('svg').setAttribute('fill', !newStarred ? 'currentColor' : 'none');
     }
 }
-
-// Reader
 
 export function backToList() {
     document.getElementById('reader-panel').style.display = 'none';
@@ -924,8 +902,6 @@ function renderEmailBody(data) {
     }
 }
 
-// Reply / Forward
-
 export function replyEmail() {
     if (!currentEmailData) return;
     const toEmail = extractEmail(currentEmailData.from);
@@ -956,8 +932,6 @@ export function forwardEmail() {
     document.getElementById('compose-modal').classList.add('show');
     document.getElementById('compose-to').focus();
 }
-
-// Compose
 
 let composeSelectedFiles = [];
 
@@ -1072,8 +1046,6 @@ export async function sendEmail(isScheduled = false, scheduledAt = null) {
     }
 }
 
-// Contacts
-
 function updateContactsFromEmails(emails) {
     if (!emails) return;
     emails.forEach(e => {
@@ -1102,8 +1074,6 @@ export function toggleMailSidebar() {
         }
     }
 }
-
-// Init (called from main.js)
 
 export function init() {
     updateThemeIcon();

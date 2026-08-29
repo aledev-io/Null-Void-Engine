@@ -13,7 +13,6 @@ export async function showWorkspaces() {
     document.getElementById('workspaces-list-view').style.display = 'flex';
     document.getElementById('workspace-detail-view').style.display = 'none';
 
-    // update active nav item
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.getElementById('nav-workspaces').classList.add('active');
 
@@ -34,16 +33,13 @@ export async function loadWorkspaces() {
         if (res.ok) {
             let spaces = await res.json();
             
-            // Render in sidebar
             renderStarredWorkspaces(spaces);
             
-            // Filter logic
             const filterSelect = document.getElementById('workspace-filter-select');
             const filterVal = filterSelect ? filterSelect.value : 'active';
             
             let visibleSpaces = spaces.filter(s => filterVal === 'archived' ? s.is_archived : !s.is_archived);
             
-            // Sort logic
             const sortSelect = document.getElementById('workspace-sort-select');
             const sortVal = sortSelect ? sortSelect.value : 'updated';
             if (sortVal === 'updated') {
@@ -227,12 +223,10 @@ export async function openWorkspaceDetail(id, name, desc, is_starred) {
     currentWorkspaceId = id;
     window.currentWorkspaceId = id; // global for chat.js
     
-    // Hide other views and show workspace view container
     document.getElementById('workspaces-view').style.display = 'flex';
     document.getElementById('chat-view').style.display = 'none';
     document.getElementById('notes-view').style.display = 'none';
 
-    // Update active nav state
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     const navWs = document.getElementById('nav-workspaces');
     if (navWs) navWs.classList.add('active');
@@ -498,7 +492,6 @@ export function startWorkspaceChat() {
         window.newChat(currentWorkspaceId);
         document.getElementById('workspaces-view').style.display = 'none';
         document.getElementById('chat-view').style.display = 'flex';
-        // highlight new chat in sidebar
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     }
 }
@@ -513,7 +506,6 @@ export function startWorkspaceChatFromInput() {
     const text = input.value.trim();
     if (!text && (!window.attachedFiles || window.attachedFiles.length === 0)) return;
     
-    // Sync model selection
     const wsModelSelect = document.getElementById('workspace-model-select');
     const mainModelSelect = document.getElementById('model-select');
     if (wsModelSelect && mainModelSelect) {
@@ -538,7 +530,6 @@ export function renderWorkspaceChats() {
     const emptyState = document.getElementById('workspace-chat-empty');
     if (!container) return;
     
-    // Clear previous chats (but keep emptyState)
     Array.from(container.children).forEach(child => {
         if (child.id !== 'workspace-chat-empty') child.remove();
     });
@@ -574,7 +565,6 @@ export function renderWorkspaceChats() {
 window.toggleSortMenu = function(e) {
     e.stopPropagation();
     const menu = document.getElementById('workspace-sort-menu');
-    // Hide other context menus first
     document.querySelectorAll('.chat-context-menu').forEach(m => {
         if (m.id !== 'workspace-sort-menu') m.style.display = 'none';
     });

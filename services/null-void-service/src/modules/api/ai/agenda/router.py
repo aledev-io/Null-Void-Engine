@@ -102,8 +102,6 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", t.lower()).strip()
 
 
-# ─── FastText Classifier ──────────────────────────────────────────────────────
-
 def get_fasttext_model():
     """Carga perezosa del modelo FastText."""
     global _fasttext_model, _fasttext_error
@@ -161,8 +159,6 @@ def train_classifier(training_file: str) -> bool:
         print(f"❌ Error al entrenar: {e}")
         return False
 
-
-# ─── spaCy NLP & Semantic Scoring ─────────────────────────────────────────────
 
 def _get_spacy_nlp(lang: str):
     global _SPACY_NLPS
@@ -303,8 +299,6 @@ def is_agenda_request(text: str) -> bool:
     # 4. Fallback semántico
     return _score_agenda(src) >= 40
 
-
-# ─── Context Extraction Helpers ───────────────────────────────────────────────
 
 def detect_read_period(text: str) -> Optional[str]:
     """Periodo de lectura sugerido por la consulta."""

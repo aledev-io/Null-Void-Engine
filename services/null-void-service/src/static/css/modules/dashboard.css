@@ -46,7 +46,6 @@
             min-width: 0;
         }
 
-        /* SIDEBAR STYLES */
         .sidebar {
             width: 260px;
             background: var(--bg-card);
@@ -136,7 +135,6 @@
             background: var(--bg-card);
         }
 
-        /* MAIN CONTENT STYLES */
         .main-content-wrapper {
             flex: 1;
             display: flex;
@@ -2020,7 +2018,6 @@
         /* MOBILE VERTICAL ≤ 560px */
         @media (max-width: 560px) {
 
-            /* BACKGROUND: animated gradient mesh */
             #shell::before {
                 content: '';
                 position: fixed;
@@ -2039,7 +2036,6 @@
                 z-index: 1;
             }
 
-            /* TOPBAR */
             #topbar {
                 padding: 0 16px;
                 height: 56px;
@@ -2057,12 +2053,10 @@
                 padding: 2px 6px !important;
             }
 
-            /* MAIN PADDING */
             #main {
                 padding: 0 0 24px 0;
             }
 
-            /* HERO HEADER SECTION */
             .monitor-head {
                 margin: 0 !important;
                 padding: 20px 16px 0 16px !important;
@@ -2085,7 +2079,6 @@
                 margin-top: 2px;
             }
 
-            /* METRICS STRIP: horizontal glassmorphism cards */
             .metrics-grid {
                 display: flex !important;
                 flex-direction: row !important;
@@ -2189,7 +2182,6 @@
                 display: none !important;
             }
 
-            /* SECTION DIVIDER */
             .sec-row {
                 margin: 20px 16px 12px 16px !important;
                 display: flex !important;
@@ -2212,7 +2204,6 @@
                 background: linear-gradient(to right, var(--border), transparent) !important;
             }
 
-            /* APP GRID: 2 columns, premium cards */
             .nav-grid {
                 display: grid !important;
                 grid-template-columns: repeat(2, 1fr) !important;
@@ -2284,7 +2275,6 @@
                 opacity: 0.85 !important;
             }
 
-            /* PROFILE DROPDOWN */
             .profile-dropdown {
                 width: 260px !important;
                 padding: 20px !important;
@@ -2317,7 +2307,6 @@
                 padding: 6px 12px !important;
             }
 
-            /* STATUS/TOOLS GRIDS */
             .status-grid,
             .tools-grid {
                 grid-template-columns: 1fr !important;
@@ -3105,7 +3094,6 @@
             max-width: 100%;
         }
 
-        /* --- DASHBOARD GRID WIDGETS --- */
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -3308,7 +3296,6 @@
             transform: translateY(-1px);
         }
 
-        /* Mock Calendar */
         .mock-calendar {
             background: var(--surface-hi);
             border-radius: 8px;
@@ -3362,7 +3349,6 @@
             }
         }
 
-        /* Statistics */
         .stat-list {
             display: flex;
             flex-direction: column;
@@ -3395,7 +3381,6 @@
             color: var(--indigo);
         }
 
-        /* Progress */
         .progress-list {
             display: flex;
             flex-direction: column;
@@ -3428,7 +3413,6 @@
             border-radius: 3px;
         }
 
-        /* Recent Activity */
         .activity-list {
             display: flex;
             flex-direction: column;

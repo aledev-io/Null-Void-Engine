@@ -303,7 +303,6 @@ def export_list_pdf_route():
     W, _    = PAGE
     content_w = W - 3*cm
 
-    # Estilos ────────────────────────────────────────────────────────────
     s_title = ParagraphStyle('t', fontSize=16, fontName='Helvetica-Bold',
                               textColor=colors.HexColor('#1e293b'))
     s_sub   = ParagraphStyle('s', fontSize=8,  fontName='Helvetica',
@@ -321,7 +320,6 @@ def export_list_pdf_route():
 
     story = []
 
-    # Cabecera del documento ─────────────────────────────────────────────
     now_str = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
     label   = 'atHome.lu — Apartamentos' if target == 'athome' else 'PcComponentes — Componentes'
     story.append(Paragraph(f'Listado de resultados · {label}', s_title))
@@ -334,7 +332,6 @@ def export_list_pdf_route():
                              color=colors.HexColor('#e2e8f0')))
     story.append(Spacer(1, 10))
 
-    # Cabecera de tabla ──────────────────────────────────────────────────
     is_athome = target == 'athome'
 
     if is_athome:
@@ -435,7 +432,6 @@ def export_list_pdf_route():
 
         rows.append(row)
 
-    # Construcción de la tabla ───────────────────────────────────────────
     main_table = Table(rows, colWidths=col_w, repeatRows=1)
     row_bg = [colors.HexColor('#f8fafc'), colors.white]
 
@@ -458,7 +454,6 @@ def export_list_pdf_route():
 
     story.append(main_table)
 
-    # Pie ───────────────────────────────────────────────────────────────
     story.append(Spacer(1, 12))
     story.append(HRFlowable(width='100%', thickness=1,
                              color=colors.HexColor('#e2e8f0')))

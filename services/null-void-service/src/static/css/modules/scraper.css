@@ -1,4 +1,3 @@
-/* Global styles for Filter Toggle */
 .mobile-filters-btn {
   display: flex !important;
   padding: 10px !important;
@@ -388,7 +387,6 @@
       justify-content: center;
     }
 
-    /* ====== RESPONSIVE RULES ====== */
     @media (max-width: 900px) {
       .sidebar {
         position: absolute;
@@ -1033,7 +1031,6 @@
       gap: 7px;
     }
 
-    /* Chart */
     .chart-wrap {
       position: relative;
       height: 110px;
@@ -1182,7 +1179,6 @@
       color: #f87171;
     }
 
-    /* Specs table */
     .specs-tbl {
       width: 100%;
       border-collapse: collapse;
@@ -1215,7 +1211,6 @@
       margin-top: 10px;
     }
 
-    /* Insights */
     .insight-row {
       display: flex;
       justify-content: space-between;
@@ -1261,7 +1256,6 @@
       vertical-align: middle;
     }
 
-    /* Tip card */
     .tip-card {
       background: rgba(99, 102, 241, 0.05);
       border: 1px dashed rgba(99, 102, 241, 0.25);
@@ -1279,7 +1273,6 @@
       font-size: 0.82rem;
     }
 
-    /* Loading skeleton */
     @keyframes shimmer {
       0% {
         background-position: -400px 0;
@@ -1359,7 +1352,6 @@
       min-width: 0;
     }
 
-    /* Filter Panel Styles */
     .filter-panel-header {
       padding: 12px 14px;
       border-bottom: 1px solid var(--border-color);
@@ -1525,7 +1517,6 @@
       transform: scale(0.98);
     }
 
-    /* Property Cards */
     .props-header {
       padding: 10px 16px;
       border-bottom: 1px solid var(--border-color);
@@ -1797,7 +1788,6 @@
       padding: 10px 0;
     }
 
-    /* Compact search bar top */
     .portal-topbar {
       padding: 8px 16px;
       border-bottom: 1px solid var(--border-color);
@@ -1840,7 +1830,6 @@
     }
 
 
-    /* Bulk action bar */
     .bulk-bar {
       display: none;
       padding: 8px 16px;
@@ -1853,7 +1842,6 @@
       flex-shrink: 0;
     }
 
-    /* Pagination */
     .pag-btn {
       width: 32px;
       height: 32px;

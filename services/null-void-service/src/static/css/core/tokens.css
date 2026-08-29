@@ -1,6 +1,5 @@
 /* TOKENS & DESIGN SYSTEM */
 :root {
-    /* Global Backgrounds */
     --bg-primary: #151f35;
     --bg-secondary: #111827;
     --bg: #111827;
@@ -9,12 +8,10 @@
     --bg-card: #161d2f;
     --panel-right-bg: #111827;
 
-    /* Borders */
     --border: rgba(255, 255, 255, 0.07);
     --border-hi: rgba(99, 102, 241, 0.3);
     --border-hover: rgba(99, 102, 241, 0.4);
 
-    /* Typography */
     --text-main: #e8edf8;
     --text-heading: #e8edf8;
     --text-dim: #e8edf8;
@@ -22,7 +19,6 @@
     --text-muted: #8b95b0;
     --text-label: #8b95b0;
 
-    /* Accents (Indigo) */
     --accent: #6366f1;
     --accent-2: #8b5cf6;
     --indigo: #6366f1;
@@ -32,18 +28,15 @@
     --badge-color: #6366f1;
     --badge-dot: #6366f1;
 
-    /* Metrics Colors */
     --cpu: #f87171;
     --ram: #c084fc;
     --temp: #fb923c;
 
-    /* Inputs */
     --input-bg: rgba(255, 255, 255, 0.05);
     --input-border: rgba(99, 102, 241, 0.22);
     --input-text: #e2e8f0;
     --input-placeholder: rgba(148, 163, 184, 0.38);
 
-    /* Auth Specific Overlays */
     --branding-title: #ffffff;
     --branding-desc: rgba(226, 232, 240, 0.72);
     --title-shadow: none;
@@ -52,19 +45,16 @@
     --panel-sep: rgba(99, 102, 241, 0.14);
     --panel-sep-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
 
-    /* Cloud Components */
     --cloud-nav-text: #f1f5f9;
     --cloud-nav-bg-active: rgba(129, 140, 248, 0.25);
     --cloud-nav-text-active: #ffffff;
     --cloud-row-border: rgba(255, 255, 255, 0.1);
     --cloud-row-hover: rgba(255, 255, 255, 0.05);
 
-    /* Toggles */
     --toggle-bg: rgba(255, 255, 255, 0.07);
     --toggle-border: rgba(255, 255, 255, 0.12);
     --toggle-color: #94a3b8;
 
-    /* Nav Items */
     --nav-hover: rgba(255, 255, 255, 0.05);
     --nav-active: rgba(129, 140, 248, 0.25);
     --nav-text-active: #ffffff;
@@ -73,18 +63,15 @@
 }
 
 [data-theme="light"] {
-    /* Global Backgrounds */
     --bg: #f9fafb;
     --surface: #ffffff;
     --surface-hi: #f3f4f6;
     --bg-card: #ffffff;
     --panel-right-bg: #f3f4f6;
 
-    /* Borders */
     --border: rgba(0, 0, 0, 0.08);
     --border-hi: rgba(0, 0, 0, 0.15);
 
-    /* Typography */
     --text-main: #000000;
     --text-heading: #0f172a;
     --text-dim: #3730a3;
@@ -92,7 +79,6 @@
     --text-muted: #334155;
     --text-label: #4f46e5;
 
-    /* Accents (Indigo) */
     --indigo: #4338ca;
     --indigo-dim: rgba(79, 70, 229, 0.15);
     --badge-bg: rgba(221, 222, 234, 0.836);
@@ -100,18 +86,15 @@
     --badge-color: #4f46e5;
     --badge-dot: #6366f1;
 
-    /* Metrics Colors */
     --cpu: #b91c1c;
     --ram: #7e22ce;
     --temp: #c2410c;
 
-    /* Inputs */
     --input-bg: rgba(255, 255, 255, 0.75);
     --input-border: rgba(99, 102, 241, 0.22);
     --input-text: #1e293b;
     --input-placeholder: rgba(71, 85, 105, 0.40);
 
-    /* Auth Specific Overlays */
     --branding-title: #0f172a;
     --branding-desc: #2a3233;
     --title-shadow: none;
@@ -120,19 +103,16 @@
     --panel-sep: rgba(99, 102, 241, 0.14);
     --panel-sep-shadow: -10px 0 40px rgba(0, 0, 0, 0.1);
 
-    /* Cloud Components */
     --cloud-nav-text: #1a1c1e;
     --cloud-nav-bg-active: #e8f0fe;
     --cloud-nav-text-active: #174ea6;
     --cloud-row-border: rgba(0, 0, 0, 0.1);
     --cloud-row-hover: rgba(0, 0, 0, 0.04);
 
-    /* Toggles */
     --toggle-bg: rgba(0, 0, 0, 0.05);
     --toggle-border: rgba(0, 0, 0, 0.10);
     --toggle-color: #64748b;
 
-    /* Nav Items */
     --nav-hover: rgba(0, 0, 0, 0.04);
     --nav-active: #e8f0fe;
     --nav-text-active: #174ea6;

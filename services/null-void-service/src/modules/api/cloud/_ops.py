@@ -1,6 +1,4 @@
-"""Cluster de operaciones de archivo (Rename/Copy/Move) extraído de
-cloud.services (fase 6N.16).
-
+"""Cluster de operaciones de archivo (Rename/Copy/Move).
 Depende de _context (_check_agent_scope, get_view_root, get_user_root,
 resolve_protect_view, is_item_protected, _resolve_shared_or_recent_path,
 add_activity), de _infra (_load_json, _unique_path, logger), y directamente de

@@ -1,5 +1,4 @@
-"""Cluster IA extraído de cloud.services (fase 6N.6).
-
+"""Cluster IA.
 Gestiona los archivos adjuntos del módulo IA bajo <DATA_DIR>/ai/<uid> con su
 metadata en la tabla ai_attachment_files. Depende de _infra (get_token,
 ai_root_for_uid, _update_json), de _context (user_root_for_uid, add_activity) y

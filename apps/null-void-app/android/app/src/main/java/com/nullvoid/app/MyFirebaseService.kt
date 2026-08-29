@@ -76,7 +76,6 @@ class MyFirebaseService : FirebaseMessagingService() {
     private fun sendModuleNotification(module: String, title: String, messageBody: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // 1. Determinar Configuración por Módulo
         val (groupKey, channelId, importance, summaryRes) = when (module) {
             "social" -> quadruple(GROUP_SOCIAL, CHANNEL_SOCIAL, NotificationManager.IMPORTANCE_HIGH, R.string.summary_social)
             "ai"     -> quadruple(GROUP_AI, CHANNEL_AI, NotificationManager.IMPORTANCE_DEFAULT, R.string.summary_ai)
@@ -86,7 +85,6 @@ class MyFirebaseService : FirebaseMessagingService() {
             else     -> quadruple(GROUP_SYSTEM, CHANNEL_SYSTEM, NotificationManager.IMPORTANCE_HIGH, R.string.summary_system)
         }
 
-        // 2. Crear Canal si no existe
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelName = when (module) {
                 "social" -> getString(R.string.channel_social_name)
@@ -116,7 +114,6 @@ class MyFirebaseService : FirebaseMessagingService() {
         val pendingIntent = PendingIntent.getActivity(this, 0, intent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE)
 
-        // 3. Notificación Individual
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_refresh)
             .setContentTitle(title)
@@ -129,7 +126,6 @@ class MyFirebaseService : FirebaseMessagingService() {
         val notificationId = (System.currentTimeMillis() and 0x3FFFFFFF).toInt()
         notificationManager.notify(notificationId, notificationBuilder.build())
 
-        // 4. Notificación de Resumen (Summary)
         val summaryNotification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_refresh)
             .setStyle(NotificationCompat.InboxStyle()

@@ -149,7 +149,7 @@ def create_app():
     # a los usuarios con un "Sesión expirada" inesperado.
 
     if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-        # Composición (fase 6M.3): se inyecta la fuente real de recordatorios
+        # Composición: se inyecta la fuente real de recordatorios
         # desde el dominio Events en el notifier, de modo que core no dependa
         # de modules.api.events.
         from types import SimpleNamespace

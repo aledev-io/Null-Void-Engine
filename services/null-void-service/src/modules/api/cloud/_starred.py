@@ -1,4 +1,4 @@
-"""Cluster de Starred/Protection extraído de cloud.services (fase 6N.15).
+"""Cluster de Starred/Protection.
 
 Gestión de metadatos de marcado (estrella) y protección de archivos, persistidos
 como JSON en .starred.json y .protected.json de la raíz del usuario.

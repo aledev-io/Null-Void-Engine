@@ -1,4 +1,4 @@
-"""Cluster de vídeo extraído de cloud.services (fase 6N.7).
+"""Cluster de vídeo.
 
 Transcodificación asíncrona (ffmpeg) y streaming de vídeo con caché LRU.
 Depende de _infra (BASE_CLOUD_ROOT, _is_safe_path, tokens_lock,

@@ -83,7 +83,6 @@ body {
     overflow: hidden;
 }
 
-/* Sidebar */
 #sidebar {
     width: 260px;
     border-right: 1px solid var(--border);
@@ -261,7 +260,6 @@ body {
     cursor: pointer;
 }
 
-/* Inbox Panel */
 #inbox-panel {
     flex: 1;
     background: var(--bg-primary);
@@ -478,7 +476,6 @@ body {
     text-overflow: ellipsis;
 }
 
-/* Reader Panel */
 #reader-panel {
     flex: 1;
     background: var(--bg-primary);
@@ -970,7 +967,6 @@ body {
     background: rgba(248, 113, 113, 0.1);
 }
 
-/* Toast notifications */
 .toast-container {
     position: fixed;
     bottom: 24px;
@@ -1059,7 +1055,6 @@ input:-webkit-autofill:active {
     transition: background-color 5000s ease-in-out 0s;
 }
 
-/* Mobile Sidebar */
 .sidebar-overlay {
     position: fixed;
     top: 60px;

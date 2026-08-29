@@ -218,7 +218,6 @@ def cancel_quota_request(user_id):
         conn.commit()
 
 
-# ── Metadatos de adjuntos de IA (ai_attachment_files) ─────────────
 # Tabla gestionada por el módulo de Cloud: los adjuntos de la IA
 # guardan aquí su metadata y en ai_messages solo queda la FK (id).
 

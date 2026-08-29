@@ -80,7 +80,6 @@ export function initCalendarWidget() {
         const today = new Date();
         const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
-        // Previous month days
         for (let i = startDay - 1; i >= 0; i--) {
             const dayNum = prevLastDay - i;
             const prevMonthDate = new Date(year, month - 1, dayNum);
@@ -95,7 +94,6 @@ export function initCalendarWidget() {
             grid.appendChild(el);
         }
         
-        // Current month days
         for (let i = 1; i <= daysInMonth; i++) {
             const el = document.createElement('div');
             el.className = 'cal-day';
@@ -104,7 +102,6 @@ export function initCalendarWidget() {
             }
             el.textContent = i;
             
-            // Check for events
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
             if (eventsMap[dateStr]) {
                 const dot = document.createElement('div');
@@ -124,7 +121,6 @@ export function initCalendarWidget() {
             grid.appendChild(el);
         }
         
-        // Next month days to fill grid
         const totalCells = startDay + daysInMonth;
         const nextDays = Math.ceil(totalCells / 7) * 7 - totalCells;
         for (let i = 1; i <= nextDays; i++) {

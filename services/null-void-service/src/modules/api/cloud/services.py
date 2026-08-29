@@ -1,4 +1,4 @@
-"""Fachada pública del módulo Cloud (fase 6N.20).
+"""Fachada pública del módulo Cloud.
 
 Re-exporta la infraestructura neutral (_infra), el contexto compartido
 (_context) y los clusters de funcionalidad (_ai, _video, _download, _preview,
@@ -76,7 +76,7 @@ from ._uploads import (
     _finalize_upload,
 )
 
-# Frontera de extracción (fase 6N.6): el cluster IA vive en _ai.py y se
+# Frontera de extracción: el cluster IA vive en _ai.py y se
 # re-exporta aquí para no romper la API pública de cloud.services.
 from ._ai import (
     get_ai_root,
@@ -96,7 +96,7 @@ from ._ai import (
     ai_update_file_by_uid,
 )
 
-# Frontera de extracción (fase 6N.7): el cluster de vídeo vive en _video.py y
+# Frontera de extracción: el cluster de vídeo vive en _video.py y
 # se re-exporta aquí para no romper la API pública de cloud.services.
 from ._video import (
     VIDEO_CACHE_MAX_MB,
@@ -106,7 +106,7 @@ from ._video import (
     stream_video,
 )
 
-# Frontera de extracción (fase 6N.8): el cluster de descargas/streaming ZIP
+# Frontera de extracción: el cluster de descargas/streaming ZIP
 # vive en _download.py y se re-exporta aquí para no romper la API pública de
 # cloud.services. _zip_stream/_iter_zip_entries también los usa el cluster
 # _archive (zip_item/unzip_item), que sigue en este módulo.
@@ -118,7 +118,7 @@ from ._download import (
     download_file,
 )
 
-# Frontera de extracción (fase 6N.9): el cluster de previews/PDF vive en
+# Frontera de extracción: el cluster de previews/PDF vive en
 # _preview.py y se re-exporta aquí para no romper la API pública de
 # cloud.services.
 from ._preview import (
@@ -127,7 +127,7 @@ from ._preview import (
     preview_file,
 )
 
-# Frontera de extracción (fase 6N.10): el cluster de búsqueda (FTS + sweeper)
+# Frontera de extracción: el cluster de búsqueda (FTS + sweeper)
 # vive en _search.py y se re-exporta aquí para no romper la API pública de
 # cloud.services. invalidate_user_index es llamado por otros clusters y por el
 # cluster Files de este módulo.
@@ -143,7 +143,7 @@ from ._search import (
     _schedule_content_index,
 )
 
-# Frontera de extracción (fase 6N.11): el cluster archive (ZIP/unzip) vive en
+# Frontera de extracción: el cluster archive (ZIP/unzip) vive en
 # _archive.py y se re-exporta aquí para no romper la API pública de
 # cloud.services.
 from ._archive import (
@@ -152,7 +152,7 @@ from ._archive import (
     unzip_item,
 )
 
-# Frontera de extracción (fase 6N.12): el cluster de subidas por chunks vive en
+# Frontera de extracción: el cluster de subidas por chunks vive en
 # _uploads.py y se re-exporta aquí para no romper la API pública de
 # cloud.services (routes.py y test_cloud_upload_chunks.py usan UPLOAD_CHUNK_SIZE).
 from ._uploads import (
@@ -164,7 +164,7 @@ from ._uploads import (
     abort_upload,
 )
 
-# Frontera de extracción (fase 6N.13): el cluster de compartidos vive en
+# Frontera de extracción: el cluster de compartidos vive en
 # _sharing.py y se re-exporta aquí para no romper la API pública de
 # cloud.services (routes.py, auth/services.py, __init__.py, tests).
 from ._sharing import (
@@ -175,7 +175,7 @@ from ._sharing import (
     list_shared_by_me,
 )
 
-# Frontera de extracción (fase 6N.14): el cluster de versionado vive en
+# Frontera de extracción: el cluster de versionado vive en
 # _versions.py y se re-exporta aquí para no romper la API pública de
 # cloud.services. _snapshot_version también lo usa _uploads._finalize_upload.
 from ._versions import (
@@ -190,7 +190,7 @@ from ._versions import (
     delete_version,
 )
 
-# Frontera de extracción (fase 6N.15): el cluster Starred/Protection vive en
+# Frontera de extracción: el cluster Starred/Protection vive en
 # _starred.py y se re-exporta aquí. Los helpers _clean/_rename/_move_starred_entry
 # también viven en _starred (los usa el cluster Files de este módulo y _ops).
 from ._starred import (
@@ -202,7 +202,7 @@ from ._starred import (
     _move_starred_entry,
 )
 
-# Frontera de extracción (fase 6N.16): el cluster Rename/Copy/Move vive en
+# Frontera de extracción: el cluster Rename/Copy/Move vive en
 # _ops.py y se re-exporta aquí para no romper la API pública de cloud.services.
 from ._ops import (
     rename_item,
@@ -210,7 +210,7 @@ from ._ops import (
     move_item,
 )
 
-# Frontera de extracción (fase 6N.17): el cluster Quota/Info vive en _info.py
+# Frontera de extracción: el cluster Quota/Info vive en _info.py
 # y se re-exporta aquí para no romper la API pública de cloud.services.
 from ._info import (
     get_quota_info,

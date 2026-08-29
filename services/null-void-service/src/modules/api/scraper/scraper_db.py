@@ -7,11 +7,11 @@ from config.config import CONFIG, PROJECT_ROOT
 DATA_DIR = CONFIG.DATA_DIR
 _raw_scraper_dir = os.environ.get("SCRAPER_DIR")
 SCRAPER_DIR = _raw_scraper_dir if _raw_scraper_dir and os.path.isabs(_raw_scraper_dir) else (os.path.join(PROJECT_ROOT, _raw_scraper_dir) if _raw_scraper_dir else os.path.join(os.path.dirname(DATA_DIR), 'scraper'))
-os.makedirs(SCRAPER_DIR, exist_ok=True)
-os.makedirs(DATA_DIR, exist_ok=True)
 SCRAPER_DB_SQLITE = os.path.join(SCRAPER_DIR, 'scraper.db')
 
 def get_db_connection():
+    os.makedirs(SCRAPER_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
     conn = sqlite3.connect(SCRAPER_DB_SQLITE)
     conn.execute("PRAGMA foreign_keys = ON;")
     try:

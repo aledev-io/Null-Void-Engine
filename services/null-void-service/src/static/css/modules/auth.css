@@ -1,4 +1,3 @@
-/* RESET */
 *,
 *::before,
 *::after {
@@ -136,7 +135,6 @@ body {
     transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
 }
 
-/* CARD */
 #card {
     width: 100%;
     padding: 0 48px;
@@ -258,7 +256,6 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     transform: scale(1.1);
 }
 
-/* MESSAGES */
 .msg-area {
     min-height: 20px;
     font-size: 0.73rem;
@@ -276,7 +273,6 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     color: #34d399;
 }
 
-/* BUTTON */
 .form-btn {
     width: 100%;
     height: 48px;
@@ -355,7 +351,6 @@ html[data-theme="dark"] .field-input:-webkit-autofill {
     color: #a5b4fc;
 }
 
-/* THEME BUTTON */
 .btn-theme-float {
     position: fixed;
     top: 20px;
@@ -418,7 +413,6 @@ html[data-theme="light"] .btn-theme-float:hover {
     box-shadow: 0 4px 20px rgba(79, 70, 229, 0.35);
 }
 
-/* ANIMATIONS */
 @keyframes kenburns {
     from {
         opacity: 0.35;

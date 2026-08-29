@@ -363,7 +363,6 @@ function renderVault() {
     }
     
     if (hasPasswords) {
-        // Group by category/site
         const groups = {};
         vaultData.passwords.forEach((item, index) => {
             const cat = item.category || 'General';
@@ -371,7 +370,6 @@ function renderVault() {
             groups[cat].push({ item, index });
         });
         
-        // Render groups
         Object.keys(groups).sort().forEach(cat => {
             const catHeader = document.createElement('h3');
             catHeader.style.marginTop = '24px';
@@ -435,7 +433,6 @@ function renderVault() {
         });
     }
     
-    // Add legacy notes if any
     if (vaultData.notes && vaultData.notes.length > 0) {
         const notesHeader = document.createElement('h3');
         notesHeader.style.marginTop = '24px';
@@ -473,7 +470,6 @@ function copyField(entryIndex, fieldIndex) {
     if (!item || !item.fields || !item.fields[fieldIndex]) return;
     
     navigator.clipboard.writeText(item.fields[fieldIndex].value).then(() => {
-        // feedback visual
     }).catch(err => {
         console.error('Error al copiar', err);
         NV_Alert("No se pudo copiar al portapapeles.");
@@ -518,7 +514,6 @@ function openModal(index = -1) {
     const cObj = document.getElementById('entry-correo');
     const pObj = document.getElementById('entry-pwd');
     
-    // reset
     uObj.value = '';
     cObj.value = '';
     pObj.value = '';

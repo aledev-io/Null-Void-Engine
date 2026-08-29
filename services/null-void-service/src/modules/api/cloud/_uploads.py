@@ -1,5 +1,4 @@
-"""Cluster de subidas reanudables por chunks extraído de cloud.services
-(fase 6N.12).
+"""Cluster de subidas reanudables por chunks.
 
 Gestiona sesiones de subida por chunks (estilo TUS): crear sesión, consultar
 estado, anexar chunks, completar y abortar. Depende de _infra (infraestructura),

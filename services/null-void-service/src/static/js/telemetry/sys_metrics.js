@@ -169,7 +169,6 @@ async function fetchMetrics() {
         const data = await res.json();
         if (!data.ok) return;
 
-        // Top bar updates
         const updateTime = document.getElementById('update-time');
         if (updateTime) updateTime.innerText = new Date().toLocaleTimeString();
 
@@ -205,7 +204,6 @@ async function fetchMetrics() {
             `;
         }
 
-        // Metrics loop
         const metrics = ['cpu', 'ram', 'temp', 'latency', 'rps'];
         metrics.forEach(key => {
             const newVal = data[key];
@@ -258,7 +256,6 @@ async function fetchMetrics() {
             }
         });
 
-        // Disk
         if (data.disk && Array.isArray(data.disk)) {
             const diskList = document.getElementById('disk-list');
             if (diskList) {
@@ -292,7 +289,6 @@ async function fetchMetrics() {
             }
         }
 
-        // Charts update
         if (data.hist) {
             const len = data.hist.cpu ? data.hist.cpu.length : 20;
             const labels = Array(len).fill('');

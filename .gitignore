@@ -68,7 +68,7 @@ logs
 *.gguf
 
 # ============================================================
-# Tests y documentación interna (no publicar)
+# Tests y documentación interna
 # ============================================================
 tests/
 docs/

@@ -377,8 +377,6 @@ SHARED_STYLE += f"""
 """
 
 
-# PANTALLA SPLASH + WIZARD DE VINCULACION
-
 def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn):
     try:
         from PySide6 import QtWidgets, QtCore, QtGui, QtSvg
@@ -417,7 +415,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     root_layout.addWidget(stack)
     result_config = {"config": None}
 
-    # PAGINA 0 — SPLASH / BIENVENIDA (Diseño responsivo y ultra limpio)
     splash = QtWidgets.QWidget()
     splash_l = QtWidgets.QHBoxLayout(splash)
     splash_l.setContentsMargins(0, 0, 0, 0)
@@ -514,7 +511,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     splash_l.addWidget(right_panel, 1)
     stack.addWidget(splash)
 
-    # PAGINA 1 — WIZARD DE VINCULACION (3 pasos)
     wizard = QtWidgets.QWidget()
     wiz_main = QtWidgets.QHBoxLayout(wizard)
     wiz_main.setContentsMargins(0, 0, 0, 0)
@@ -885,8 +881,6 @@ def register_agent_qt_gui(bootstrap_servers, default_device_name, perform_reg_fn
     return None
 
 
-# HELPERS
-
 def _elapsed_str(client):
     if client.last_sync_time:
         elapsed = int(time.time() - client.last_sync_time)
@@ -897,8 +891,6 @@ def _elapsed_str(client):
         return f"hace {elapsed // 60} min"
     return "—"
 
-
-# DIÁLOGO — AÑADIR / VINCULAR OTRO PC
 
 def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_success=None, preselect_dev=None):
     """
@@ -993,7 +985,6 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
     # ESTADO COMPARTIDO
     state = {"token": "", "devices": [], "username": "", "workers": []}
 
-    # PASO 1: Introducir Token
     page1 = QtWidgets.QWidget()
     p1l = QtWidgets.QVBoxLayout(page1)
     p1l.setSpacing(14)
@@ -1056,7 +1047,6 @@ def open_add_pc_dialog(parent_win, client, QtWidgets, QtCore, QtGui, QtSvg, on_s
 
     stack.addWidget(page1)
 
-    # PASO 2: Seleccionar / crear PC
     page2 = QtWidgets.QWidget()
     p2l = QtWidgets.QVBoxLayout(page2)
     p2l.setSpacing(12)
@@ -1410,8 +1400,6 @@ def _make_main_window_cls(QtWidgets, QtCore):
     return NullVoidMainWindow
 
 
-# DASHBOARD PRINCIPAL — ESTILO CLOUD
-
 def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb=None):
     try:
         from PySide6 import QtCore, QtGui, QtWidgets, QtSvg
@@ -1456,7 +1444,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     win.setStyleSheet(SHARED_STYLE)
 
-    # SIDEBAR
     sidebar = QtWidgets.QFrame()
     sidebar.setObjectName("sidebar")
     sidebar.setFixedWidth(240)
@@ -1652,7 +1639,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     root.addWidget(sidebar)
 
-    # AREA PRINCIPAL
     main_area = QtWidgets.QWidget()
     main_l = QtWidgets.QVBoxLayout(main_area)
     main_l.setContentsMargins(0, 0, 0, 0)
@@ -1673,7 +1659,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     page_stack = QtWidgets.QStackedWidget()
     main_l.addWidget(page_stack, 1)
 
-    # PAGINA 0: DASHBOARD
     pg_dash = QtWidgets.QWidget()
     pg_dash_l = QtWidgets.QVBoxLayout(pg_dash)
     pg_dash_l.setContentsMargins(24, 20, 24, 20)
@@ -1737,7 +1722,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
     action_row.addStretch(1)
     pg_dash_l.addLayout(action_row)
 
-    # Log mini
     log_hdr = QtWidgets.QLabel("ACTIVIDAD RECIENTE")
     log_hdr.setStyleSheet("font-size: 10px; font-weight: 800; color: #4e5870; letter-spacing: 0.08em; margin-top: 2px;")
     pg_dash_l.addWidget(log_hdr)
@@ -1748,7 +1732,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     page_stack.addWidget(pg_dash)
 
-    # PAGINA 1: CONSOLA FULL
     pg_logs = QtWidgets.QWidget()
     pg_logs_l = QtWidgets.QVBoxLayout(pg_logs)
     pg_logs_l.setContentsMargins(24, 20, 24, 20)
@@ -1760,7 +1743,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     root.addWidget(main_area, 1)
 
-    # Logica navegacion
     def set_page(idx):
         if idx < 0:
             return
@@ -1882,7 +1864,6 @@ def launch_native_qt_gui(client, local_dir, open_folder_cb, log_queue, logout_cb
 
     set_page(0)
 
-    # Tray
     tray = None
     if QtWidgets.QSystemTrayIcon.isSystemTrayAvailable():
         try:

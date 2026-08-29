@@ -1,8 +1,6 @@
-"""Cluster de Quota/Info extraído de cloud.services (fase 6N.17).
-
+"""Cluster de Quota/Info.
 Información de cuota/almacenamiento, comprobación de capacidad y metadatos de
 un archivo o su actividad.
-
 Depende de _infra (get_dir_size, get_disk_info, _load_json, BASE_CLOUD_ROOT) y
 de _context (get_user_root, get_user_quota, get_view_root,
 _resolve_shared_or_recent_path). No depende de services.py.

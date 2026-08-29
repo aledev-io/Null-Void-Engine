@@ -1,4 +1,4 @@
-"""Cluster de versionado extraído de cloud.services (fase 6N.14).
+"""Cluster de versionado.
 
 Control de versiones de archivos: cuando un archivo se sobrescribe (sync del
 agente o subida con overwrite), el contenido anterior se conserva como hardlink

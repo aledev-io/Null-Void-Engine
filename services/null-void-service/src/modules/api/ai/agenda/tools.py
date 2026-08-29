@@ -9,8 +9,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from core.socket_ext import socketio
 
-# ─── Configuración y Constantes ───────────────────────────────────────────────
-
 MAX_TOOL_ROUNDS = 2
 ALLOWED_CATEGORIES = {"personal", "trabajo", "salud", "estudio", "ocio", "otros"}
 
@@ -235,8 +233,6 @@ AGENDA_EXTRACTION_PROMPT = (
 )
 
 
-# ─── Funciones Auxiliares de Normalización y Fechas ───────────────────────────
-
 def _normalize_title(title: str) -> str:
     t = unicodedata.normalize("NFKD", title or "").encode("ascii", "ignore").decode("ascii")
     return re.sub(r"\s+", " ", t.lower()).strip()
@@ -332,8 +328,6 @@ def _shift_month(d: date, n: int) -> date:
     day = min(d.day, max_day)
     return date(year, month, day)
 
-
-# ─── Parser Tolerante de JSON y Tool Calls ────────────────────────────────────
 
 _TOOL_NAMES_PATTERN = "list_upcoming_events|create_event|create_task|create_reminder|update_event|delete_event"
 _TEXT_TOOL_PATTERN = re.compile(
@@ -696,8 +690,6 @@ def parse_user_event_request(text: str, lang: str = "es", uid: Optional[str] = N
         args["category"] = cat
     return ("create_task" if is_task else "create_event", args)
 
-
-# ─── Ejecución de Herramientas y CRUD ─────────────────────────────────────────
 
 def _find_matching_series(uid: str, title: str, ev_type: str) -> Optional[Dict[str, Any]]:
     from modules.api.events.services import get_user_events
@@ -1227,8 +1219,6 @@ def execute_tool(name: str, args: Any, uid: str) -> Dict[str, Any]:
             pass
     return result
 
-
-# ─── Prompts, Formato y Capacidades de Modelo ─────────────────────────────────
 
 def build_agent_prompt(extraction: bool = False) -> str:
     hoy = date.today().isoformat()

@@ -89,7 +89,7 @@ def get_db() -> sqlite3.Connection:
 def init_db() -> None:
     """Crea/actualiza el esquema canónico y aplica migraciones versionadas.
 
-    El DDL y las migraciones viven en core.schema (fase de auditoría DBA):
+    El DDL y las migraciones viven en core.schema:
     este módulo solo delega. Idempotente y seguro de llamar en cada arranque."""
     from core import schema
     schema.apply_schema()

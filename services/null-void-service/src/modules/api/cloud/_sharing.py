@@ -1,4 +1,4 @@
-"""Cluster de compartidos extraído de cloud.services (fase 6N.13).
+"""Cluster de compartidos.
 
 Inicialización del Cloud de un usuario y lógica de compartición
 (share/list with-me/subpath/by-me). Depende de _infra (_save_json, _load_json,

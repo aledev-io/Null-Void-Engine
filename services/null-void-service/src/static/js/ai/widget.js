@@ -312,10 +312,6 @@ async function widgetAutoResume() {
     } catch (e) { /* sin red: se mantiene el mensaje de bienvenida */ }
 }
 
-/* ─── Generación en segundo plano ────────────────────────────────────────
-   Si se cerró sesión o el widget con un mensaje en cola sin cancelar, el
-   servidor completa la respuesta en segundo plano (respetando la cola) y la
-   guarda en la sesión. Aquí se detecta y se recarga cuando termina. ─── */
 let widgetPollTimer = null;
 let widgetPollingSession = null;
 let widgetTypingEl = null;

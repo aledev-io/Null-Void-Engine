@@ -48,7 +48,6 @@ import { socket } from './socket.js';
 Object.assign(window, {
   filterTable, loadSelectedPreset, onFluctuationChange, saveScraperRef, toggleSelectAll, validatePriceRange, batchScrapeListed, bulkAction, cancelPresetSave, cancelRoutine, closeBotRulesView, closeConfigView, closeLightbox, closeProductView, createBotRule, cycleFluctuationSort, deleteSelectedPreset, exportListPdf, fetchDescription, loadFilters, saveConfig, savePccompTerms, sendSelectedToTelegram, showAllProducts, showConfigView, showDiscarded, showFavorites, sortByDistance, startCreatePreset, startRenamePreset, startRoutine, startScrape, toggleChatbot, toggleDiscarded, toggleFavorite, toggleSection, toggleSidebar, toggleTheme, toggleUserMenu, copyAtHomeSummary, deleteBotRule, exportProduct, filterByField, goToPage, openLightbox, openProduct, sendDetailToTelegram, toggleBotRule, toggleRowSelection, filterBrandsList
 });
-/* ─── FILTROS Y PRESETS ─────────────────────────────────── */
 
 function startCreatePreset() {
   const select = document.getElementById('filter-presets-selector');
@@ -380,7 +379,6 @@ async function loadFilters(silent = false) {
   if (!silent) showToast("Filtros y presets recargados.");
 }
 
-/* ─── SOCKET.IO: ESTADO DEL SCRAPER ──────────────────────── */
 socket.on('scraper_state_update', (sockState) => {
   const loading = document.getElementById('loading');
   const btnRoutine = document.getElementById('btn-routine');
@@ -460,9 +458,6 @@ socket.on('scraper_distance_update', (data) => {
   }, 500);
 });
 
-/* ─── UI: TEMA, SIDEBAR Y MENÚS ──────────────────────────── */
-
-
 if (localStorage.getItem('nv_theme') === 'light') {
   document.documentElement.setAttribute('data-theme', 'light');
   document.addEventListener("DOMContentLoaded", () => {
@@ -476,9 +471,6 @@ setInterval(async () => {
     await fetchAPI('/api/system/user/info');
   } catch (e) { }
 }, 60000);
-
-/* ─── BASE DE DATOS: ESTADO GLOBAL ────────────────────────── */
-
 
 function onFluctuationChange() {
   const fluc = document.getElementById('filter-fluctuation').value;
@@ -794,7 +786,6 @@ function filterByField(value) {
 
 // --- NUEVO: Inicialización de caché asíncrona desde el servidor de Docker ---
 
-/* ─── GEOLOCALIZACIÓN Y DISTANCIAS ────────────────────────── */
 async function loadGeocodeCacheFromServer() {
   try {
     const res = await fetchAPI('/api/scraper/geocode/cache'); if (!res) return;
@@ -966,7 +957,6 @@ async function sortByDistance(silent = false, forceRecalculate = false) {
   }
 }
 
-/* ─── FILTRADO, ORDENACIÓN Y PAGINACIÓN ───────────────────── */
 function filterTable(preservePage = false) {
   const query = document.getElementById('local-filter').value.toLowerCase();
   const category = document.getElementById('filter-category').value;
@@ -1102,7 +1092,6 @@ function filterTable(preservePage = false) {
 
 
 
-/* ─── CARGA DE BASE DE DATOS ──────────────────────────────── */
 async function loadDatabase(isPolling = false) {
   try {
     const saved = localStorage.getItem('nv_geocode_cache_v3');
@@ -1278,7 +1267,6 @@ async function loadDatabase(isPolling = false) {
 }
 
 
-/* ─── SCRAPING: BÚSQUEDA Y RUTINAS ────────────────────────── */
 async function startScrape() {
   const termsRaw = document.getElementById('config-pccomp-terms').value.trim();
   if (!termsRaw) { showToast("Escribe al menos un término para scrapear."); return; }
@@ -1496,10 +1484,6 @@ async function saveConfig() {
   }
 }
 
-/* ─── GRÁFICO DE PRECIOS ──────────────────────────────────── */
-
-/* ─── TELEGRAM ────────────────────────────────────────────── */
-
 async function sendDetailToTelegram() {
   const isAtHome = (localStorage.getItem('nv_scraper_target') || 'pccomponentes') === 'athome';
   if (!isAtHome) {
@@ -1585,15 +1569,12 @@ async function exportListPdf() {
   }
 }
 
-/* ─── INICIALIZACIÓN DEL MÓDULO ───────────────────────────── */
 async function initScraperModule() {
   await loadGeocodeCacheFromServer();
   await loadDatabase();
   await loadFilters(true);
 }
 
-
-/* ─── WIZARD: EXTRACCIÓN PROFUNDA (FASE 2) ────────────────── */
 
 async function batchScrapeListed() {
   const btn = document.getElementById('btn-wizard-scrape');
@@ -1754,10 +1735,6 @@ async function sendSelectedToTelegram() {
     btn.disabled = false;
   }
 }
-
-/* ─── BOT RULES (TELEGRAM) ────────────────────────────────── */
-
-
 
 async function createBotRule() {
   const name = document.getElementById('bot-rule-name').value.trim();

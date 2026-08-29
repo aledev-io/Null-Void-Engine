@@ -42,10 +42,6 @@ except Exception:
     _SPACY_AVAILABLE = False
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Modelos de datos
-# ─────────────────────────────────────────────────────────────────────────────
-
 _ES_NER_MODEL = "es_core_news_sm"
 _EN_NER_MODEL = "en_core_web_sm"
 _nlps: Dict[str, Any] = {"es": None, "en": None}
@@ -121,10 +117,6 @@ class MaskingContext:
         return "".join(pieces)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Validadores algorítmicos
-# ─────────────────────────────────────────────────────────────────────────────
-
 _DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
 
 
@@ -179,10 +171,6 @@ def _is_valid_phone(value: str) -> bool:
     s = s.lstrip("+")
     return 9 <= len(s) <= 15 and s.isdigit()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Patrones estructurados
-# ─────────────────────────────────────────────────────────────────────────────
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,8}\b", re.IGNORECASE)
@@ -284,10 +272,6 @@ _AGENDA_CONTEXT = {
     "calendar", "schedule", "reminder", "holiday", "birthday",
 }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Detectores
-# ─────────────────────────────────────────────────────────────────────────────
 
 class Detector(Protocol):
     priority: int
@@ -436,10 +420,6 @@ def _get_nlp(lang: str = "es"):
     return _nlps[lang]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Resolución de solapamientos: Prioridad > Confianza > Longitud
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _resolve_spans(candidates: Iterable[Candidate]) -> list[Candidate]:
     accepted: list[Candidate] = []
     for c in sorted(
@@ -451,10 +431,6 @@ def _resolve_spans(candidates: Iterable[Candidate]) -> list[Candidate]:
         accepted.append(c)
     return sorted(accepted, key=lambda c: c.start)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Detectores registrados
-# ─────────────────────────────────────────────────────────────────────────────
 
 _DETECTORS: tuple[Detector, ...] = (
     RegexDetector(PIIType.SECRET, _PRIVATE_KEY_RE, None, priority=10),
@@ -510,10 +486,6 @@ def _get_detectors(mode: str = "full") -> tuple[Detector, ...]:
 
 _ALWAYS_MASK_ROLES = {"user", "assistant", "tool", "system"}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# API pública
-# ─────────────────────────────────────────────────────────────────────────────
 
 def mask_sensitive(text: str, mode: str = "full") -> tuple[str, dict[str, str]]:
     """Enmascara PII de un texto. Devuelve (texto_enmascarado, mapping)."""

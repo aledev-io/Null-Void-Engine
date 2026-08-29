@@ -1,5 +1,4 @@
-"""Cluster de búsqueda (FTS + sweeper) (fase 6N.10).
-
+"""Cluster de búsqueda (FTS + sweeper).
 Índice de nombres en memoria (O(1)) + índice de contenido FTS5 en background
 con barrido periódico. Depende de _infra (BASE_CLOUD_ROOT, logger, _load_json)
 y de _context (get_user_root, get_view_root). No depende de services.py. El

@@ -6,21 +6,17 @@ export const PushNotifications = {
         }
 
         try {
-            // Check current permission
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') {
                 console.log("Notificaciones no permitidas por el usuario.");
                 return;
             }
 
-            // Register service worker
             const registration = await navigator.serviceWorker.register('/sw.js');
             console.log("Service Worker registered with scope:", registration.scope);
 
-            // Wait for it to be active
             await navigator.serviceWorker.ready;
 
-            // Get VAPID public key from backend
             const vapidRes = await fetch('/api/system/webpush/vapid_public_key', { headers: window.HEADERS });
             if (!vapidRes.ok) throw new Error("Could not fetch VAPID key");
             const vapidData = await vapidRes.json();
@@ -47,7 +43,6 @@ export const PushNotifications = {
                 }
             }
 
-            // Send subscription to backend
             const subRes = await fetch('/api/system/webpush/subscribe', {
                 method: 'POST',
                 headers: {

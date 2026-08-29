@@ -1,5 +1,4 @@
-"""Cluster de descargas + streaming ZIP extraído de cloud.services (fase 6N.8).
-
+"""Cluster de descargas + streaming ZIP.
 Gestiona tokens de descarga (single/multi), streaming ZIP (DEFLATE con data
 descriptors) y la descarga de archivos. Depende de _infra (tokens, JSON,
 _ZIP_CHUNK_BYTES, _yield_event_loop, BASE_CLOUD_ROOT) y de _context

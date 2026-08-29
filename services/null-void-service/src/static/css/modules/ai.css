@@ -2138,11 +2138,8 @@ html {
     background: rgba(99, 102, 241, 0.1);
 }
 
-/* RESPONSIVE RULES */
 @media (max-width: 767px),
 (max-height: 500px) and (orientation: landscape) {
-
-    /* Main Layout */
     .app-layout {
         position: relative;
         overflow: hidden;
@@ -2172,7 +2169,6 @@ html {
         box-shadow: none;
     }
 
-    /* Drawer visible solo cuando el usuario lo abre (.open en móvil) */
     .sidebar.open {
         transform: translateX(0);
         box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
@@ -2231,7 +2227,6 @@ html {
         display: none;
     }
 
-    /* ─── Input wrapper: pastilla nativa estilo iMessage ──────── */
     .input-wrapper {
         padding: 8px 12px !important;
         gap: 6px;

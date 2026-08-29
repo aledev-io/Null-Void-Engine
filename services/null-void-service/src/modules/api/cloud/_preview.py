@@ -1,5 +1,4 @@
-"""Cluster de previews/PDF extraído de cloud.services (fase 6N.9).
-
+"""Cluster de previews/PDF.s
 Genera miniaturas (imágenes, vídeo, PDF) y placeholders SVG para la
 previsualización de archivos. Depende de _infra (BASE_CLOUD_ROOT,
 MAX_FILE_SIZE_PREVIEW) y de _context (get_user_root, get_view_root,

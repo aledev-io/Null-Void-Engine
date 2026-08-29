@@ -1,5 +1,4 @@
-"""Cluster archive (ZIP/unzip) extraído de cloud.services (fase 6N.11).
-
+"""Cluster archive (ZIP/unzip).
 Comprime una carpeta/archivo a ZIP y descomprime ZIPs con protecciones anti
 Zip-Slip / Zip-Bomb. Depende de _infra (logger, _unique_path, _ZIP_CHUNK_BYTES,
 _yield_event_loop, _MAX_UNCOMPRESSED_BYTES, BASE_CLOUD_ROOT), de _context

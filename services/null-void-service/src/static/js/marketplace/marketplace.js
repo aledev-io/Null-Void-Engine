@@ -21,10 +21,8 @@ export async function fetchMarketplace() {
 
 export function sortModules(modules) {
     return [...modules].sort((a, b) => {
-        // System modules first (a.core == true)
         if (a.core && !b.core) return -1;
         if (!a.core && b.core) return 1;
-        // Then sort alphabetically by name
         return a.name.localeCompare(b.name);
     });
 }

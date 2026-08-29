@@ -1082,7 +1082,6 @@ export function applyBillingCalculatorUI() {
     let nameInput = document.getElementById('billing-ui-name');
     let productName = (nameInput && nameInput.value.trim() !== '') ? nameInput.value : "Desconocido";
 
-    // Initialize Column A template if it doesn't exist
     if (!spreadsheetData['A2'] || spreadsheetData['A2'] !== "INVERSION") {
         spreadsheetData = {}; // Clear everything
 
@@ -1124,7 +1123,6 @@ export function applyBillingCalculatorUI() {
         return;
     }
 
-    // Ensure Global Summary formulas exist in Column B
     if (!spreadsheetData['B2']) {
         spreadsheetData['B2'] = "=SUM(B9:ZZ9)";
         spreadsheetData['B3'] = "=SUM(B14:ZZ14)";
@@ -1132,19 +1130,16 @@ export function applyBillingCalculatorUI() {
         spreadsheetData['B5'] = "=B4 / B2";
     }
 
-    // Find the first empty column for the new product (Check row 8 for Product Name)
     let colIdx = 1; // start at B (1)
     while (spreadsheetData[`${indexToColName(colIdx)}8`] !== undefined) {
         colIdx++;
     }
     const colStr = indexToColName(colIdx);
 
-    // Populate the product data
     spreadsheetData[`${colStr}8`] = productName;
     spreadsheetData[`${colStr}9`] = cost;
     spreadsheetData[`${colStr}10`] = margin;
 
-    // Scan Column A to find discount blocks and inject formulas
     let r = 12;
     while (spreadsheetData[`A${r}`] !== undefined) {
         let match = spreadsheetData[`A${r}`].match(/--(\d+(?:\.\d+)?)%--/);

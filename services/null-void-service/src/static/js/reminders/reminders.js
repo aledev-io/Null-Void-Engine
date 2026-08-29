@@ -21,7 +21,6 @@ window.renderReminders = function() {
     const localTomorrow = new Date(tomorrow.getTime() - (tomorrow.getTimezoneOffset() * 60000));
     const tomorrowStr = localTomorrow.toISOString().split('T')[0];
 
-    // Count badges
     let cAll = 0, cUpcoming = 0, cImp = 0;
     window.allEvents.forEach(ev => {
         if (ev.completed) return;
@@ -37,7 +36,6 @@ window.renderReminders = function() {
     const elImp = document.getElementById('badge-important');
     if (elImp) elImp.textContent = cImp;
 
-    // Filter
     const filter = window.currentFilter || 'all';
     let alerts = window.allEvents.filter(ev => {
         if (ev.completed) return false;

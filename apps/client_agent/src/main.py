@@ -36,11 +36,12 @@ def load_agent_env():
     cualquier servidor cuyo certificado no coincida (anti-MITM).
     """
     data = {}
+    base = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
     env_paths = [
-        '.env',
-        '../.env',
-        '../../.env',
-        os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), '.env')
+        os.path.join(base, '.env'),
+        os.path.join(base, '..', '.env'),
+        os.path.join(base, '..', '..', '.env'),
+        os.path.join(base, '..', '..', '..', '.env'),
     ]
     for env_path in env_paths:
         if os.path.exists(env_path):

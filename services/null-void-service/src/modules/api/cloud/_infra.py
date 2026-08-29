@@ -1,5 +1,4 @@
-"""Infraestructura de bajo nivel de Cloud, dependencia-neutral (fase 6N.20).
-
+"""Infraestructura de bajo nivel de Cloud, dependencia-neutral.
 Reúne constantes, primitivas de ruta/seguridad, persistencia JSON, cálculo de
 tamaños, estado de tokens de descarga y el acceso al token de petición. NO
 depende de services.py ni de ningún submodule de Cloud (solo stdlib, config y

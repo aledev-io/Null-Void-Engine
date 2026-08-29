@@ -277,7 +277,6 @@ def send_email(user_id, username, to_email, subject, body, files, mode, is_sched
     connector.send_via_smtp(gmail_user, gmail_pass, to_email, subject, body, files)
 
 
-# ── Despacho de correos programados ───────────────────────────────────────────
 # Ownership del bucle de envío programado (antes en core/mail_scheduler.py).
 # El scheduler de core solo dispara este servicio; el dominio Mail posee la
 # lectura de internal_mail, la evaluación de due-time, la resolución de

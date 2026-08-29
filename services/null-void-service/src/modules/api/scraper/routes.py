@@ -378,10 +378,8 @@ def toggle_bot_rule_proxy(rule_id):
 import os as _os, json as _json
 
 def _geocode_cache_path():
-    return _os.path.join(
-        _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '../../../../data')),
-        'scraper', 'geocode_cache_v2.json'
-    )
+    from modules.api.scraper.scraper_db import SCRAPER_DIR
+    return _os.path.join(SCRAPER_DIR, 'geocode_cache_v2.json')
 
 @scraper_bp.route('/api/scraper/geocode/cache', methods=['GET'])
 def get_geocode_cache():
@@ -627,7 +625,8 @@ def export_to_favourites():
         
     import os
     import re
-    fav_dir = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../data')), 'favourites')
+    from modules.api.scraper.scraper_db import SCRAPER_DIR
+    fav_dir = os.path.join(SCRAPER_DIR, 'favourites')
     os.makedirs(fav_dir, exist_ok=True)
     
     title = prod_data['product']['title']

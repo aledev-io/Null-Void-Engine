@@ -19,7 +19,7 @@ from core.webpush_utils import get_or_create_vapid_keys, get_vapid_claims
 HISTORY_PATH = os.path.join(os.path.dirname(DB_PATH), 'notifications_history.json')
 
 class ReminderSource(Protocol):
-    """Port (fase 6M.3): origen de recordatorios de eventos.
+    """Port: origen de recordatorios de eventos.
 
     Core posee el mecanismo de notificación y solo necesita saber que existe
     una fuente capaz de devolver los recordatorios próximos a notificar.

@@ -7,7 +7,6 @@
 import { state } from './state.js';
 import { fetchAPI } from './api.js';
 
-/* ─── UI: TEMA, SIDEBAR Y MENÚS ─────────────── */
     export function toggleTheme() {
       const current = document.documentElement.getAttribute('data-theme');
       const target = current === 'light' ? 'dark' : 'light';
@@ -28,7 +27,6 @@ import { fetchAPI } from './api.js';
       if (sidebar) sidebar.classList.toggle('collapsed');
     }
 
-/* ─── SELECCIÓN Y FAVORITOS (RENDER) ────────── */
     export function updateDetailButtons(sku) {
       if (!sku) return;
       sku = String(sku);
@@ -74,7 +72,6 @@ import { fetchAPI } from './api.js';
       }
     }
 
-/* ─── UI: TEMA, SIDEBAR Y MENÚS ─────────────── */
     export function toggleSection(id) {
       const container = document.getElementById('list-' + id);
       const chevron = document.getElementById('chevron-' + id);
@@ -129,7 +126,6 @@ import { fetchAPI } from './api.js';
       });
     }
 
-/* ─── GRID DE PRODUCTOS (RENDER) ────────────── */
     export function goToPage(page) {
       state.page = page;
       if (state.filteredData) {
@@ -313,7 +309,6 @@ import { fetchAPI } from './api.js';
       }
     }
 
-/* ─── DETALLE DE PRODUCTO ───────────────────── */
 export async function openProduct(sku) {
       state.currentProductSku = sku;
       document.getElementById('view-main').style.display = 'none';
@@ -528,7 +523,6 @@ export async function fetchDescription(cacheOnly = false) {
           let gridHtml = '';
           const imgs = data.images;
 
-          // Helper function to render image with lightbox
           const renderImg = (src, style) => `<div style="${style} cursor:pointer; overflow:hidden;" onclick="openLightbox('${src}')"><img src="${src}" style="width:100%; height:100%; object-fit:${isAtHome ? 'cover' : 'contain'}; background:#fff; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"></div>`;
 
           if (imgs.length === 1) {
@@ -576,7 +570,6 @@ export async function fetchDescription(cacheOnly = false) {
       document.getElementById('view-main').style.display = 'block';
     }
 
-/* ─── CONFIGURACIÓN (VISTAS) ────────────────── */
 export async function showConfigView() {
       if (typeof state.isBatchScrapingDescriptions !== 'undefined' && state.isBatchScrapingDescriptions) {
         alert("Por favor, cancela o espera a que termine la extracción profunda (Fase 2) antes de entrar a Configuración.");
@@ -640,7 +633,6 @@ export async function showConfigView() {
       }, 3000);
     }
 
-/* ─── GRÁFICO DE PRECIOS ────────────────────── */
     export function drawGraph(history, currentPrice) {
       const graph = document.getElementById('detail-graph');
 
@@ -762,7 +754,6 @@ export async function showConfigView() {
       });
     }
 
-/* ─── TELEGRAM (MENSAJES) ───────────────────── */
     export function buildTelegramMessage(p, desc) {
       let pets = "Not specified";
       if (desc.match(/no pets|pets not allowed|pets are not allowed|pets not permitted|pets are not permitted|pas d'animaux|sans animaux|animaux non acceptés|animaux interdits|no mascotas|sin mascotas|no se admiten|animaux ne sont pas admis|ne sont pas admis/i)) {
@@ -849,7 +840,6 @@ export async function showConfigView() {
       if (sec) sec.style.display = isAtHome ? 'block' : 'none';
     }
 
-/* ─── WIZARD / BOT RULES (VISTAS) ───────────── */
     export function setWizardStep(stepNumber) {
       // Update step badge colors
       const b1 = document.getElementById('badge-step-1');
@@ -934,7 +924,6 @@ export async function loadBotRules() {
       }
     }
 
-/* ─── CHATBOT FLOTANTE ──────────────────────── */
     export function toggleChatbot() {
       const wnd = document.getElementById('chatbot-window');
       if (wnd.style.display === 'none' || wnd.style.display === '') {

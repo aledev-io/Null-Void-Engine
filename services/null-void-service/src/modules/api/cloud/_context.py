@@ -1,6 +1,5 @@
 """Contexto compartido de Cloud: raíces de usuario, vistas, cuota, compartición,
-protección, actividad y ámbito de agente (fase 6N.20).
-
+protección, actividad y ámbito de agente.
 Depende de _infra (infraestructura neutral), del repositorio de Cloud y de la
 sesión. NO importa services.py ni ningún submodule de Cloud a nivel de módulo.
 Los únicos imports perezosos legítimos son core.database (get_db) y socketio.

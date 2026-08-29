@@ -37,8 +37,6 @@ window.cancelChatEdit = function () {
     }
 };
 
-/* ─── Helpers ─── */
-
 function isImageFile(name) {
     const ext = name.split('.').pop().toLowerCase();
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext);
@@ -84,8 +82,6 @@ function getChatFileIcon(name) {
     };
     return icons[ext] || { bg: '#6b7280', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' };
 }
-
-/* ─── Init / Stop ─── */
 
 async function initChat() {
     initSocketConnection();
@@ -168,8 +164,6 @@ function stopChat() {
     if (_chatTypingTimeout) { clearTimeout(_chatTypingTimeout); _chatTypingTimeout = null; }
     if (_chatTypingHideTimeout) { clearTimeout(_chatTypingHideTimeout); _chatTypingHideTimeout = null; }
 }
-
-/* ─── Socket.IO ─── */
 
 function initSocketConnection() {
     if (chatSocket && chatSocket.connected) return;
@@ -339,7 +333,6 @@ function initSocketConnection() {
     });
 }
 
-/* ─── Global Event Listeners ─── */
 let _isDraggingSelection = false;
 let _dragSelectAdding = true;
 
@@ -421,8 +414,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-/* ─── Typing Indicator ─── */
-
 function handleChatTyping() {
     if (!chatSocket || !chatSocket.connected || !currentChatContact) return;
     chatSocket.emit('typing', {
@@ -443,8 +434,6 @@ function hideChatTyping() {
     const el = document.getElementById('chat-typing');
     if (el) el.style.display = 'none';
 }
-
-/* ─── Polling ─── */
 
 let _chatPollInterval = null;
 let _chatConvInterval = null;
@@ -508,8 +497,6 @@ function stopChatPolling() {
         _chatConvInterval = null;
     }
 }
-
-/* ─── Conversations ─── */
 
 async function loadChatConversations(force = false) {
     // Debounce: skip if a load is already in-flight or ran less than 2s ago (unless forced)
@@ -613,9 +600,6 @@ function renderChatConversations(conversations) {
     list.innerHTML = html;
 }
 
-/* ─── Open / Load Messages ─── */
-
-
 let _chatMessageCache = {};
 
 async function openChatWith(contactId, contactName, lastActivityIso = '', isGroup = false) {
@@ -673,8 +657,6 @@ async function loadChatMessages(contactId) {
         console.error("Error cargando mensajes:", err);
     }
 }
-
-/* ─── Render Messages (WhatsApp-style) ─── */
 
 function renderChatMessages() {
     const container = document.getElementById('chat-messages');
@@ -991,8 +973,6 @@ function handleChatScroll() {
     }
 }
 
-/* ─── Message Actions (Context Menu) ─── */
-
 function closeChatContextMenu() {
     const el = document.getElementById('chat-msg-menu');
     if (el) {
@@ -1225,8 +1205,6 @@ function editMessageInline(msgId) {
     }
 }
 
-/* ─── Forward Dialog ─── */
-
 function showForwardDialog(msgId) {
     if (msgId) _contextMsgId = msgId;
     const overlay = document.createElement('div');
@@ -1325,8 +1303,6 @@ async function doForward(targetContactId) {
         cancelMessageSelection();
     } catch (e) { }
 }
-
-/* ─── Delete Conversation ─── */
 
 function openChatConvMenu(e, contactId, contactName, isMuted, isGroup = false, isOwner = false) {
     e.preventDefault();
@@ -1498,8 +1474,6 @@ async function toggleChatMute(contactId) {
         loadChatConversations(true);
     } catch (e) { }
 }
-
-/* ─── Message Selection ─── */
 
 function startMessageSelection(msgId) {
     _chatSelectionMode = true;
@@ -1685,8 +1659,6 @@ async function deleteSelectedMessages() {
     cancelMessageSelection();
 }
 
-/* ─── Secure Download ─── */
-
 async function downloadFile(url, filename) {
     try {
         const res = await fetch(url, { headers: { 'X-Token': TOKEN } });
@@ -1704,8 +1676,6 @@ async function downloadFile(url, filename) {
         console.error("Error en descarga:", err);
     }
 }
-
-/* ─── Audio Player (play/pause/resume) ─── */
 
 let _chatAudio = null;
 let _chatAudioEl = null;
@@ -1813,8 +1783,6 @@ function playAudio(el, url) {
         });
 }
 
-/* ─── Video Player (lightbox) ─── */
-
 function openChatVideo(src) {
     const lb = document.getElementById('chat-lightbox');
     const img = document.getElementById('chat-lightbox-img');
@@ -1834,8 +1802,6 @@ function openChatVideo(src) {
         lb.classList.add('active');
     }
 }
-
-/* ─── Lightbox ─── */
 
 let currentLbGroup = [];
 let currentLbIndex = -1;
@@ -1922,8 +1888,6 @@ document.addEventListener('touchstart', (e) => {
 }, { passive: true });
 document.addEventListener('touchend', () => { if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; } }, { passive: true });
 document.addEventListener('touchmove', () => { if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; } }, { passive: true });
-
-/* ─── Voice Recorder ─── */
 
 let _mediaRecorder = null;
 let _audioChunks = [];
@@ -2116,8 +2080,6 @@ function cleanupVoiceRecording() {
 }
 
 
-/* ─── File Selection & Drag/Paste ─── */
-
 function attachChatFiles() {
     if (selectedChatFiles.length === 0) return;
     cancelMessageSelection();
@@ -2206,8 +2168,6 @@ function clearChatFile() {
     document.getElementById('chat-file-preview').style.display = 'none';
     if (typeof updateChatActionBtn === 'function') updateChatActionBtn();
 }
-
-/* ─── Send Message ─── */
 
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
@@ -2348,8 +2308,6 @@ async function updateChatBadge() {
         }
     } catch (err) { }
 }
-
-/* ─── New Chat Dialog ─── */
 
 let _newChatActiveTab = 'friends';
 let _searchDebounceTimeout = null;
@@ -2505,8 +2463,6 @@ async function startNewChat(userId, username, lastActivityIso) {
         openChatWith(userId, username, lastActivityIso);
     } catch (err) { }
 }
-
-/* ─── Formatting ─── */
 
 function formatChatTime(timestamp) {
     const date = new Date(timestamp * 1000);
@@ -2755,8 +2711,6 @@ document.addEventListener('click', function (e) {
 initSocketConnection();
 setTimeout(() => updateChatBadge(), 2000);
 setInterval(() => updateChatBadge(), 15000);
-
-/* ─── Smart Chat (floating widget) ─── */
 
 let _currentChatMode = 'ai';
 

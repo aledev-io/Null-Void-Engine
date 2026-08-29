@@ -12,7 +12,7 @@ class MailScheduler:
     SMTP) vive en modules.api.mail.services.dispatch_scheduled_emails(). Este
     módulo solo gestiona el ciclo de vida del hilo y delega el despacho.
 
-    (Fase 6M.2: se movió de core/mail_scheduler.py a modules/api/mail/scheduler.py
+    (Se movió de core/mail_scheduler.py a modules/api/mail/scheduler.py
     para romper la dependencia core → modules.api.mail.)
     """
     def __init__(self):

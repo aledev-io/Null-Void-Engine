@@ -10,7 +10,6 @@ import { initSockets } from './socket_manager.js';
 Object.defineProperty(window, 'notes', { get: () => Notes.notes });
 Object.defineProperty(window, 'currentNoteId', { get: () => Notes.currentNoteId });
 
-// Notes
 window.saveToNoteHistory = Notes.saveToNoteHistory;
 window.undoNote = Notes.undoNote;
 window.redoNote = Notes.redoNote;
@@ -38,7 +37,6 @@ window.setViewMode = Notes.setViewMode;
 window.handleCursorUpdate = Notes.handleCursorUpdate;
 window.handleNoteUpdate = Notes.handleNoteUpdate;
 
-// API
 window.fetchModels = API.fetchModels;
 window.loadCloudItemsForAttach = API.loadCloudItemsForAttach;
 window.loadNotesItemsForAttach = API.loadNotesItemsForAttach;
@@ -48,7 +46,6 @@ window.fetchAPIKeys = API.fetchAPIKeys;
 window.saveAPIKey = API.saveAPIKey;
 window.deleteAPIKey = API.deleteAPIKey;
 
-// Files & Attachments
 window.openAttachSelectorModal = Files.openAttachSelectorModal;
 window.closeAttachSelectorModal = Files.closeAttachSelectorModal;
 window.navigateSelectModalCloudUp = Files.navigateSelectModalCloudUp;
@@ -77,7 +74,6 @@ window.attachPastedText = Files.attachPastedText;
 window.detectSnippetExtension = Files.detectSnippetExtension;
 window.initPasteHandlers = Files.initPasteHandlers;
 
-// Workspace
 window.showWorkspaces = Workspace.showWorkspaces;
 window.createNewWorkspace = Workspace.createNewWorkspace;
 window.openWorkspaceDetail = Workspace.openWorkspaceDetail;
@@ -91,7 +87,6 @@ window.filterWorkspaces = Workspace.filterWorkspaces;
 window.toggleFilterMenu = Workspace.toggleFilterMenu;
 window.selectWorkspaceFilter = Workspace.selectWorkspaceFilter;
 
-// UI & Modals
 window.showInputDialog = UI.showInputDialog;
 window.cancelInputDialog = UI.cancelInputDialog;
 window.showConfirmDialog = UI.showConfirmDialog;
@@ -138,7 +133,6 @@ window.showToast = UI.showToast;
 window.updateCursor = UI.updateCursor;
 window.renderActiveCollaborators = UI.renderActiveCollaborators;
 
-// Chat
 window.showChat = Chat.showChat;
 window.handleRouting = Chat.handleRouting;
 window.autoResize = Chat.autoResize;
@@ -177,7 +171,6 @@ window.getVisibleSearchItems = Chat.getVisibleSearchItems;
 window.moveSearchSelection = Chat.moveSearchSelection;
 window.activateSearchSelection = Chat.activateSearchSelection;
 
-// Initialize when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     // Espejo del nombre del modelo actual hacia el label del top-nav (#top-model-label)
     const _modelSrc = document.getElementById('main-model-label');

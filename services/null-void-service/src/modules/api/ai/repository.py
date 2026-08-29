@@ -865,7 +865,6 @@ def unshare_note(note_id: str, friend_id: str):
         conn.commit()
 
 
-# ── Re-exports de compatibilidad: Workspaces ────────────────────
 from .workspaces.repository import (
     create_workspace,
     get_workspaces,
@@ -880,7 +879,6 @@ from .workspaces.repository import (
 )
 
 
-# ── Registro de migraciones en el runner central (core.schema) ──
 # Las migraciones 101-104 corresponden a las antiguas v1-v4 del módulo IA.
 # Son idempotentes por contenido; el runner central las ejecuta una sola vez.
 from core import schema as _core_schema
