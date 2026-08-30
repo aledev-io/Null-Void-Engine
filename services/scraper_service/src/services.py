@@ -143,7 +143,6 @@ def _scrape_task(query: str, user_id=None):
                 
         # Fix rounded prices from microdata by searching the raw HTML for exact decimal prices
         import re
-        html_text = respuesta.text
         exact_prices = {}
         # Search for exact prices in Next.js state or HTML data attributes (e.g., "price":267.99)
         # Matches patterns like "sku":"123","price":267.99 or "article":"123","price":267.99

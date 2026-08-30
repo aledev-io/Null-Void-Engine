@@ -5,7 +5,6 @@ from . import services
 from core.limiter import limiter
 
 friends_bp = Blueprint('friends', __name__, url_prefix='/api/friends')
-limiter.exempt(friends_bp)
 
 
 def _get_user():
@@ -16,6 +15,7 @@ def _get_user():
 
 
 @friends_bp.route('/list', methods=['GET'])
+@limiter.exempt
 def get_friends():
     _, uid = _get_user()
     if not uid:
@@ -123,6 +123,7 @@ def remove_friend():
 
 
 @friends_bp.route('/search', methods=['GET'])
+@limiter.exempt
 def search():
     _, uid = _get_user()
     if not uid:

@@ -43,7 +43,10 @@ def get_folder_emails():
     force_refresh = request.args.get('refresh') == 'true'
     google_email = request.args.get('google_email')
 
-    page = int(request.args.get('page', 1))
+    try:
+        page = int(request.args.get('page', 1))
+    except (ValueError, TypeError):
+        page = 1
     try:
         data = services.get_emails(user_id, folder, mode, force_refresh, google_email=google_email, page=page)
         resp = {"emails": data["emails"], "has_more": data.get("has_more", False), "folder": folder, "folder_name": FOLDER_NAMES.get(folder, folder)}

@@ -118,7 +118,3 @@ def search_users_for_friend(query, user_id):
             'last_activity': sess.get_last_activity(u['username']),
         })
     return result
-
-
-def remove_friend(user_id, friend_id):
-    return repository.remove_friendship(user_id, friend_id)

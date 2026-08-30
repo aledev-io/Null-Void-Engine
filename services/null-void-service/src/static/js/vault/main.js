@@ -329,7 +329,10 @@ async function unlockVault() {
 }
 
 async function syncVault() {
-    if (!vaultKey) return;
+    if (!vaultKey) {
+        NV_Alert("No hay clave maestra. Vault no sincronizado.");
+        return;
+    }
     
     try {
         const fileContent = await encryptVault(vaultData, vaultKey);
@@ -496,7 +499,7 @@ async function createNewCategory() {
         if (!vaultData.categories) vaultData.categories = ['General'];
         if (!vaultData.categories.includes(cleanCat)) {
             vaultData.categories.push(cleanCat);
-            syncVault(); // save it
+            await syncVault();
         }
         updateCategorySelect();
         document.getElementById('entry-category').value = cleanCat;
@@ -558,7 +561,7 @@ function closeModal() {
     document.getElementById('vault-modal').style.display = 'none';
 }
 
-function saveEntry() {
+async function saveEntry() {
     const cat = document.getElementById('entry-category').value;
     
     const u = document.getElementById('entry-usuario').value.trim();
@@ -588,7 +591,7 @@ function saveEntry() {
     
     closeModal();
     renderVault();
-    syncVault();
+    await syncVault();
 }
 
 // -- Notes Logic --
@@ -633,14 +636,14 @@ async function saveNote() {
     
     closeNoteModal();
     renderVault();
-    syncVault();
+    await syncVault();
 }
 
-function deleteNote(index) {
+async function deleteNote(index) {
     if(!confirm("¿Estás seguro de que deseas borrar esta nota?")) return;
     vaultData.notes.splice(index, 1);
     renderVault();
-    syncVault();
+    await syncVault();
 }
 
 async function deleteEntry(index) {
@@ -669,7 +672,7 @@ function escapeHtml(unsafe) {
          .replace(/'/g, "&#039;");
 }
 
-// Handle enter key on auth
+// Handle enter key on auth + overlay click-to-close
 document.addEventListener('DOMContentLoaded', () => {
     const pwdInput = document.getElementById('vault-master-pwd');
     if (pwdInput) {
@@ -677,6 +680,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') {
                 unlockVault();
             }
+        });
+    }
+
+    const vaultModal = document.getElementById('vault-modal');
+    if (vaultModal) {
+        vaultModal.addEventListener('click', (e) => {
+            if (e.target === vaultModal) closeModal();
+        });
+    }
+    const noteModal = document.getElementById('note-modal');
+    if (noteModal) {
+        noteModal.addEventListener('click', (e) => {
+            if (e.target === noteModal) closeNoteModal();
         });
     }
 });

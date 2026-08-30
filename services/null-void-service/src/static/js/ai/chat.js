@@ -1366,7 +1366,8 @@ export function addMessage(role, content, isStreaming = false, attachments = [])
     row.className = 'message-row ' + (role === 'assistant' ? 'ai-row' : 'user-row');
     row.oncontextmenu = (e) => {
         e.preventDefault();
-        openMessageContextMenu(e, role, content, window.chatMessages.length - 1);
+        const idx = window.chatMessages.findIndex(m => m.content === content && m.role === role);
+        openMessageContextMenu(e, role, content, idx >= 0 ? idx : window.chatMessages.length - 1);
     };
 
     const avatar = document.createElement('div');

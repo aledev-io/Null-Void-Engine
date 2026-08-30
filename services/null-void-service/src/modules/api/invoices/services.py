@@ -170,6 +170,12 @@ def process_upload(uid: str, file_storage, token: str) -> None:
     if not filename.lower().endswith('.pdf'):
         raise ValueError("Solo se permiten archivos PDF")
 
+    file_storage.seek(0, os.SEEK_END)
+    file_size = file_storage.tell()
+    file_storage.seek(0)
+    if file_size > 10 * 1024 * 1024:
+        raise ValueError("El archivo supera el límite de 10MB")
+
     business_root = get_view_root('business', token)
     if not business_root:
         raise ValueError("No se pudo acceder al almacenamiento cloud")

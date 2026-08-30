@@ -1287,7 +1287,12 @@ async function startScrape() {
         method: 'POST',
         body: JSON.stringify({ query })
       });
-      if (!res) return;
+      if (!res) {
+        document.getElementById('loading').style.display = 'none';
+        socket.emit('set_scraper_state', { is_scraping: false });
+        showToast("Error de autenticación o conexión al iniciar scraping.");
+        return;
+      }
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       _startPolling(300, 2000);
@@ -1322,7 +1327,12 @@ async function startScrape() {
       method: 'POST',
       body: JSON.stringify({ terms })
     });
-    if (!res) return;
+    if (!res) {
+      loading.style.display = 'none';
+      socket.emit('set_scraper_state', { is_scraping: false });
+      showToast("Error de autenticación o conexión al iniciar scraping.");
+      return;
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     _startPolling(3600, 3000);
@@ -1358,7 +1368,7 @@ async function startRoutine() {
   let payload = {};
   if (target === 'pccomponentes') {
     const termsStr = localStorage.getItem('nv_pccomp_terms') || '';
-    const terms = termsStr.split('\\n').map(t => t.trim()).filter(t => t);
+    const terms = termsStr.split('\n').map(t => t.trim()).filter(t => t);
     if (terms.length === 0) {
       showToast("Debes configurar términos de búsqueda en Ajustes primero.");
       return;
@@ -1380,7 +1390,13 @@ async function startRoutine() {
       method: 'POST',
       body: JSON.stringify(payload)
     });
-    if (!res) return;
+    if (!res) {
+      loading.style.display = 'none';
+      if (btnCancel) btnCancel.style.display = 'none';
+      socket.emit('set_scraper_state', { is_scraping: false });
+      showToast("Error de autenticación o conexión al iniciar rutina.");
+      return;
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     if (state.pollingInterval) clearInterval(state.pollingInterval);
@@ -1408,7 +1424,10 @@ async function cancelRoutine() {
     const res = await fetchAPI('/api/scraper/cancel', {
       method: 'POST'
     });
-    if (!res) return;
+    if (!res) {
+      showToast("Error de autenticación o conexión al cancelar rutina.");
+      return;
+    }
 
     const loading = document.getElementById('loading');
     loading.style.display = 'none';
@@ -1420,6 +1439,7 @@ async function cancelRoutine() {
     alert("La rutina se cancelará en breve. (Puede tardar unos segundos en soltar el navegador actual).");
   } catch (err) {
     console.error("[Scraper API] Error al cancelar:", err);
+    showToast("Error de red al cancelar rutina.");
   }
 }
 
@@ -1458,17 +1478,26 @@ async function saveConfig() {
           existingFilters = typeof data.filters === 'string' ? JSON.parse(data.filters) : data.filters;
         }
       }
-    } catch (e) { }
+    } catch (e) {
+      console.error('[Scraper] Error loading config:', e);
+    }
 
     const routineUrl = document.getElementById('athome-routine-url').value.trim();
     existingFilters['athome_routine_url'] = routineUrl;
 
     try {
-      await fetchAPI('/api/scraper/config', {
+      const saveRes = await fetchAPI('/api/scraper/config', {
         method: 'POST',
         body: JSON.stringify({ filters: existingFilters })
       });
-    } catch (e) { }
+      if (!saveRes || !saveRes.ok) {
+        showToast('Error al guardar la configuración.');
+        return;
+      }
+    } catch (e) {
+      showToast('Error al guardar la configuración.');
+      return;
+    }
 
     showToast('Configuración guardada correctamente.');
     closeConfigView();
@@ -1490,7 +1519,7 @@ async function sendDetailToTelegram() {
     showToast("Solo disponible para atHome.");
     return;
   }
-  const p = allData.find(x => x.sku === currentProductSku);
+  const p = state.allData.find(x => x.sku === state.currentProductSku);
   if (!p) return;
   const descEl = document.getElementById('raw-desc-text');
   const desc = descEl ? descEl.innerText.toLowerCase() : (p.description ? p.description.toLowerCase() : "");
@@ -1624,7 +1653,10 @@ async function batchScrapeListed() {
         res = await fetchAPI(url);
       }
 
-      if (!res) return;
+      if (!res) {
+        failCount++;
+        continue;
+      }
       if (!res.ok) {
         console.warn(`[Batch] Error ${res.status} al obtener ${p.sku}`);
         failCount++;
@@ -1699,7 +1731,7 @@ async function sendSelectedToTelegram() {
       }
     }
   } else {
-    messages.push(`*Manual Selection (${selectedSkus.size} items)*`);
+    messages.push(`*Manual Selection (${state.selectedSkus.size} items)*`);
     let idx = 1;
     for (const sku of state.selectedSkus) {
       const p = state.allData.find(x => x.sku === sku);
@@ -1715,7 +1747,10 @@ async function sendSelectedToTelegram() {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    if (!res) return;
+    if (!res) {
+      showToast("Error de autenticación o conexión al enviar a Telegram.");
+      return;
+    }
     loading.style.display = 'flex';
     if (res.ok) {
       loading.innerHTML = '<span style="color:#22c55e; font-weight:bold;">¡Apartamentos enviados a Telegram con éxito!</span>';

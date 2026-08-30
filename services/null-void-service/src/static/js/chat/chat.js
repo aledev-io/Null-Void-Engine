@@ -229,7 +229,14 @@ function initSocketConnection() {
     });
 
     chatSocket.on('typing', (data) => {
-        if (currentChatContact && data.sender_id == currentChatContact.contact_id) {
+        if (!currentChatContact) return;
+        if (data.group_id) {
+            if (currentChatContact.is_group && currentChatContact.contact_id === data.group_id && data.sender_id != window.USER_ID) {
+                showChatTyping(data.sender_name || 'Alguien');
+                if (_chatTypingHideTimeout) clearTimeout(_chatTypingHideTimeout);
+                _chatTypingHideTimeout = setTimeout(hideChatTyping, 4000);
+            }
+        } else if (data.sender_id == currentChatContact.contact_id) {
             showChatTyping(currentChatContact.contact_name);
             if (_chatTypingHideTimeout) clearTimeout(_chatTypingHideTimeout);
             _chatTypingHideTimeout = setTimeout(hideChatTyping, 4000);

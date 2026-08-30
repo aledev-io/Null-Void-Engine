@@ -1,5 +1,6 @@
 import os
 import sys
+import uuid
 import mimetypes
 from functools import wraps
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -201,10 +202,7 @@ def hide_recent_conversation():
     if not contact_id:
         return jsonify(error="Falta contact_id"), 400
         
-    if contact_id.startswith('group_'):
-        repository.delete_conversation(request.user_id, contact_id)
-    else:
-        repository.delete_conversation(request.user_id, contact_id)
+    repository.delete_conversation(request.user_id, contact_id)
     return jsonify(ok=True)
 
 
@@ -494,8 +492,13 @@ def forward_message():
     result, error = services.forward_message(user_id, msg_id, target)
     if error:
         return jsonify(error=error), 400
-    socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{target}")
-    socketio.emit('new_message', result, room=f"user_{user_id}")
+    if target.startswith('group_'):
+        members = repository.get_group_members(target)
+        for member_id in members:
+            socketio.emit('new_message', {**result, 'mine': str(member_id) == str(user_id)}, room=f"user_{member_id}")
+    else:
+        socketio.emit('new_message', {**result, 'mine': False}, room=f"user_{target}")
+        socketio.emit('new_message', {**result, 'mine': True}, room=f"user_{user_id}")
     return jsonify(ok=True, message=result)
 
 

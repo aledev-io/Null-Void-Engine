@@ -9,12 +9,16 @@ export async function fetchAdminAlerts() {
     }
 }
 
+function _escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 window.renderReminders = function() {
     if (!window.allEvents) return;
     
     const now = new Date();
-    const localNow = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
-    const todayStr = localNow.toISOString().split('T')[0];
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -129,7 +133,7 @@ window.renderReminders = function() {
             return `
                 <div class="reminder-card" style="--card-color: ${indicatorColor}; opacity: ${isPassed ? '0.7' : '1'};" onclick="window.handleReminderCardClick(event, '${ev.id}')">
                     <div class="reminder-header">
-                        <h3 class="reminder-title">${ev.title}</h3>
+                        <h3 class="reminder-title">${_escHtml(ev.title)}</h3>
                         <div style="display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:12px; margin-right:4px;">
                             <div class="admin-event-star" 
                                  style="color: ${isImportant ? '#fbbf24' : 'var(--border-hi)'}; font-size:1.3rem; margin-top:-2px; cursor:pointer;"
@@ -149,7 +153,7 @@ window.renderReminders = function() {
                             </button>
                         </div>
                     </div>
-                    <p class="reminder-desc">${descText}</p>
+                    <p class="reminder-desc">${_escHtml(descText)}</p>
                     <div class="reminder-meta">
                         <span style="display:flex; align-items:center; gap:6px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>

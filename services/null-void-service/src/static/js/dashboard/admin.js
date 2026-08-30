@@ -1,6 +1,6 @@
 export async function fetchAdminAlerts() {
     try {
-        const res = await fetch('/api/events');
+        const res = await fetch('/api/events', { headers: window.HEADERS });
         const events = await res.json();
 
         const now = new Date();
@@ -101,7 +101,7 @@ export async function fetchAdminAlerts() {
 export async function toggleEventImportance(eventId, currentStatus, event) {
     if (event) event.stopPropagation();
     try {
-        const res = await fetch('/api/events');
+        const res = await fetch('/api/events', { headers: window.HEADERS });
         const events = await res.json();
         const ev = events.find(e => e.id === eventId);
         
@@ -114,7 +114,7 @@ export async function toggleEventImportance(eventId, currentStatus, event) {
 
         const updateRes = await fetch(`/api/events/${eventId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...window.HEADERS, 'Content-Type': 'application/json' },
             body: JSON.stringify(updatedEv)
         });
 

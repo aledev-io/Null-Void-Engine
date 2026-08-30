@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from services import _scrape_task, _scrape_all_laptops_daily
-from scraper_db import get_db_connection, update_user_task_date
+from scraper_db import get_db_connection, update_user_task_date, init_db
 from config import ENGINE_BASE_URL
 import gevent
 from gevent.pywsgi import WSGIServer
@@ -473,6 +473,11 @@ def export_list_pdf_route():
 
 if __name__ == '__main__':
     print("Iniciando Microservicio Scraper en el puerto 5001...")
+    # Inicialización explícita de la BD (no se hace en el import).
+    try:
+        init_db()
+    except Exception as e:
+        print(f"[Scraper] AVISO: no se pudo inicializar la BD ({e}). El servicio seguirá arrancando.")
     import threading
     threading.Thread(target=scraper_worker, daemon=True).start()
     if os.environ.get("AUTO_SCRAPE_ENABLED", "false").lower() == "true":

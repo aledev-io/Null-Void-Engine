@@ -10,7 +10,7 @@ export async function fetchNotificationHistory() {
     notifList.innerHTML = `<p style="text-align: center; color: var(--text-muted); font-weight: 500; padding: 40px;">${t('notif_loading')}</p>`;
 
     try {
-        const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store', headers: window.HEADERS });
         const data = await res.json();
         
         let seenIds = [];
@@ -165,22 +165,38 @@ export async function fetchNotificationHistory() {
 
 export async function deleteNotification(id) {
     try {
-        await fetch('/api/system/notifications/delete', {
+        const res = await fetch('/api/system/notifications/delete', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ id: id })
         });
+        if (!res.ok) {
+            if (window.showToast) window.showToast('Error al borrar notificación.', 'error');
+            return;
+        }
+        if (window.showToast) window.showToast('Notificación borrada.', 'success');
         fetchNotificationHistory();
-    } catch (e) { console.error("Error deleting notification:", e); }
+    } catch (e) {
+        console.error("Error deleting notification:", e);
+        if (window.showToast) window.showToast('Error de conexión al borrar notificación.', 'error');
+    }
 }
 
 export async function clearAllNotifications() {
     const t = window.t_dash || (k => k);
     if (await NV_Confirm(t('notif_confirm_clear'))) {
         try {
-            await fetch('/api/system/notifications/clear', { method: 'POST', headers: window.HEADERS });
+            const res = await fetch('/api/system/notifications/clear', { method: 'POST', headers: window.HEADERS });
+            if (!res.ok) {
+                if (window.showToast) window.showToast('Error al limpiar notificaciones.', 'error');
+                return;
+            }
+            if (window.showToast) window.showToast('Notificaciones limpiadas.', 'success');
             fetchNotificationHistory();
-        } catch (e) { console.error("Error clearing notifications:", e); }
+        } catch (e) {
+            console.error("Error clearing notifications:", e);
+            if (window.showToast) window.showToast('Error de conexión al limpiar notificaciones.', 'error');
+        }
     }
 }
 
@@ -207,7 +223,7 @@ export function markNotificationRead(id) {
 
 export async function markAllNotificationsRead() {
     try {
-        const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch('/api/system/notifications/history?_t=' + Date.now(), { cache: 'no-store', headers: window.HEADERS });
         const data = await res.json();
         
         let seenIds = [];

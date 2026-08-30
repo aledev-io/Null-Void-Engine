@@ -227,7 +227,7 @@ async function confirmPasswordChange() {
         showMsg("⚠ " + t('err_pass_match'), "error");
         return;
     }
-    if (newPass.length < 1) {
+    if (newPass.length < 8) {
         showMsg("⚠ " + t('err_pass_length'), "error");
         return;
     }

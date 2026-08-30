@@ -28,7 +28,10 @@ def get_marketplace():
 @system_bp.route('/marketplace/install', methods=['POST'])
 def install_module():
     token = request.cookies.get('token') or request.headers.get('X-Token')
-    module_id = request.get_json().get('id')
+    data = request.get_json(silent=True) or {}
+    module_id = data.get('id')
+    if not module_id:
+        return jsonify(error="id requerido"), 400
     result = services.install_module(token, module_id)
     if result is None:
         return jsonify(error="No autorizado"), 401

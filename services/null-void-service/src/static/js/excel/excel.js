@@ -164,6 +164,7 @@ function recomputeAll() {
 
             let rawFormula = spreadsheetData[cellId].toUpperCase();
             let errMsg = `Error de cálculo.`;
+            const _ef = rawFormula.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 
             if (val === '#NAME?') {
                 if (rawFormula.includes('SUM(') && !rawFormula.match(/SUM\([A-Z]+\d+:[A-Z]+\d+\)/)) {
@@ -183,7 +184,7 @@ function recomputeAll() {
 
             errors.push(`
                 <div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border-left: 2px solid #ef4444; margin-bottom: 4px;">
-                    <strong style="color:#ef4444;">[${cellId}]</strong> <span style="color:#e2e8f0; font-weight: bold;">${rawFormula}</span><br>
+                    <strong style="color:#ef4444;">[${cellId}]</strong> <span style="color:#e2e8f0; font-weight: bold;">${_ef}</span><br>
                     <span style="color:#fca5a5; font-size: 0.7rem;">${errMsg}</span>
                 </div>
             `);
@@ -623,7 +624,8 @@ export function handleExcelKey(e, row, col) {
 }
 
 export function togglePythonPanel() {
-    const panel = document.getElementById('python-panel');
+    const panel = document.getElementById('tab-python');
+    if (!panel) return;
     panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
 }
 

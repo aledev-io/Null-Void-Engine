@@ -190,8 +190,8 @@ def delete_message_for_everyone(msg_id: str, sender_id: str) -> bool:
             conn.execute("""
                 UPDATE chat_messages 
                 SET message = '[DELETED]', file_path = NULL, file_name = NULL, read = 1
-                WHERE id = ? AND sender_id = ?
-            """, (msg_id, sender_id))
+                WHERE id = ? AND (sender_id = ? OR receiver_id = ?)
+            """, (msg_id, sender_id, sender_id))
             conn.commit()
             return conn.total_changes > 0
         except Exception:

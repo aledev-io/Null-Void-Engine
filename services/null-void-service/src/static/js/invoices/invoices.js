@@ -27,13 +27,16 @@ export function renderInvoiceTable(data) {
 
     tbody.innerHTML = data.map(inv => {
         let displayRef = inv.reference ? inv.reference.replace(/^[0-9a-f]{12}_/i, '') : '-';
+        const _en = (inv.invoice_number || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        const _ec = (inv.client || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        const _er = (displayRef || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         return `
         <tr class="${inv.status === 'pagada' ? 'row-pagada' : (inv.status === 'no_pagada' ? 'row-no_pagada' : 'row-a_cuenta')}">
             <td style="text-align: center;"><input type="checkbox" class="invoice-checkbox" value="${inv.id}" onclick="window.updateSelectedCount()"></td>
-            <td style="font-weight: 600;">${inv.invoice_number}</td>
+            <td style="font-weight: 600;">${_en}</td>
             <td>${inv.date}</td>
-            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${inv.client}</td>
-            <td style="font-family: monospace; color: var(--text-dim);">${displayRef}</td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${_ec}</td>
+            <td style="font-family: monospace; color: var(--text-dim);">${_er}</td>
             <td style="font-family: monospace; font-weight: 700; text-align: right;">${parseFloat(inv.total).toLocaleString('es-ES', { minimumFractionDigits: 2 })}€</td>
             <td style="text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <span class="badge badge-${inv.status} status-badge" onclick="window.toggleInvoiceStatus('${inv.id}', '${inv.status}')">
@@ -95,13 +98,20 @@ function updateInvoiceStats(data) {
 export async function toggleInvoiceStatus(id, current) {
     const next = current === 'no_pagada' ? 'pagada' : (current === 'pagada' ? 'a_cuenta' : 'no_pagada');
     try {
-        await fetch('/api/invoices/update_status', {
+        const res = await fetch('/api/invoices/update_status', {
             method: 'POST',
             headers: window.HEADERS,
             body: JSON.stringify({ id, status: next })
         });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            await NV_Alert(data.error || 'Error al cambiar estado.');
+            return;
+        }
         fetchInvoices();
-    } catch (e) { }
+    } catch (e) {
+        await NV_Alert('Error de conexión al cambiar estado.');
+    }
 }
 
 export function filterInvoices(type) {
@@ -229,7 +239,7 @@ export function viewInvoiceDetail(id) {
 
 function formatInvoiceData(inv) {
     const raw = inv.raw_text || "";
-    if (!raw) return '<div style="text-align: center; padding: 40px; color: #666;">> No hay datos disponibles para esta factura.</div>';
+    if (!raw) return '<div style="text-align: center; padding: 40px; color: #666;">No hay datos disponibles para esta factura.</div>';
 
     const lines = raw.split('\n');
     let items = [];
@@ -283,11 +293,11 @@ function formatInvoiceData(inv) {
         <div style="border-bottom: 2px solid var(--border); padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;">
             <div style="font-family: 'Inter', sans-serif;">
                 <div style="font-size: 0.65rem; font-weight: 800; color: var(--indigo); letter-spacing: 2px; margin-bottom: 10px;">CLIENTE / RECEPTOR</div>
-                <h1 style="margin: 0; font-size: 1.6rem; color: var(--text-main); font-weight: 900;">${displayClient}</h1>
+                <h1 style="margin: 0; font-size: 1.6rem; color: var(--text-main); font-weight: 900;">${displayClient ? displayClient.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''}</h1>
             </div>
             <div style="text-align: right; font-family: 'Inter', sans-serif;">
                 <div style="font-size: 0.7rem; font-weight: 800; color: ${s.color}; margin-bottom: 8px; letter-spacing: 1px;">${s.label}</div>
-                <div style="font-size: 0.9rem; color: var(--text-dim);">Ref: <span style="color: var(--text-main); font-weight: 700;">${inv.invoice_number}</span></div>
+                <div style="font-size: 0.9rem; color: var(--text-dim);">Ref: <span style="color: var(--text-main); font-weight: 700;">${(inv.invoice_number || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}</span></div>
                 <div style="font-size: 0.8rem; color: var(--text-muted);">${inv.date}</div>
             </div>
         </div>
@@ -295,30 +305,35 @@ function formatInvoiceData(inv) {
         <div style="margin-bottom: 40px;">
             <div style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;">I. MEMORIA TÉCNICA</div>
             <div style="font-size: 1.1rem; color: var(--text-main); font-style: italic; line-height: 1.4; opacity: 0.9;">
-                ${mainDescription || "Intervención técnica programada."}
+                ${mainDescription ? mainDescription.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : "Intervención técnica programada."}
             </div>
         </div>
 
         <div style="margin-bottom: 40px;">
             <div style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px;">II. CONCEPTOS Y CUANTÍAS</div>
             <table style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+            <thead>
             <tr style="border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px;">
                         <th style="padding: 10px 5px; text-align: left; width: 60px;">Cant.</th>
-            <thead>
                         <th style="padding: 10px 5px; text-align: left;">Descripción Detallada</th>
                         <th style="padding: 10px 5px; text-align: right; width: 80px;">P.U.</th>
                         <th style="padding: 10px 5px; text-align: right; width: 90px;">Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${items.map(item => `
+                    ${items.map(item => {
+                        const _iq = (item.qty || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        const _id = (item.desc || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        const _ip = (item.price || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        const _it = (item.total || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        return `
                         <tr style="border-bottom: 1px solid var(--border);">
-                            <td style="padding: 15px 5px; color: var(--indigo); font-family: monospace; font-size: 0.85rem;">${item.qty}</td>
-                            <td style="padding: 15px 5px; color: var(--text-main); font-size: 0.85rem; font-family: 'Times New Roman', serif;">${item.desc}</td>
-                            <td style="padding: 15px 5px; color: var(--text-dim); font-size: 0.8rem; text-align: right; font-family: monospace;">${item.price}</td>
-                            <td style="padding: 15px 5px; color: var(--text-main); font-size: 0.85rem; text-align: right; font-weight: 700; font-family: monospace;">${item.total}</td>
-                        </tr>
-                    `).join('')}
+                            <td style="padding: 15px 5px; color: var(--indigo); font-family: monospace; font-size: 0.85rem;">${_iq}</td>
+                            <td style="padding: 15px 5px; color: var(--text-main); font-size: 0.85rem; font-family: 'Times New Roman', serif;">${_id}</td>
+                            <td style="padding: 15px 5px; color: var(--text-dim); font-size: 0.8rem; text-align: right; font-family: monospace;">${_ip}</td>
+                            <td style="padding: 15px 5px; color: var(--text-main); font-size: 0.85rem; text-align: right; font-weight: 700; font-family: monospace;">${_it}</td>
+                        </tr>`;
+                    }).join('')}
                     ${items.length === 0 ? '<tr><td colspan="4" style="padding: 30px; color: var(--text-muted); text-align: center; font-style: italic;">Sin desglose automático disponible.</td></tr>' : ''}
                 </tbody>
             </table>

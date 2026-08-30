@@ -1,87 +1,13 @@
 import { NV_Alert, NV_Confirm, NV_Prompt } from '../dashboard/ui.js';
-import { getCookie, formatBytes, getFileIcon, getFolderIcon, getComputerIcon, timeAgo } from '../dashboard/utils.js';
-
-// Garantiza que todas las peticiones fetch incluyan credenciales (cookies) para
-// preservar el token de sesión durante operaciones largas de descarga/streaming.
-// Además aplica un timeout automático para evitar peticiones colgadas: se
-// respeta una señal externa si el llamador la proporciona y se excluyen los
-// envíos de archivos (FormData/ReadableStream) y descargas/streams de vídeo.
-if (!window.__nvFetchCredentialsPatched) {
-    window.__nvFetchCredentialsPatched = true;
-    const _origFetch = window.fetch.bind(window);
-    const _FETCH_TIMEOUT_MS = 120000;
-    const _noTimeout = u => /\/get_token|\/download|stream_video|\/stream\?/.test(String(u || ''));
-    window.fetch = function (url, options) {
-        options = Object.assign({}, options);
-        if (options.credentials === undefined) {
-            options.credentials = 'include';
-        }
-        if (options.signal || _noTimeout(url)) {
-            return _origFetch(url, options);
-        }
-        const body = options.body;
-        if (body instanceof FormData || (body && typeof body.pipe === 'function') ||
-            (body && typeof body.getReader === 'function')) {
-            return _origFetch(url, options);
-        }
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), _FETCH_TIMEOUT_MS);
-        return _origFetch(url, Object.assign({}, options, { signal: ctrl.signal }))
-            .then(res => { clearTimeout(timer); return res; })
-            .catch(err => {
-                clearTimeout(timer);
-                if (err && err.name === 'AbortError') {
-                    console.warn(`[Cloud] Petición agotada (timeout ${_FETCH_TIMEOUT_MS / 1000}s): ${url}`);
-                }
-                throw err;
-            });
-    };
-}
-
-// Traducción de errores del servidor: el backend responde en español, el
-// frontend mapea a la traducción correcta según el idioma activo.
-const _SERVER_ERR_TRANSLATIONS = {
-    "Acceso denegado": "Access denied",
-    "Datos insuficientes": "Insufficient data",
-    "El archivo supera el límite de 50GB": "The file exceeds the 50GB limit",
-    "El nombre no puede estar vacío": "The name cannot be empty",
-    "Falta el nombre del archivo": "File name missing",
-    "Falta especificar el archivo a descomprimir": "No file specified to extract",
-    "Falta especificar el elemento a comprimir": "No item specified to compress",
-    "Falta nombre de archivo": "File name missing",
-    "Falta usuario a revocar": "No user to revoke",
-    "La descarga del agente solo está disponible por HTTPS. Accede con https:// y reintenta.": "The agent download is only available over HTTPS. Access via https:// and retry.",
-    "El ejecutable de Windows no está compilado. Ejecuta client_agent/build_windows_agent.bat en un PC Windows y vuelve a intentarlo.": "The Windows executable is not compiled yet. Run client_agent/build_windows_agent.bat on a Windows PC and try again.",
-    "El ejecutable de macOS no está compilado. Ejecuta client_agent/compile.sh en un Mac y vuelve a intentarlo.": "The macOS executable is not compiled yet. Run client_agent/compile.sh on a Mac and try again.",
-    "El ejecutable de Linux no está compilado. Ejecuta client_agent/compile.sh y vuelve a intentarlo.": "The Linux executable is not compiled yet. Run client_agent/compile.sh and try again.",
-    "Error interno al preparar el cliente": "Internal error preparing the client",
-    "No autorizado": "Not authorized",
-    "No autorizado o archivo no encontrado": "Not authorized or file not found",
-    "No autorizado o no encontrado": "Not authorized or not found",
-    "No autorizado o ruta no válida": "Not authorized or invalid path",
-    "No autorizado o sesión expirada": "Not authorized or session expired",
-    "No existe": "Does not exist",
-    "No hay archivo": "No file",
-    "Ruta compartida no encontrada": "Shared path not found",
-    "Ya tienes una petición pendiente": "You already have a pending request"
-};
-
-function _tServerErr(msg) {
-    if (!msg) return msg;
-    if (window.currentLang !== 'en') return msg;
-    return _SERVER_ERR_TRANSLATIONS[msg] || msg;
-}
-
-// Parseo JSON defensivo: nunca lanza aunque el servidor responda HTML o vacío.
-async function _cloudJson(res, fallback = {}) {
-    if (!res) return fallback;
-    try {
-        const text = await res.text();
-        return text ? JSON.parse(text) : fallback;
-    } catch (e) {
-        return fallback;
-    }
-}
+import { formatBytes, getFileIcon, getFolderIcon, getComputerIcon, timeAgo } from '../dashboard/utils.js';
+import { esc, escAttr, jsStr, sanitizeName } from '../core/dom.js';
+import { cloudNameHue, cloudAvatarHtml } from './avatar.js';
+import { _escapeRegExp, highlightMatch, searchMatchLine } from './search.js';
+import { _tServerErr, _cloudJson, fetchCloudWithRetry } from './api.js';
+import { getCurrentCloudLimitBytes, getCurrentCloudUsedBytes, updateCloudQuotaInfo, requestMoreCloudQuota, fetchAdminQuotaRequests, resolveQuotaRequest } from './quota.js';
+import { showCloudVersions, restoreCloudVersion, downloadCloudVersion, deleteCloudVersion } from './versions.js';
+import { openLinkDeviceModal, setLinkDeviceOS, closeLinkDeviceModal, generateSyncCommand, copySyncCommand, downloadClientAgent, showSyncInstructionsAlert, copyInfoSyncCommand, handleGenerateLinkToken } from './link-device.js';
+import { openCloudShare, renderManageShares, closeCloudShareModal, loadCloudContacts, searchUsersForSharing, selectUserForSharing, removeSelectedUser, revokeCloudShare, renderSelectedUsers, shareSelectedItems, confirmCloudShare } from './share.js';
 
 let currentCloudPath = '';
 let currentCloudView = 'home';
@@ -91,111 +17,6 @@ let uploadDestinationOverrideView = null;
 let currentCloudInfoItem = null;
 let CLOUD_FILES = [];
 
-// Helpers de seguridad: escape HTML para contenido y atributos, y saneado de
-// nombres de archivos/carpetas introducidos por el usuario.
-
-// Escape HTML básico (texto visible dentro de innerHTML).
-function esc(v) {
-    return String(v == null ? '' : v)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-// Escape orientado a atributos HTML (p.ej. onclick="...") y URLs dentro de
-// atributos: también neutraliza backticks y el cierre de atributo.
-function escAttr(v) {
-    return esc(v).replace(/`/g, '&#96;').replace(/\//g, '&#47;');
-}
-
-// Convierte un valor en un literal de string JavaScript SEGURO para interpolar
-// dentro de onclick="...". El truco de los escapes unicode impide que las
-// comillas cierren el literal aunque el atributo se decodifique después.
-function jsStr(v) {
-    return String(v == null ? '' : v)
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\u0027")
-        .replace(/"/g, "\\u0022")
-        .replace(/`/g, "\\u0060")
-        .replace(/<\//g, '<\\/');
-}
-
-// Sanedado de nombres de archivo/carpeta: whitelist de caracteres seguros,
-// colapso de espacios, recorte y límite de longitud. Devuelve el nombre
-// limpio (puede quedar vacío si todo era inválido).
-function sanitizeName(v, maxLen = 150) {
-    return String(v == null ? '' : v)
-        .replace(/[^\p{L}\p{N}\s\-_().,\[\]{}@+#%&~!=]/gu, '')
-        .replace(/\s{2,}/g, ' ')
-        .replace(/^[\s.]+|[\s.]+$/g, '')
-        .replace(/[.]+$/g, '')
-        .slice(0, maxLen);
-}
-
-// Fallback de avatar seguro: sustituye la <img> rota por un círculo con la
-// primera letra del usuario. Se construye con createElement/textContent para
-// no interpolar datos del usuario en HTML/strings.
-window.cloudAvatarFallback = function (img, username, hue) {
-    if (!img || !img.parentNode) return;
-    const style = img.getAttribute('style') || '';
-    const size = (style.match(/width:\s*(\d+)px/) || [])[1] || '';
-    const letter = String(username || '').trim().charAt(0).toUpperCase() || 'U';
-    const div = document.createElement('div');
-    const bg = (hue !== undefined && hue !== null && !isNaN(hue))
-        ? `hsl(${Math.round(hue)}, 65%, 45%)`
-        : 'var(--indigo, #6366f1)';
-    div.style.cssText = style.replace(/width:\s*[^;]+;?/, '')
-        .replace(/height:\s*[^;]+;?/, '')
-        .replace(/;?\s*$/, '') +
-        (size ? `; width:${size}px; height:${size}px;` : '; width:32px; height:32px;') +
-        `; border-radius:50%; background:${bg}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:` + Math.max(9, Math.round(parseInt(size || '32') * 0.42)) + 'px;';
-    div.textContent = letter;
-    img.parentNode.replaceChild(div, img);
-};
-
-// Color determinista por usuario para el círculo de iniciales del badge.
-function cloudNameHue(name) {
-    let h = 0;
-    const s = String(name || '');
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return h % 360;
-}
-
-// Avatar del propietario para el badge: el círculo de inicial de color está
-// SIEMPRE detrás del <img>; si la foto carga la tapa y si falla (this.remove)
-// queda el círculo con la inicial. Nunca aparece una caja negra/blanca vacía.
-function cloudAvatarHtml(ownerId, ownerName, size) {
-    const sz = size || 20;
-    const name = String(ownerName || '').trim();
-    const letter = name.charAt(0).toUpperCase() || 'U';
-    const hue = cloudNameHue(name);
-    const id = String(ownerId || name || 'u');
-    const src = `/api/system/user/avatar/${encodeURIComponent(id)}`;
-    return `<span class="cloud-badge-avatar" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;border-radius:50%;background:hsl(${hue}, 65%, 45%);color:#fff;font-size:${Math.max(9, Math.round(sz * 0.42))}px;font-weight:600;flex-shrink:0;overflow:hidden;line-height:1;">${letter}<img src="${src}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.remove()"></span>`;
-}
-
-
-// Reintenta peticiones GET fallidas (reinicio del servidor) con backoff.
-// Devuelve null si agota los intentos. NO usar con peticiones que mutan datos.
-async function fetchCloudWithRetry(url, options, retries = 3) {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const res = await fetch(url, options);
-            if (res.ok) return res;
-            if (res.status === 429) {
-                console.warn(`[Cloud] Límite de peticiones (429) en ${url}, sin reintentos`);
-                return null;
-            }
-            console.warn(`[Cloud] Respuesta ${res.status} de ${url}, intento ${attempt}/${retries}`);
-        } catch (error) {
-            console.warn(`[Cloud] Red caída en ${url}, intento ${attempt}/${retries}`);
-        }
-        await new Promise(resolve => setTimeout(resolve, 1200 * attempt));
-    }
-    return null;
-}
 
 function updateTableHeaderVisibility(targetView = currentCloudView, targetPath = currentCloudPath) {
     const tableHeader = document.querySelector('.cloud-table-header');
@@ -991,7 +812,7 @@ function renderCloudFiles(files, isRecent = false) {
                         ghostIcon = getFileIcon(ext);
                     }
                 }
-                let ghostText = name;
+                let ghostText = esc(name);
 
                 if (SELECTED_CLOUD_ITEMS.length > 1) {
                     ghostIcon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="#5f6368"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H8v-2h6v2zm2-4H6v-2h10v2zm0-4H6V6h10v2z"/></svg>`;
@@ -1077,32 +898,6 @@ function protectSvgIcon(locked, size) {
     return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${rect}${shackle}</svg>`;
 }
 
-function _escapeRegExp(text) {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function highlightMatch(text, query) {
-    if (!text) return '';
-    const safe = esc(text);
-    if (!query) return safe;
-    try {
-        return safe.replace(new RegExp(_escapeRegExp(query.trim()), 'ig'),
-            m => `<mark class="cloud-search-hit">${m}</mark>`);
-    } catch (e) {
-        return safe;
-    }
-}
-
-function searchMatchLine(matchType, snippet, query) {
-    // Línea sutil integrada bajo el nombre: solo el fragmento resaltado.
-    // Sin pastillas ni etiquetas: la palabra clave en amarillo ya indica
-    // por qué coincide, y en las coincidencias por nombre no hace falta nada
-    // (el propio nombre va resaltado).
-    if (matchType === 'content') {
-        return `<span class="cloud-search-snippet">${highlightMatch(snippet, query)}</span>`;
-    }
-    return '';
-}
 
 function renderListRow(f, isRecent, getFileTemplateData) {
     const d = getFileTemplateData(f);
@@ -1246,154 +1041,6 @@ function showCloudNewMenu(e, anchor) {
         if (fab) fab.classList.remove('open');
     };
     setTimeout(() => window.addEventListener('click', closeMenu), 10);
-}
-
-let _currentCloudLimitBytes = Infinity;
-let _currentCloudUsedBytes = 0;
-
-async function updateCloudQuotaInfo() {
-    const bar = document.getElementById('cloud-quota-bar');
-    const text = document.getElementById('cloud-quota-text');
-
-    try {
-        const token = getCookie('token') || '';
-        const res = await fetch('/api/cloud/quota', {
-            method: 'GET',
-            headers: { 'X-Token': token, 'Content-Type': 'application/json' },
-            credentials: 'include'
-        });
-
-        if (!res.ok) throw new Error("Status: " + res.status);
-        const data = await _cloudJson(res);
-
-        const usedBytes = data.used_bytes || 0;
-        const limitGb = data.limit_gb !== undefined ? data.limit_gb : 5;
-        const freeDisk = data.disk_free || 0;
-
-        const limitBytes = limitGb * 1024 * 1024 * 1024;
-        _currentCloudLimitBytes = limitBytes;
-        _currentCloudUsedBytes = usedBytes;
-        let percent = 0;
-        if (limitBytes === 0) {
-            // If quota is 0, don't show an aggressive 100% full bar
-            percent = usedBytes > 0 ? 100 : 0;
-        } else {
-            percent = (usedBytes / limitBytes) * 100;
-        }
-
-        if (bar) {
-            bar.style.width = Math.min(percent, 100) + '%';
-            // Only show red danger color if limit is actually greater than 0 and we are near it
-            bar.style.background = (percent > 90 && limitBytes > 0) ? 'var(--cpu)' : 'var(--indigo)';
-        }
-
-        if (text) {
-            text.innerHTML = `
-            <div class="quota-text-main" style="font-size: 0.85rem;">
-                ${formatBytes(usedBytes)} ${window.t_cloud('of')} ${limitGb} GB ${window.t_cloud('used')}
-            </div>
-            <div class="quota-text-disk" style="font-size: 0.75rem; margin-top: 6px;">
-                ${window.t_cloud('disk')}: ${formatBytes(freeDisk)} ${window.t_cloud('available')}
-            </div>
-        `;
-        }
-
-        const btn = document.getElementById('cloud-quota-request-btn');
-        if (btn) {
-            if (data.has_pending_request) {
-                btn.innerHTML = window.t_cloud('cancel_quota_request', 'Cancelar petición pendiente');
-                btn.style.borderColor = 'rgba(248, 113, 113, 0.3)';
-                btn.style.color = 'var(--cpu)';
-                btn.onclick = cancelCloudQuotaRequest;
-            } else {
-                btn.innerHTML = window.t_cloud('get_more_space', 'Obtener más espacio');
-                btn.style.borderColor = 'var(--border)';
-                btn.style.color = 'var(--text-main)';
-                btn.onclick = requestMoreCloudQuota;
-            }
-        }
-    } catch (err) {
-        console.error("Error cuota cloud:", err);
-    }
-}
-
-async function cancelCloudQuotaRequest() {
-    if (!await NV_Confirm(window.t_cloud('cancel_quota_confirm'), window.t_cloud('cancel_quota_title'), window.t_cloud('btn_confirm'), window.t_cloud('back'))) return;
-    try {
-        const res = await fetch('/api/cloud/quota', {
-            method: 'DELETE',
-            headers: HEADERS
-        });
-        if (res.ok) {
-            updateCloudQuotaInfo();
-        }
-    } catch (err) { }
-}
-
-async function requestMoreCloudQuota() {
-    if (!await NV_Confirm(window.t_cloud('request_10gb_confirm'), window.t_cloud('request_space_title'), window.t_cloud('btn_confirm'), window.t_cloud('btn_cancel'))) return;
-    try {
-        const res = await fetch('/api/cloud/quota', {
-            method: 'POST',
-            headers: HEADERS
-        });
-        if (res.ok) {
-            await NV_Alert(window.t_cloud('request_sent'));
-            updateCloudQuotaInfo();
-        } else {
-            const errData = await _cloudJson(res);
-            await NV_Alert(errData.error || 'Error.');
-        }
-    } catch (err) { }
-}
-
-async function fetchAdminQuotaRequests() {
-    try {
-        const res = await fetch('/api/cloud/admin/quota_requests', { headers: HEADERS });
-        if (res.ok) {
-            const data = await _cloudJson(res);
-            renderAdminQuotaRequests(data.requests || []);
-        }
-    } catch (err) { console.error(err); }
-}
-
-async function resolveQuotaRequest(id, action) {
-    try {
-        const res = await fetch('/api/cloud/admin/quota_requests', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({ id, action })
-        });
-        if (res.ok) {
-            fetchAdminQuotaRequests();
-        }
-    } catch (err) { }
-}
-
-function renderAdminQuotaRequests(requests) {
-    const container = document.getElementById('admin-quota-list');
-    if (!container) return;
-    if (requests.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding: 20px; opacity: 0.5;">${window.currentLang === 'en' ? 'No pending requests.' : 'No hay peticiones pendientes.'}</div>`;
-        return;
-    }
-
-    let html = '';
-    requests.forEach(r => {
-        html += `
-            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div style="font-weight: 600;">${r.username}</div>
-                    <div style="font-size: 0.8rem; opacity: 0.7;">+${r.requested_gb}GB - ${new Date(r.created_at * 1000).toLocaleString(window.currentLang)}</div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="resolveQuotaRequest(${r.id}, 'rejected')" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">${window.currentLang === 'en' ? 'Reject' : 'Rechazar'}</button>
-                    <button onclick="resolveQuotaRequest(${r.id}, 'approved')" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">${window.currentLang === 'en' ? 'Approve' : 'Aprobar'}</button>
-                </div>
-            </div>
-        `;
-    });
-    container.innerHTML = html;
 }
 
 
@@ -1638,7 +1285,7 @@ async function handleCloudUpload(e, isFolder = false) {
         totalSize += input.files[i].size;
     }
 
-    if (_currentCloudUsedBytes + totalSize > _currentCloudLimitBytes) {
+    if (getCurrentCloudUsedBytes() + totalSize > getCurrentCloudLimitBytes()) {
         await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
         input.value = '';
         return;
@@ -2040,7 +1687,7 @@ async function toggleCloudStar(name, path, fileView = null, ownerId = null) {
 }
 
 async function handleCreateFolder() {
-    if (_currentCloudUsedBytes >= _currentCloudLimitBytes) {
+    if (getCurrentCloudUsedBytes() >= getCurrentCloudLimitBytes()) {
         await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
         return;
     }
@@ -2499,8 +2146,8 @@ function _destroyPdfViewer() {
     const v = _pdfViewer;
     if (!v) return;
     v.destroyed = true;
-    if (v.observer) { try { v.observer.disconnect(); } catch (e) {} v.observer = null; }
-    if (v.pdf && v.pdf.destroy) { try { v.pdf.destroy(); } catch (e) {} }
+    if (v.observer) { try { v.observer.disconnect(); } catch (e) { } v.observer = null; }
+    if (v.pdf && v.pdf.destroy) { try { v.pdf.destroy(); } catch (e) { } }
     v.pdf = null;
     v.container = null;
     _pdfViewer = null;
@@ -2730,7 +2377,7 @@ class NvPdfViewer {
                 }
                 pageEl.appendChild(a);
             }
-        }).catch(() => {});
+        }).catch(() => { });
     }
 
     resolveDest(dest) {
@@ -2739,8 +2386,8 @@ class NvPdfViewer {
             if (!ref) return;
             this.pdf.getPageIndex(ref).then((idx) => {
                 this.goToPage(idx + 1);
-            }).catch(() => {});
-        }).catch(() => {});
+            }).catch(() => { });
+        }).catch(() => { });
     }
 
     updatePageInfo() {
@@ -2968,7 +2615,7 @@ function _initVideoProgressTracking(fileKey, restore) {
     });
 }
 
- function closeCloudPreview() {
+function closeCloudPreview() {
     // Liberar el visor PDF (EventBus/observer/páginas/render tasks).
     _destroyPdfViewer();
     // Guardar la posición antes de destruir el reproductor.
@@ -3016,83 +2663,179 @@ function _ctxMultiSelectionState() {
     return { inMulti, allStarred, allProtected };
 }
 
+// Resuelve el contexto completo de un elemento desde los data-* de la fila.
+// Unifica la construcción de currentCloudContextItem para las dos rutas de acceso
+// (botón ⋮ y clic derecho).
+function resolveCloudContext(row, overridePath) {
+    if (!row) return null;
+    const name = row.getAttribute('data-name');
+    const trashId = row.getAttribute('data-trash-id') || null;
+    const ownerId = row.getAttribute('data-owner-id') || null;
+    if (!name && !trashId) return null;
+
+    const ctx = {
+        name: name || '',
+        isDir: row.getAttribute('data-is-dir') === 'true',
+        path: overridePath !== null ? overridePath : (row.getAttribute('data-path') || currentCloudPath),
+        view: currentCloudView,
+        trashId,
+        ownerId,
+        isMine: row.getAttribute('data-is-mine') !== 'false',
+        protected: row.getAttribute('data-protected') === 'true',
+        starred: row.getAttribute('data-starred') === 'true',
+        sharedWith: row.getAttribute('data-shared-with') || null,
+        protectedAncestor: row.getAttribute('data-protected-ancestor') || ''
+    };
+
+    if ((currentCloudView === 'home' || currentCloudView === 'recent') && ctx.path.includes('.computers')) {
+        ctx.view = 'computers';
+    }
+
+    return ctx;
+}
+
+// Oculta todos los botones de acción del menú contextual.
+function _ctxHideAllBtns() {
+    ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn',
+        'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn',
+        'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn',
+        'ctx-empty-trash-btn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+}
+
+// Aplica la visibilidad de botones para la vista de papelera (clic derecho).
+// Diferente del ⋮: muestra "Eliminar permanentemente" y oculta organize/copy/move.
+function _applyCtxMenuTrash() {
+    _ctxHideAllBtns();
+    setCloudDeleteVisible(true);
+    const dt = document.getElementById('ctx-delete-text');
+    if (dt) dt.innerText = window.t_cloud('ctx_delete_perm', 'Eliminar permanentemente');
+    const restoreBtn = document.getElementById('ctx-restore-btn');
+    if (restoreBtn) restoreBtn.style.display = 'block';
+}
+
+// Aplica la visibilidad de botones para computadoras en nivel superior.
+function _applyCtxMenuComputers() {
+    _ctxHideAllBtns();
+    const tokenBtn = document.getElementById('ctx-token-btn');
+    if (tokenBtn) tokenBtn.style.display = 'block';
+    const infoBtn = document.getElementById('ctx-info-btn');
+    if (infoBtn) infoBtn.style.display = 'block';
+    const deleteBtn = document.getElementById('ctx-delete-btn');
+    setCloudDeleteVisible(true);
+    if (deleteBtn) deleteBtn.style.color = '#f87171';
+    const dt = document.getElementById('ctx-delete-text');
+    if (dt) {
+        dt.setAttribute('data-i18n', 'btn_unlink');
+        dt.innerText = window.t_cloud('btn_unlink', 'Desvincular');
+    }
+}
+
+// Aplica la visibilidad de botones para vistas estándar (drive, shared, etc.).
+// `multi` proviene de _ctxMultiSelectionState(); puede pasarse null si no aplica.
+function _applyCtxMenuStandard(ctx, multi) {
+    const v = ctx.view;
+    const isMine = ctx.isMine;
+    const itemProtected = ctx.protected;
+
+    document.getElementById('ctx-download-btn').style.display = 'block';
+    document.getElementById('ctx-info-btn').style.display = 'block';
+    document.getElementById('ctx-organize-btn').style.display = 'block';
+
+    const isShared = v === 'shared' || v === 'shared_by_me';
+    document.getElementById('ctx-rename-btn').style.display = (isShared || !isMine || itemProtected) ? 'none' : 'block';
+    document.getElementById('ctx-share-btn').style.display = (!isMine) ? 'none' : 'block';
+    document.getElementById('ctx-restore-btn').style.display = 'none';
+
+    const unshareBtn = document.getElementById('ctx-unshare-btn');
+    if (unshareBtn) unshareBtn.style.display = 'none';
+
+    const noMoveViews = (v === 'shared' || v === 'shared_by_me' || v === 'recent' || v === 'starred' || v === 'home');
+    const noOrganizeAi = v === 'ai';
+    document.getElementById('ctx-move-btn').style.display = (noMoveViews || noOrganizeAi || !isMine || itemProtected) ? 'none' : 'block';
+    document.getElementById('ctx-copy-btn').style.display = noOrganizeAi ? 'none' : 'block';
+
+    const zipBtn = document.getElementById('ctx-zip-btn');
+    const unzipBtn = document.getElementById('ctx-unzip-btn');
+    if (zipBtn) zipBtn.style.display = (noMoveViews || noOrganizeAi || !isMine) ? 'none' : 'flex';
+    if (unzipBtn) unzipBtn.style.display = (noOrganizeAi || !isMine || !ctx.name || !ctx.name.toLowerCase().endsWith('.zip')) ? 'none' : 'flex';
+
+    const starFinal = multi && multi.inMulti ? multi.allStarred : ctx.starred;
+    document.getElementById('ctx-star-btn').style.display = 'block';
+    const starText = document.getElementById('ctx-star-text');
+    if (starText) {
+        starText.setAttribute('data-i18n', starFinal ? 'ctx_unstar' : 'ctx_star');
+        starText.innerText = starFinal ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+    }
+
+    document.getElementById('ctx-protect-btn').style.display = (!isMine) ? 'none' : 'block';
+    const protectFinal = multi && multi.inMulti ? multi.allProtected : itemProtected;
+    const protectText = document.getElementById('ctx-protect-text');
+    const protectIcon = document.getElementById('ctx-protect-icon');
+    if (protectText) {
+        protectText.setAttribute('data-i18n', protectFinal ? 'ctx_unprotect' : 'ctx_protect');
+        protectText.innerText = protectFinal ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
+    }
+    if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!protectFinal);
+
+    setCloudDeleteVisible(!isMine ? false : true);
+    document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_trash', 'Mover a la papelera');
+}
+
+// Muestra y posiciona el menú contextual. Centraliza el posicionamiento para
+// ambas rutas (e.clientX del ⋮ y e.pageX del clic derecho).
+function _showCloudMenu(menu, x, y) {
+    menu.style.display = 'block';
+    const rect = menu.getBoundingClientRect();
+    const menuWidth = rect.width || 200;
+    const menuHeight = rect.height || 300;
+    const submenuWidth = 180;
+
+    if (x - submenuWidth < 0) x = submenuWidth + 10;
+    if (x + menuWidth > window.innerWidth - 10) x = window.innerWidth - menuWidth - 10;
+    if (y + menuHeight > window.innerHeight - 10) {
+        y = window.innerHeight - menuHeight - 10;
+        if (y < 0) y = 10;
+    }
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+}
+
 function handleCloudAction(e, name, isDir, overridePath = null) {
     e.stopPropagation();
     e.preventDefault();
 
-    let trashId = null;
-    let ownerId = null;
-    let isMine = true;
-    let isStarred = false;
-    let isProtected = false;
-
-    // Mapeo seguro del dataset de la fila
     const targetEl = e.currentTarget || e.target;
-    if (targetEl) {
-        const row = targetEl.closest('.cloud-folder-row, .cloud-file-card, .cloud-file-row');
-        if (row) {
-            trashId = row.getAttribute('data-trash-id') || null;
-            ownerId = row.getAttribute('data-owner-id') || null;
-            isMine = row.getAttribute('data-is-mine') !== 'false';
-            isStarred = row.getAttribute('data-starred') === 'true';
-            isProtected = row.getAttribute('data-protected') === 'true';
-        }
-    }
+    const row = targetEl ? targetEl.closest('.cloud-folder-row, .cloud-file-card, .cloud-file-row') : null;
+    const ctx = resolveCloudContext(row, overridePath);
+    if (!ctx) return;
 
-    currentCloudContextItem = {
-        name: name,
-        isDir: isDir,
-        path: overridePath !== null ? overridePath : currentCloudPath,
-        view: currentCloudView,
-        trashId: trashId,
-        ownerId: ownerId,
-        protected: isProtected === true
-    };
+    // Preservar propiedades que resolveCloudContext no establece desde name/isDir/overridePath
+    ctx.name = name;
+    ctx.isDir = isDir;
+    if (overridePath !== null) ctx.path = overridePath;
 
-    if ((currentCloudView === 'home' || currentCloudView === 'recent') && currentCloudContextItem.path.includes('.computers')) {
-        currentCloudContextItem.view = 'computers';
-    }
+    currentCloudContextItem = ctx;
 
     const menu = document.getElementById('cloud-context-menu');
     const itemActions = document.getElementById('ctx-item-actions');
     const creationActions = document.getElementById('ctx-creation-actions');
-
-    // RAMA C: Tarjeta de dispositivo/computadora vinculada.
-    // Menú aislado del menú contextual genérico de archivos: únicamente "Información" y "Desvincular" (destructivo).
     const isComputerCard = currentCloudView === 'computers' && currentCloudPath === '';
+
     if (isComputerCard) {
-        const hiddenBtns = ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn', 'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn', 'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn', 'ctx-empty-trash-btn'];
-        hiddenBtns.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-        });
-
-        const tokenBtn = document.getElementById('ctx-token-btn');
-        if (tokenBtn) tokenBtn.style.display = 'block';
-
-        document.getElementById('ctx-info-btn').style.display = 'block';
-
-        const deleteBtn = document.getElementById('ctx-delete-btn');
-        setCloudDeleteVisible(true);
-        deleteBtn.style.color = '#f87171';
-        const deleteText = document.getElementById('ctx-delete-text');
-        if (deleteText) {
-            deleteText.setAttribute('data-i18n', 'btn_unlink');
-            deleteText.innerText = window.t_cloud('btn_unlink', 'Desvincular');
-        }
+        _applyCtxMenuComputers();
     } else if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me') {
         document.getElementById('ctx-download-btn').style.display = 'block';
-
-        // Forzamos la traducción por si acaso
         const downloadBtn = document.getElementById('ctx-download-btn');
         if (downloadBtn && downloadBtn.children[1]) {
             downloadBtn.setAttribute('data-i18n', 'ctx_download');
             downloadBtn.children[1].innerText = window.t_cloud('ctx_download', 'Descargar');
         }
-
         document.getElementById('ctx-info-btn').style.display = 'block';
         document.getElementById('ctx-unshare-btn').style.display = 'block';
-
         const unshareText = document.getElementById('ctx-unshare-text');
         if (unshareText) {
             if (currentCloudView === 'shared') {
@@ -3103,72 +2846,24 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
                 unshareText.innerText = window.t_cloud('ctx_unshare', 'Dejar de compartir');
             }
         }
-
-        // Ocultación total de herramientas de propietario comunes
         document.getElementById('ctx-rename-btn').style.display = 'none';
         setCloudDeleteVisible(false);
         document.getElementById('ctx-share-btn').style.display = 'none';
         document.getElementById('ctx-protect-btn').style.display = 'none';
         document.getElementById('ctx-restore-btn').style.display = 'none';
         document.getElementById('ctx-move-btn').style.display = 'none';
-
-        // Permitimos organizar (star, copy)
         document.getElementById('ctx-organize-btn').style.display = 'block';
         document.getElementById('ctx-star-btn').style.display = 'block';
         document.getElementById('ctx-copy-btn').style.display = 'block';
-
         const starText = document.getElementById('ctx-star-text');
         if (starText) {
-            starText.setAttribute('data-i18n', isStarred ? 'ctx_unstar' : 'ctx_star');
-            starText.innerText = isStarred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
+            starText.setAttribute('data-i18n', ctx.starred ? 'ctx_unstar' : 'ctx_star');
+            starText.innerText = ctx.starred ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
         }
     } else {
-        // RAMA B: Vistas estándar (Mi unidad, Computadoras, Trash...)
-        document.getElementById('ctx-download-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
-        document.getElementById('ctx-info-btn').style.display = 'block';
-        document.getElementById('ctx-organize-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
-        document.getElementById('ctx-copy-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
-
-        // Gestión de visibilidad según propiedad y contexto
-        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || isProtected) ? 'none' : 'block';
-        setCloudDeleteVisible(currentCloudView !== 'shared_by_me' && isMine && !isProtected);
-        document.getElementById('ctx-delete-text').innerText = currentCloudView === 'computers' && currentCloudPath === '' ? window.t_cloud('btn_unlink', 'Desvincular') : window.t_cloud('ctx_trash', 'Mover a la papelera');
-        document.getElementById('ctx-share-btn').style.display = (!isMine) ? 'none' : 'block';
-        document.getElementById('ctx-restore-btn').style.display = currentCloudView === 'trash' ? 'block' : 'none';
-
-        const unshareBtn = document.getElementById('ctx-unshare-btn');
-        if (unshareBtn) unshareBtn.style.display = 'none';
-
-        // Selección múltiple: si el elemento pulsado forma parte de una
-        // selección activa, las etiquetas de Destacar/Proteger reflejan el
-        // estado de TODA la selección (y la acción se aplica a todos).
-        const _multi = _ctxMultiSelectionState();
-        const isStarredFinal = _multi.inMulti ? _multi.allStarred : isStarred;
-
-        // Destacados dinámicos
-        document.getElementById('ctx-star-btn').style.display = currentCloudView === 'trash' ? 'none' : 'block';
-        const starText = document.getElementById('ctx-star-text');
-        if (starText) {
-            starText.setAttribute('data-i18n', isStarredFinal ? 'ctx_unstar' : 'ctx_star');
-            starText.innerText = isStarredFinal ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
-        }
-
-        // Protección dinámicos
-        document.getElementById('ctx-protect-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash') ? 'none' : 'block';
-        const protectText = document.getElementById('ctx-protect-text');
-        const protectIcon = document.getElementById('ctx-protect-icon');
-        const isProtectedFinal = _multi.inMulti ? _multi.allProtected : isProtected;
-        if (protectText) {
-            protectText.setAttribute('data-i18n', isProtectedFinal ? 'ctx_unprotect' : 'ctx_protect');
-            protectText.innerText = isProtectedFinal ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
-        }
-        if (protectIcon) protectIcon.innerHTML = protectSvgIcon(!isProtectedFinal);
-
-        // Movimientos
-        document.getElementById('ctx-move-btn').style.display = (currentCloudView === 'shared_by_me' || !isMine || currentCloudView === 'trash' || isProtected) ? 'none' : 'block';
+        _applyCtxMenuStandard(ctx, null);
     }
 
-    // Selección múltiple: Info y Renombrar no aplican a varios elementos
     if (_ctxMultiSelectionState().inMulti) {
         const _rnBtn = document.getElementById('ctx-rename-btn');
         const _infoBtn = document.getElementById('ctx-info-btn');
@@ -3176,33 +2871,9 @@ function handleCloudAction(e, name, isDir, overridePath = null) {
         if (_infoBtn) _infoBtn.style.display = 'none';
     }
 
-    // Despliegue del panel del menú
     itemActions.style.display = 'block';
     creationActions.style.display = 'none';
-    menu.style.display = 'block';
-
-    // Cálculo geométrico de la pantalla
-    const rect = menu.getBoundingClientRect();
-    const menuWidth = rect.width || 200;
-    const menuHeight = rect.height || 300;
-    const submenuWidth = 180;
-
-    let x = e.clientX;
-    let y = e.clientY;
-
-    if (x - submenuWidth < 0) {
-        x = submenuWidth + 10;
-    }
-    if (x + menuWidth > window.innerWidth - 10) {
-        x = window.innerWidth - menuWidth - 10;
-    }
-    if (y + menuHeight > window.innerHeight - 10) {
-        y = window.innerHeight - menuHeight - 10;
-        if (y < 0) y = 10;
-    }
-
-    menu.style.left = x + 'px';
-    menu.style.top = y + 'px';
+    _showCloudMenu(menu, e.clientX, e.clientY);
 }
 
 function closeCloudInfoPanel() {
@@ -3242,85 +2913,6 @@ function switchCloudInfoTab(btn, tab) {
     } else {
         showCloudActivity(currentCloudInfoItem.name, currentCloudInfoItem.path, currentCloudInfoItem.owner_id);
     }
-}
-
-function _versionsResolvedView() {
-    return ['recent', 'starred', 'shared_by_me'].includes(currentCloudView) ? 'drive' : currentCloudView;
-}
-
-async function showCloudVersions(name, path) {
-    const body = document.getElementById('info-panel-body');
-    const view = _versionsResolvedView();
-    body.innerHTML = `<div style="display:flex; justify-content:center; padding:20px;"><div class="loading-spinner"></div></div>`;
-    try {
-        const res = await fetch(`/api/cloud/versions?view=${encodeURIComponent(view)}&path=${encodeURIComponent(path || '')}&name=${encodeURIComponent(name)}`, { headers: HEADERS });
-        const data = await _cloudJson(res);
-        if (!res.ok || !data.versions) throw new Error(data.error || 'Error');
-        const versions = data.versions || [];
-        if (versions.length === 0) {
-            body.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-dim);">${window.t_cloud('versions_empty', 'No hay versiones guardadas para este archivo.')}</div>`;
-            return;
-        }
-        body.innerHTML = versions.map(v => `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-bottom:1px solid var(--border);">
-                <div style="min-width:0;">
-                    <div style="font-weight:600; font-size:0.85rem; color:var(--text-main);">${window.t_cloud('version_label', 'Versión')} ${v.n}</div>
-                    <div style="font-size:0.72rem; color:var(--text-dim);">${new Date(v.ts * 1000).toLocaleString(window.currentLang)} · ${formatBytes(v.size)}</div>
-                </div>
-                <div style="display:flex; gap:6px; flex-shrink:0;">
-                    <button onclick="restoreCloudVersion('${escAttr(name)}', '${escAttr(path || '')}', '${v.vid}', '${view}')" style="padding:5px 10px; font-size:0.72rem; font-weight:600; background:var(--indigo); color:#fff; border:none; border-radius:6px; cursor:pointer;">${window.t_cloud('btn_restore', 'Restaurar')}</button>
-                    <button onclick="downloadCloudVersion('${escAttr(name)}', '${escAttr(path || '')}', '${v.vid}', '${view}')" style="padding:5px 10px; font-size:0.72rem; font-weight:600; background:transparent; border:1px solid var(--border); color:var(--text-main); border-radius:6px; cursor:pointer;">${window.t_cloud('btn_download', 'Descargar')}</button>
-                    <button onclick="deleteCloudVersion('${escAttr(name)}', '${escAttr(path || '')}', '${v.vid}', '${view}')" title="${window.t_cloud('btn_delete_version', 'Eliminar versión')}" style="padding:5px 8px; font-size:0.72rem; background:transparent; border:1px solid var(--border); color:#ef4444; border-radius:6px; cursor:pointer;">✕</button>
-                </div>
-            </div>`).join('');
-    } catch (err) {
-        body.innerHTML = `<div style="padding:20px; color:#f87171;">${err.message}</div>`;
-    }
-}
-
-async function restoreCloudVersion(name, path, vid, view) {
-    const ok = await NV_Confirm(window.t_cloud('versions_restore_confirm', `¿Restaurar la versión de "${name}"? Se guardará una copia de la versión actual.`).replace('{0}', name), window.t_cloud('btn_restore', 'Restaurar'));
-    if (!ok) return;
-    try {
-        const res = await fetch('/api/cloud/versions/restore', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({ name, path, view, v: vid })
-        });
-        const data = await _cloudJson(res);
-        if (!res.ok) {
-            await NV_Alert(_tServerErr(data.error) || window.t_cloud('versions_restore_err', 'No se pudo restaurar la versión.'));
-            return;
-        }
-        showCloudVersions(name, path);
-        await NV_Alert(window.t_cloud('versions_restored_ok', 'Versión restaurada correctamente.'));
-        fetchCloudFiles(currentCloudPath, currentCloudView);
-        updateCloudQuotaInfo();
-    } catch (e) {
-        await NV_Alert(window.t_cloud('versions_restore_err', 'No se pudo restaurar la versión.'));
-    }
-}
-
-async function downloadCloudVersion(name, path, vid, view) {
-    window.location.href = `/api/cloud/versions/download?view=${encodeURIComponent(view)}&path=${encodeURIComponent(path || '')}&name=${encodeURIComponent(name)}&v=${vid}`;
-}
-
-async function deleteCloudVersion(name, path, vid, view) {
-    const ok = await NV_Confirm(window.t_cloud('versions_delete_confirm', '¿Eliminar esta versión?'), window.t_cloud('btn_delete_version', 'Eliminar versión'));
-    if (!ok) return;
-    try {
-        const res = await fetch('/api/cloud/versions/delete', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({ name, path, view, v: vid })
-        });
-        const data = await _cloudJson(res);
-        if (!res.ok) {
-            await NV_Alert(_tServerErr(data.error) || window.t_cloud('versions_delete_err', 'No se pudo eliminar la versión.'));
-            return;
-        }
-        showCloudVersions(name, path);
-    } catch (e) { }
 }
 
 async function showCloudInfo(name, path, trashId = null, ownerId = null) {
@@ -3461,40 +3053,6 @@ function showCloudDetails(name, path, data) {
     `;
 }
 
-function copyInfoSyncCommand() {
-    const cmdBox = document.getElementById('info-sync-cmd-box');
-    if (!cmdBox) return;
-
-    navigator.clipboard.writeText(cmdBox.innerText.trim()).then(() => {
-        NV_Alert(window.t_cloud('link_modal_token_copied', 'Token copiado al portapapeles'));
-    }).catch(err => {
-        console.error("Error al copiar:", err);
-    });
-}
-
-function showSyncInstructionsAlert(deviceName) {
-    const cleanName = deviceName.replace('', '');
-    const alertHtml = `
-        <div style="text-align: left; line-height: 1.5; font-size: 0.9rem; color: #e2e8f0; font-family: sans-serif;">
-            <div style="font-weight: 700; color: #fbbf24; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-size: 1.05rem;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.55.63 2.89 1.63 3.82.64.6 1.33 2.18"></path></svg> Guía de Ejecución Permanente (nohup)
-            </div>
-            <p style="margin-bottom: 12px; color: #94a3b8; font-size: 0.85rem;">Si deseas que el Agente de Sincronización siga ejecutándose en tu ordenador incluso si cierras la ventana de tu terminal física, ejecútalo usando <b>nohup</b> en segundo plano:</p>
-            <div style="position: relative; margin-bottom: 16px;">
-                <pre id="adv-sync-cmd" style="background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.78rem; color: #818cf8; word-break: break-all; white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.05); margin: 0; padding-right: 70px; min-height: 50px;">nohup python3 -c "$(curl -fsSLk '${window.location.origin}/api/cloud/sync-agent/script?device=${encodeURIComponent(cleanName)}')" &amp;</pre>
-                <button onclick="navigator.clipboard.writeText(document.getElementById('adv-sync-cmd').innerText.trim()); NV_Alert('¡Comando avanzado copiado!');" style="position: absolute; right: 6px; top: 6px; padding: 4px 8px; border-radius: 4px; border: none; background: var(--indigo); color: #fff; font-size: 0.7rem; font-weight: 600; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">Copiar</button>
-            </div>
-            <div style="font-weight: 600; color: #ffffff; margin-bottom: 6px; font-size: 0.85rem;">Instrucciones rápidas:</div>
-            <ol style="margin-left: 20px; padding: 0; color: #cbd5e1; font-size: 0.82rem; line-height: 1.6;">
-                <li style="margin-bottom: 4px;">Copia el comando de arriba haciendo clic en "Copiar".</li>
-                <li style="margin-bottom: 4px;">Pégalo en tu terminal física y presiona <b>Enter</b>.</li>
-                <li>¡Listo! El agente se ejecutará en segundo plano permanentemente y los logs se guardarán en <code style="background:rgba(255,255,255,0.1); padding:2px 4px; border-radius:3px; font-family:monospace; font-size:0.75rem;">nohup.out</code>.</li>
-            </ol>
-        </div>
-    `;
-    NV_Alert(alertHtml);
-}
-
 async function showCloudActivity(name, path, ownerId = null) {
     const body = document.getElementById('info-panel-body');
     body.innerHTML = `<div style="display:flex; justify-content:center; padding:20px;"><div class="loading-spinner"></div></div>`;
@@ -3560,15 +3118,10 @@ document.addEventListener('contextmenu', function (e) {
     const itemActions = document.getElementById('ctx-item-actions');
 
     if (viewCloud && viewCloud.classList.contains('active')) {
-
-
-
         e.preventDefault();
 
         if (explorer && explorer.contains(e.target)) {
             if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-
-            if (currentCloudView === 'home') return;
 
             const row = e.target.closest('.cloud-file-row') || e.target.closest('.cloud-folder-row') || e.target.closest('.cloud-file-card') || e.target.closest('.cloud-suggested-card');
             const isTrashView = currentCloudView === 'trash';
@@ -3608,113 +3161,66 @@ document.addEventListener('contextmenu', function (e) {
             }
 
             if (row) {
-                const name = row.getAttribute('data-name');
-                const path = row.getAttribute('data-path');
-                const isDir = row.getAttribute('data-is-dir') === 'true';
-                const trashId = row.getAttribute('data-trash-id');
+                const ctx = resolveCloudContext(row, null);
 
-                if (name || trashId) {
+                if (ctx) {
                     if (isTrashView) {
                         itemActions.style.display = 'block';
-                        document.getElementById('ctx-star-btn').style.display = 'none';
-                        document.getElementById('ctx-rename-btn').style.display = 'none';
-                        document.getElementById('ctx-protect-btn').style.display = 'none';
-                        document.getElementById('ctx-download-btn').style.display = 'none';
-                        document.getElementById('ctx-share-btn').style.display = 'none';
-                        document.getElementById('ctx-organize-btn').style.display = 'none';
-
-                        setCloudDeleteVisible(true);
-                        document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_delete_perm', 'Eliminar permanentemente');
-
-                        const restoreBtn = document.getElementById('ctx-restore-btn');
-                        restoreBtn.style.display = 'block';
-
+                        _applyCtxMenuTrash();
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
-                        currentCloudContextItem = { name, path, isDir, trashId, ownerId: row.getAttribute('data-owner-id'), protected: row.getAttribute('data-protected') === 'true' };
+                        currentCloudContextItem = ctx;
                     } else if (currentCloudView === 'computers' && currentCloudPath === '') {
-                        ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn', 'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn', 'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn', 'ctx-empty-trash-btn'].forEach(hiddenId => {
-                            const hiddenBtn = document.getElementById(hiddenId);
-                            if (hiddenBtn) hiddenBtn.style.display = 'none';
-                        });
-
-                        const tokenBtn = document.getElementById('ctx-token-btn');
-                        if (tokenBtn) tokenBtn.style.display = 'block';
-
-                        document.getElementById('ctx-info-btn').style.display = 'block';
-
-                        const deleteBtn = document.getElementById('ctx-delete-btn');
-                        setCloudDeleteVisible(true);
-                        deleteBtn.style.color = '#f87171';
-                        const deleteText = document.getElementById('ctx-delete-text');
-                        if (deleteText) {
-                            deleteText.setAttribute('data-i18n', 'btn_unlink');
-                            deleteText.innerText = window.t_cloud('btn_unlink', 'Desvincular');
-                        }
+                        _applyCtxMenuComputers();
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
-
-                        const fileView = row.getAttribute('data-view');
-                        currentCloudContextItem = { name, path, isDir, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), protected: row.getAttribute('data-protected') === 'true' };
+                        currentCloudContextItem = ctx;
                         itemActions.style.display = 'block';
                     } else {
-                        document.getElementById('ctx-download-btn').style.display = 'block';
-                        document.getElementById('ctx-star-btn').style.display = 'block';
-                        const isMineRow = row.getAttribute('data-is-mine') === 'true';
-                        const itemProtected = row.getAttribute('data-protected') === 'true';
-                        document.getElementById('ctx-rename-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow || itemProtected) ? 'none' : 'block';
-                        document.getElementById('ctx-protect-btn').style.display = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
-                        document.getElementById('ctx-share-btn').style.display = (currentCloudView === 'shared_by_me' || !isMineRow) ? 'none' : 'block';
+                        // Shared views: unshare visibility depends on view
+                        _applyCtxMenuStandard(ctx, null);
 
-                        const unshareBtn = document.getElementById('ctx-unshare-btn');
-                        if (unshareBtn) {
-                            unshareBtn.style.display = ((currentCloudView === 'shared' && !isMineRow) || currentCloudView === 'shared_by_me') ? 'block' : 'none';
-                            const unshareText = document.getElementById('ctx-unshare-text');
-                            if (unshareText) {
-                                if (currentCloudView === 'shared') {
-                                    unshareText.setAttribute('data-i18n', 'ctx_ignore');
-                                    unshareText.innerText = window.t_cloud('ctx_ignore', 'Ignorar');
-                                } else {
-                                    unshareText.setAttribute('data-i18n', 'ctx_unshare');
-                                    unshareText.innerText = window.t_cloud('ctx_unshare', 'Dejar de compartir');
+                        if (currentCloudView === 'shared' || currentCloudView === 'shared_by_me') {
+                            const unshareBtn = document.getElementById('ctx-unshare-btn');
+                            if (unshareBtn) {
+                                const isMineRow = ctx.isMine;
+                                unshareBtn.style.display = ((currentCloudView === 'shared' && !isMineRow) || currentCloudView === 'shared_by_me') ? 'block' : 'none';
+                                const unshareText = document.getElementById('ctx-unshare-text');
+                                if (unshareText) {
+                                    if (currentCloudView === 'shared') {
+                                        unshareText.setAttribute('data-i18n', 'ctx_ignore');
+                                        unshareText.innerText = window.t_cloud('ctx_ignore', 'Ignorar');
+                                    } else {
+                                        unshareText.setAttribute('data-i18n', 'ctx_unshare');
+                                        unshareText.innerText = window.t_cloud('ctx_unshare', 'Dejar de compartir');
+                                    }
                                 }
+                            }
+                            // Forzar descarga en shared
+                            document.getElementById('ctx-download-btn').style.display = 'block';
+                            const downloadBtn = document.getElementById('ctx-download-btn');
+                            if (downloadBtn && downloadBtn.children[1]) {
+                                downloadBtn.setAttribute('data-i18n', 'ctx_download');
+                                downloadBtn.children[1].innerText = window.t_cloud('ctx_download', 'Descargar');
                             }
                         }
 
-                        document.getElementById('ctx-organize-btn').style.display = 'block';
-                        const noMoveViews = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred');
-                        const noOrganizeAi = currentCloudView === 'ai';
-                        document.getElementById('ctx-move-btn').style.display = (noMoveViews || noOrganizeAi || !isMineRow || itemProtected) ? 'none' : 'block';
-                        document.getElementById('ctx-copy-btn').style.display = noOrganizeAi ? 'none' : 'block';
-
-                        const zipBtn = document.getElementById('ctx-zip-btn');
-                        const unzipBtn = document.getElementById('ctx-unzip-btn');
-                        if (zipBtn) zipBtn.style.display = (noMoveViews || noOrganizeAi || !isMineRow) ? 'none' : 'flex';
-                        if (unzipBtn) unzipBtn.style.display = (noOrganizeAi || !isMineRow || !name || !name.toLowerCase().endsWith('.zip')) ? 'none' : 'flex';
-
-                        document.getElementById('ctx-info-btn').style.display = 'block';
-
-                        setCloudDeleteVisible(!(noMoveViews || !isMineRow));
-                        document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_trash', 'Mover a la papelera');
-                        document.getElementById('ctx-restore-btn').style.display = 'none';
                         menu.querySelector('#ctx-creation-actions').style.display = 'none';
-
-                        const isStarred = row.getAttribute('data-starred') === 'true';
-                        const fileView = row.getAttribute('data-view');
-                        const sharedWith = row.getAttribute('data-shared-with');
-                        currentCloudContextItem = { name, path, isDir, starred: isStarred, view: fileView, trashId, ownerId: row.getAttribute('data-owner-id'), sharedWith: sharedWith, protected: itemProtected, protectedAncestor: row.getAttribute('data-protected-ancestor') };
+                        currentCloudContextItem = ctx;
                         itemActions.style.display = 'block';
 
                         const _multi = _ctxMultiSelectionState();
-                        const isStarredFinal = _multi.inMulti ? _multi.allStarred : isStarred;
-                        const isProtectedFinal = _multi.inMulti ? _multi.allProtected : itemProtected;
+                        const isStarredFinal = _multi.inMulti ? _multi.allStarred : ctx.starred;
+                        const isProtectedFinal = _multi.inMulti ? _multi.allProtected : ctx.protected;
 
                         const starText = document.getElementById('ctx-star-text');
                         starText.setAttribute('data-i18n', isStarredFinal ? 'ctx_unstar' : 'ctx_star');
                         starText.innerText = isStarredFinal ? window.t_cloud('ctx_unstar', 'Quitar de destacados') : window.t_cloud('ctx_star', 'Destacar');
 
-                        setCloudDeleteVisible(!(noMoveViews || !isMineRow || itemProtected));
+                        const noMoveViews = (currentCloudView === 'shared' || currentCloudView === 'shared_by_me' || currentCloudView === 'recent' || currentCloudView === 'starred' || currentCloudView === 'home');
+                        const isMineRow = ctx.isMine;
+                        setCloudDeleteVisible(!(noMoveViews || !isMineRow || ctx.protected));
+
                         const protectText = document.getElementById('ctx-protect-text');
                         const protectIcon = document.getElementById('ctx-protect-icon');
-
                         if (protectText) {
                             protectText.setAttribute('data-i18n', isProtectedFinal ? 'ctx_unprotect' : 'ctx_protect');
                             protectText.innerText = isProtectedFinal ? window.t_cloud('ctx_unprotect', 'Desproteger') : window.t_cloud('ctx_protect', 'Bloquear eliminación');
@@ -3750,18 +3256,7 @@ document.addEventListener('contextmenu', function (e) {
                 item.style.display = (isAllowedView && !currentCloudContextItem) ? '' : 'none';
             });
 
-            menu.style.display = 'block';
-
-            let x = e.pageX;
-            let y = e.pageY;
-            const menuWidth = 200;
-            const menuHeight = menu.offsetHeight || 220;
-
-            if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
-            if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
-
-            menu.style.left = x + 'px';
-            menu.style.top = y + 'px';
+            _showCloudMenu(menu, e.pageX, e.pageY);
         } else {
             if (menu) menu.style.display = 'none';
         }
@@ -3818,10 +3313,6 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
             restoreCloudItem(trashId);
             break;
         case 'ctx-star-btn': {
-            // Si el elemento pulsado forma parte de una selección múltiple,
-            // destacar/quitar se aplica a TODA la selección.
-            const inMultiSelection = SELECTED_CLOUD_ITEMS.length > 1
-                && SELECTED_CLOUD_ITEMS.some(it => it.name === name && (it.path || '') === (path || ''));
             if (inMultiSelection) {
                 starSelectedItems();
             } else {
@@ -3830,11 +3321,6 @@ document.getElementById('cloud-context-menu').addEventListener('click', async fu
             break;
         }
         case 'ctx-protect-btn': {
-            // Si el elemento pulsado forma parte de una selección múltiple,
-            // proteger/desproteger se aplica a TODA la selección (igual que
-            // el botón de la barra de selección múltiple).
-            const inMultiSelection = SELECTED_CLOUD_ITEMS.length > 1
-                && SELECTED_CLOUD_ITEMS.some(it => it.name === name && (it.path || '') === (path || ''));
             if (inMultiSelection) {
                 protectSelectedItems();
             } else {
@@ -3887,7 +3373,7 @@ let moveTargetIsDir = false;
 let isMoveAction = true;
 
 async function openCloudMove(name, oldPath, isDir = false, isCopy = false) {
-    if (isCopy && _currentCloudUsedBytes >= _currentCloudLimitBytes) {
+    if (isCopy && getCurrentCloudUsedBytes() >= getCurrentCloudLimitBytes()) {
         await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
         return;
     }
@@ -4253,514 +3739,6 @@ async function copyCloudItem(name, oldPath, newPath) {
     } catch (err) { await NV_Alert(window.currentLang === "en" ? "Network error saving copy" : "Error de red al guardar copia"); }
 }
 
-let selectedUsersToShare = [];
-let _existingShares = [];
-
-async function openCloudShare(name, path) {
-    if (currentCloudView === 'shared' || (currentCloudContextItem && currentCloudContextItem.view === 'shared')) {
-        await NV_Alert(window.currentLang === "en" ? "Cannot share files that were shared with you." : "No puedes compartir archivos que han sido compartidos contigo.", window.currentLang === "en" ? "Restriction" : "Restricción");
-        return;
-    }
-    window._multiShareItems = null;
-    const modal = document.getElementById('cloud-share-modal');
-    document.getElementById('share-filename').innerText = name;
-    document.getElementById('share-user-search').value = '';
-    document.getElementById('share-search-results').style.display = 'none';
-    selectedUsersToShare = [];
-    _existingShares = [];
-    renderSelectedUsers();
-
-    // Load already shared users
-    try {
-        const res = await fetch('/api/cloud/share/status', {
-            method: 'POST', headers: HEADERS,
-            body: JSON.stringify({ name, path })
-        });
-        const data = await _cloudJson(res);
-        _existingShares = data.shares || [];
-    } catch (e) { }
-
-    const isManageMode = (currentCloudView === 'shared_by_me');
-    const addSection = document.getElementById('share-add-section');
-    const contactsSection = document.getElementById('share-contacts-section');
-    const selectedSection = document.getElementById('selected-users-container');
-    const confirmBtn = document.getElementById('btn-confirm-share');
-    const manageSection = document.getElementById('share-manage-section');
-    const actionLabel = document.getElementById('share-modal-action');
-
-    if (actionLabel) {
-        actionLabel.innerText = isManageMode ? window.t_cloud('people_with_access', 'Personas con acceso') : window.t_cloud('share_action', 'Compartir');
-    }
-
-    if (isManageMode) {
-        if (addSection) addSection.style.display = 'none';
-        if (contactsSection) contactsSection.style.display = 'none';
-        if (selectedSection) selectedSection.style.display = 'none';
-        if (confirmBtn) confirmBtn.style.display = 'none';
-        if (manageSection) manageSection.style.display = 'block';
-        renderManageShares();
-    } else {
-        if (addSection) addSection.style.display = 'block';
-        if (contactsSection) contactsSection.style.display = 'block';
-        if (selectedSection) selectedSection.style.display = 'flex';
-        if (confirmBtn) confirmBtn.style.display = 'inline-block';
-        if (manageSection) manageSection.style.display = 'none';
-        loadCloudContacts();
-    }
-
-    modal.style.display = 'flex';
-}
-
-function renderManageShares() {
-    const container = document.getElementById('share-manage-list');
-    if (!container) return;
-
-    if (_existingShares.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 20px; opacity: 0.5; font-size: 0.85rem;">${window.t_cloud('no_shared_users', 'No hay usuarios con acceso')}</div>`;
-        return;
-    }
-
-    container.innerHTML = _existingShares.map(s => `
-        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 8px; transition: background 0.2s;" class="contact-item-row">
-            <img src="/api/system/user/avatar/${escAttr(s.user_id)}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border);" onerror="window.cloudAvatarFallback(this, '${jsStr(s.username)}')">
-            <div style="flex: 1;">
-                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">${esc(s.username)}</div>
-                <div style="font-size: 0.7rem; color: var(--text-dim); opacity: 0.8;">${window.t_cloud('guest', 'Invitado')}</div>
-            </div>
-            <button onclick="revokeCloudShare('${jsStr(s.user_id)}', '${jsStr(s.username)}', event)"
-                style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
-                onmouseover="this.style.background='rgba(239,68,68,0.25)';this.style.transform='scale(1.1)'" 
-                onmouseout="this.style.background='rgba(239,68,68,0.1)';this.style.transform='scale(1)'"
-                title="${window.t_cloud('ctx_unshare', 'Dejar de compartir')}">&times;</button>
-        </div>
-    `).join('');
-}
-
-function closeCloudShareModal() {
-    document.getElementById('cloud-share-modal').style.display = 'none';
-}
-
-async function loadCloudContacts() {
-    const list = document.getElementById('share-contacts-list');
-    try {
-        const res = await fetch('/api/cloud/contacts', { headers: HEADERS });
-        const data = await _cloudJson(res);
-
-        if (!data.contacts || data.contacts.length === 0) {
-            list.innerHTML = `<div style="font-size: 0.85rem; opacity: 0.5; text-align: center; padding: 10px;">${window.t_cloud('share_no_friends', 'No tienes amigos agregados.')}</div>`;
-            return;
-        }
-
-        list.innerHTML = data.contacts.map(c => {
-            const already = _existingShares.some(s => s.user_id === c.user_id);
-            return `
-                <div class="contact-item-row" onclick="${already ? '' : "selectUserForSharing('" + jsStr(c.user_id) + "', '" + jsStr(c.username) + "')"}" 
-                     style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: ${already ? 'default' : 'pointer'}; transition: background 0.2s; opacity: ${already ? 0.5 : 1};">
-                    <img src="/api/system/user/avatar/${escAttr(c.user_id)}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="window.cloudAvatarFallback(this, '${jsStr(c.username)}')">
-                    <div style="flex: 1;">
-                        <div style="font-size: 0.9rem; font-weight: 600;">${esc(c.username)}</div>
-                    </div>
-                    ${already ? '<button onclick="revokeCloudShare(\'' + c.user_id + '\', \'' + c.username.replace(/'/g, "\\'") + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">' + window.t_cloud('share_revoke', 'REVOCAR') + '</button>' : ''}
-                </div>
-            `;
-        }).join('');
-    } catch (err) {
-        console.error("Error cargando amigos:", err);
-    }
-}
-
-async function searchUsersForSharing(query) {
-    const results = document.getElementById('share-search-results');
-    if (!query || query.length < 2) {
-        results.style.display = 'none';
-        return;
-    }
-
-    try {
-        const res = await fetch(`/api/cloud/users/search?q=${encodeURIComponent(query)}`, { headers: HEADERS });
-        const data = await _cloudJson(res);
-
-        if (!data.users || data.users.length === 0) {
-            results.innerHTML = `<div style="padding: 12px; font-size: 0.85rem; opacity: 0.5;">
-        ${window.t_cloud('share_no_friends_found', 'No se encontraron amigos.')}
-        </div>`;
-        } else {
-            results.innerHTML = data.users.map(u => {
-                const already = _existingShares.some(s => s.user_id === u.user_id);
-                return `
-                <div onclick="${already ? '' : "selectUserForSharing('" + jsStr(u.user_id) + "', '" + jsStr(u.username) + "')"}" 
-                     style="padding: 10px 16px; cursor: ${already ? 'default' : 'pointer'}; border-bottom: 1px solid var(--border); transition: background 0.2s; display: flex; align-items: center; gap: 10px; opacity: ${already ? 0.5 : 1};">
-                    <img src="/api/system/user/avatar/${escAttr(u.user_id)}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);" onerror="window.cloudAvatarFallback(this, '${jsStr(u.username)}')">
-                    <div style="flex: 1;">
-                        <div style="font-size: 0.85rem; font-weight: 600;">${esc(u.username)}</div>
-                    </div>
-                    ${already ? '<button onclick="revokeCloudShare(\'' + jsStr(u.user_id) + '\', \'' + jsStr(u.username) + '\', event)" style="font-size:0.7rem;color:#ef4444;font-weight:700;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 8px;border-radius:4px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(239,68,68,0.2)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.1)\'">REVOCAR</button>' : '<div style="font-size:0.7rem;color:#4285f4;font-weight:700;">SELECCIONAR</div>'}
-                </div>
-            `}).join('');
-        }
-        results.style.display = 'block';
-    } catch (err) { }
-}
-
-function selectUserForSharing(uid, username) {
-    if (selectedUsersToShare.find(u => u.uid === uid)) return;
-    if (_existingShares.some(s => s.user_id === uid)) return;
-    selectedUsersToShare.push({ uid, username });
-    renderSelectedUsers();
-
-    // Hide search results and clear input
-    const results = document.getElementById('share-search-results');
-    if (results) results.style.display = 'none';
-    const input = document.getElementById('share-user-search');
-    if (input) input.value = '';
-}
-
-function removeSelectedUser(uid) {
-    selectedUsersToShare = selectedUsersToShare.filter(u => u.uid !== uid);
-    renderSelectedUsers();
-}
-
-async function revokeCloudShare(uid, username, event) {
-    if (event) event.stopPropagation();
-    const itemName = document.getElementById('share-filename').innerText;
-    if (!await NV_Confirm(`${window.t_cloud('confirm_unshare_user', '¿Dejar de compartir con')} ${esc(username)}?`, window.t_cloud('confirm_action_title', 'Confirmar acción'), window.t_cloud('btn_confirm_action', 'Confirmar'), window.t_cloud('btn_cancel', 'Cancelar'))) return;
-
-    try {
-        const res = await fetch('/api/cloud/unshare', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({
-                name: itemName,
-                path: currentCloudContextItem ? currentCloudContextItem.path : '',
-                shared_with: uid
-            })
-        });
-        const data = await _cloudJson(res);
-        if (data.success) {
-            _existingShares = _existingShares.filter(s => s.user_id !== uid);
-
-            // If in manage mode, re-render the manage list
-            const manageSection = document.getElementById('share-manage-section');
-            if (manageSection && manageSection.style.display === 'block') {
-                renderManageShares();
-                // If no more shares, close modal and refresh
-                if (_existingShares.length === 0) {
-                    closeCloudShareModal();
-                }
-            } else {
-                loadCloudContacts();
-                const q = document.getElementById('share-user-search').value;
-                if (q && q.length >= 2) searchUsersForSharing(q);
-            }
-
-            fetchCloudFiles(currentCloudPath, currentCloudView);
-        } else {
-            NV_Alert(_tServerErr(data.error) || (window.currentLang === "en" ? "Error revoking access" : "Error al revocar acceso"));
-        }
-    } catch (err) {
-        NV_Alert(window.currentLang === "en" ? "Connection error" : "Error de conexión");
-    }
-}
-
-function renderSelectedUsers() {
-    const container = document.getElementById('selected-users-container');
-    const btn = document.getElementById('btn-confirm-share');
-
-    if (selectedUsersToShare.length === 0) {
-        container.innerHTML = `<div style="font-size: 0.85rem; opacity: 0.4;">${window.t_cloud('share_nobody_selected', 'Nadie seleccionado')}</div>`;
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        return;
-    }
-
-    btn.disabled = false;
-    btn.style.opacity = '1';
-
-    container.innerHTML = selectedUsersToShare.map(u => `
-        <div style="display: flex; align-items: center; gap: 6px; background: var(--indigo-dim); color: var(--text-main); padding: 4px 10px; border-radius: 100px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--indigo);">
-            <img src="/api/system/user/avatar/${escAttr(u.uid)}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;" onerror="window.cloudAvatarFallback(this, '${jsStr(u.username)}')">
-            ${esc(u.username)}
-            <span onclick="removeSelectedUser('${jsStr(u.uid)}')" style="cursor: pointer; opacity: 0.6; font-size: 1rem; line-height: 1;">&times;</span>
-        </div>
-    `).join('');
-}
-
-// Comparte TODOS los elementos seleccionados: abre el modal con el primero
-// y, al confirmar, reparte los usuarios elegidos a todos los seleccionados.
-async function shareSelectedItems() {
-    if (SELECTED_CLOUD_ITEMS.length === 0) return;
-    if (currentCloudView === 'shared') {
-        await NV_Alert(window.currentLang === "en" ? "Cannot share files that were shared with you." : "No puedes compartir archivos que han sido compartidos contigo.", window.currentLang === "en" ? "Restriction" : "Restricción");
-        return;
-    }
-    window._multiShareItems = SELECTED_CLOUD_ITEMS.slice();
-    const first = SELECTED_CLOUD_ITEMS[0];
-    openCloudShare(first.name, first.path || '');
-    const nameEl = document.getElementById('share-filename');
-    if (nameEl) {
-        const count = SELECTED_CLOUD_ITEMS.length;
-        nameEl.innerText = `${count} ` + (count === 1
-            ? window.t_cloud('selected_single', 'seleccionado')
-            : window.t_cloud('selected_plural', 'seleccionados'));
-    }
-}
-
-async function confirmCloudShare() {
-    if (selectedUsersToShare.length === 0 || !currentCloudContextItem) return;
-    if (currentCloudView === 'shared' || currentCloudContextItem.view === 'shared') {
-        return;
-    }
-
-    const { name, path } = currentCloudContextItem;
-    const uids = selectedUsersToShare.map(u => u.uid);
-
-    const multiItems = window._multiShareItems || null;
-    if (multiItems && multiItems.length > 1) {
-        window._multiShareItems = null;
-        let sharedCount = 0;
-        for (const it of multiItems) {
-            try {
-                const res = await fetch('/api/cloud/share', {
-                    method: 'POST',
-                    headers: HEADERS,
-                    body: JSON.stringify({
-                        name: it.name,
-                        path: it.path || '',
-                        view: currentCloudView,
-                        shared_with: uids
-                    })
-                });
-                if (res.ok) sharedCount++;
-            } catch (err) { }
-        }
-        if (sharedCount > 0) {
-            closeCloudShareModal();
-            clearCloudSelection();
-            fetchCloudFiles(currentCloudPath, currentCloudView);
-            await NV_Alert(window.currentLang === "en"
-                ? `${sharedCount} item(s) shared with ${selectedUsersToShare.length} user(s).`
-                : `${sharedCount} elemento(s) compartidos con ${selectedUsersToShare.length} usuario(s).`);
-        }
-        return;
-    }
-
-    try {
-        const res = await fetch('/api/cloud/share', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({
-                name: name,
-                path: path,
-                view: currentCloudView,
-                shared_with: uids
-            })
-        });
-
-        if (res.ok) {
-            closeCloudShareModal();
-            await NV_Alert(window.currentLang === "en" ? `File shared with ${selectedUsersToShare.length} user(s).` : `Archivo compartido con ${selectedUsersToShare.length} usuario(s).`);
-        } else {
-            const data = await _cloudJson(res);
-            await NV_Alert("Error: " + (_tServerErr(data.error) || (window.currentLang === "en" ? "Could not share." : "No se pudo compartir.")));
-        }
-    } catch (err) {
-        await NV_Alert(window.currentLang === "en" ? "Connection error sharing." : "Error de conexión al compartir.");
-    }
-}
-
-let linkDevicePollInterval = null;
-let _currentLinkDeviceOS = 'linux';
-let _linkDeviceCurrentOS = 'linux';
-let _agentDownloading = false;
-let _currentLinkDeviceToken = null;
-let _existingDevicesAtOpen = new Set();
-
-async function downloadClientAgent() {
-    if (_agentDownloading) return;
-    _agentDownloading = true;
-    const modal = document.getElementById('cloud-link-device-modal');
-    const useToast = !modal || modal.style.display === 'none';
-    const btn = document.getElementById('btn-download-agent');
-    const originalLabel = btn ? btn.innerHTML : '';
-    const setBtnBusy = (busy) => {
-        if (!btn) return;
-        btn.style.pointerEvents = busy ? 'none' : '';
-        btn.style.opacity = busy ? '0.7' : '';
-        btn.disabled = busy;
-        btn.innerHTML = busy
-            ? '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:cloud-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Descargando Agente...'
-            : originalLabel;
-    };
-    const showToast = (msg) => {
-        if (useToast) showCloudProgressToast(msg);
-    };
-    const toastSuccess = () => {
-        const toast = document.getElementById('cloud-progress-toast');
-        const textEl = toast && toast.querySelector('.cloud-toast-text');
-        if (toast) {
-            const spinner = toast.querySelector('.cloud-toast-spinner');
-            if (spinner) spinner.style.display = 'none';
-            if (textEl) textEl.innerText = window.currentLang === "en" ? 'Download started ✓' : 'Descarga iniciada ✓';
-            toast.style.animation = 'none';
-            setTimeout(() => {
-                toast.style.animation = 'slideOutRight 0.3s ease';
-                setTimeout(() => { toast.style.display = 'none'; }, 300);
-            }, 2200);
-        }
-    };
-
-    setBtnBusy(true);
-    showToast(window.currentLang === "en" ? "Preparing agent download..." : "Descargando Agente Base...");
-
-    let res = null;
-    try {
-        res = await fetch('/api/cloud/sync-agent/download-client', { headers: HEADERS, cache: 'no-store' });
-    } catch (e) {
-        console.error('downloadClientAgent fetch error', e);
-        res = null;
-    }
-    if (!res || !res.ok) {
-        let msg = res && res.status === 403 ? (window.currentLang === 'en' ? 'The download is only available over HTTPS. Access via https:// and retry.' : 'La descarga solo está disponible por HTTPS. Entra con https:// y reintenta.') : (window.currentLang === 'en' ? 'Could not prepare the download.' : 'No se pudo preparar la descarga.');
-        try {
-            const data = res && await res.json();
-            if (data && data.error) msg = _tServerErr(data.error);
-        } catch (e) { }
-        hideCloudProgressToast();
-        setBtnBusy(false);
-        _agentDownloading = false;
-        await NV_Alert(msg);
-        return;
-    }
-    try {
-        const blob = await res.blob();
-        const cd = res.headers.get('Content-Disposition') || '';
-        const m = cd.match(/filename="?([^";]+)"?/);
-        const name = m ? m[1] : (navigator.userAgent.includes('Win') ? 'Null-Void-Agent.exe' : 'Null-Void-Agent-Linux');
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-        setBtnBusy(false);
-        _agentDownloading = false;
-        if (useToast) {
-            toastSuccess();
-        }
-    } catch (e) {
-        console.error('downloadClientAgent blob error', e);
-        hideCloudProgressToast();
-        setBtnBusy(false);
-        _agentDownloading = false;
-        window.location.href = '/api/cloud/sync-agent/download-client';
-    }
-}
-
-async function openLinkDeviceModal() {
-    const modal = document.getElementById('cloud-link-device-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-        document.getElementById('sync-command-text').innerText = 'Generando token seguro...';
-        _existingDevicesAtOpen = new Set();
-        try {
-            const devRes = await fetch('/api/cloud/files?view=computers', { headers: HEADERS });
-            if (devRes.ok) {
-                const devData = await _cloudJson(devRes);
-                (devData.files || []).forEach(f => _existingDevicesAtOpen.add(f.name));
-            }
-        } catch (e) { }
-        try {
-            const res = await fetch('/api/cloud/sync-agent/generate-token', {
-                method: 'POST',
-                headers: HEADERS
-            });
-            if (res.ok) {
-                const data = await _cloudJson(res);
-                _currentLinkDeviceToken = data.temp_token;
-            }
-        } catch (e) { console.error("Error al generar token del agente", e); }
-        const userAgent = navigator.userAgent.toLowerCase();
-        if (userAgent.includes('win')) {
-            _currentLinkDeviceOS = 'windows';
-        } else {
-            _currentLinkDeviceOS = 'linux';
-        }
-        _linkDeviceCurrentOS = _currentLinkDeviceOS;
-
-        setLinkDeviceOS(_currentLinkDeviceOS);
-        if (linkDevicePollInterval) clearInterval(linkDevicePollInterval);
-        linkDevicePollInterval = setInterval(async () => {
-            try {
-                const res = await fetch('/api/cloud/files?view=computers', { headers: HEADERS });
-                if (res.ok) {
-                    const data = await _cloudJson(res);
-                    const files = data.files || [];
-                    const newDevice = files.find(f => f.active && !_existingDevicesAtOpen.has(f.name));
-                    if (newDevice) {
-                        clearInterval(linkDevicePollInterval);
-                        linkDevicePollInterval = null;
-                        closeLinkDeviceModal();
-                        await fetchCloudFiles(newDevice.name, 'computers');
-                        await NV_Alert(window.currentLang === "en" ? `Computer "${esc(newDevice.name)}" linked successfully.` : `Computadora "${esc(newDevice.name)}" vinculada con éxito.`);
-                    }
-                }
-            } catch (err) { }
-        }, 5000);
-    }
-}
-
-function setLinkDeviceOS(os) {
-    _currentLinkDeviceOS = os;
-    const btns = ['os-btn-linux', 'os-btn-windows'];
-    btns.forEach(id => {
-        const btn = document.getElementById(id);
-        if (!btn) return;
-        const isCurrent = id === `os-btn-${os}`;
-        const isAllowed = (id === 'os-btn-linux' ? 'linux' : 'windows') === _linkDeviceCurrentOS;
-        btn.style.background = isCurrent ? 'var(--indigo)' : 'transparent';
-        btn.style.color = isCurrent ? '#fff' : 'var(--text-muted)';
-        btn.style.fontWeight = isCurrent ? '700' : '500';
-        btn.disabled = !isAllowed;
-        btn.style.cursor = isAllowed ? 'pointer' : 'not-allowed';
-        btn.style.opacity = isAllowed ? '1' : '0.4';
-    });
-    generateSyncCommand();
-}
-
-function closeLinkDeviceModal() {
-    const modal = document.getElementById('cloud-link-device-modal');
-    if (modal) modal.style.display = 'none';
-    if (linkDevicePollInterval) {
-        clearInterval(linkDevicePollInterval);
-        linkDevicePollInterval = null;
-    }
-}
-
-function generateSyncCommand() {
-    const cmdText = document.getElementById('sync-command-text');
-    if (!cmdText) return;
-
-    if (!_currentLinkDeviceToken) {
-        cmdText.innerText = "Error: no se pudo obtener token de seguridad.";
-        return;
-    }
-
-    cmdText.innerText = _currentLinkDeviceToken;
-}
-
-function copySyncCommand() {
-
-    const cmdText = document.getElementById('sync-command-text');
-    if (!cmdText) return;
-
-    navigator.clipboard.writeText(cmdText.innerText).then(() => {
-        NV_Alert(window.t_cloud('link_modal_token_copied', 'Token copiado al portapapeles'));
-    }).catch(err => {
-        console.error("Error al copiar:", err);
-    });
-}
 
 function getUploadTarget() {
     let targetView = uploadDestinationOverrideView !== null ? uploadDestinationOverrideView : currentCloudView;
@@ -5337,7 +4315,7 @@ async function moveSelectedItems() {
 // en modo copia (lote).
 async function copySelectedItems() {
     if (SELECTED_CLOUD_ITEMS.length === 0) return;
-    if (_currentCloudUsedBytes >= _currentCloudLimitBytes) {
+    if (getCurrentCloudUsedBytes() >= getCurrentCloudLimitBytes()) {
         await NV_Alert(window.currentLang === "en" ? "Not enough space, request more" : "No tienes suficiente espacio, solicita más");
         return;
     }
@@ -5943,7 +4921,7 @@ function _renderVideoQualityMenu(token) {
     const menu = document.getElementById('video-quality-menu');
     if (!menu || !token) return;
 
-const itemReady = (quality, label) => `
+    const itemReady = (quality, label) => `
         <div onclick="window.changeVideoQuality('${jsStr(quality)}', '${jsStr(label)}', '${jsStr(token)}')" class="v-qual-item" style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between;"><span>${esc(label)}</span><span class="v-qual-check" style="display:none;">✓</span></div>`;
     const itemProcessing = (quality) => `
         <div style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-muted); border-radius: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; opacity: 0.7; cursor: default;"><span>${(window.t_cloud('video_preparing', 'Preparando') || 'Preparando')} ${esc(quality)}…</span></div>`;
@@ -6064,6 +5042,8 @@ function initCloud() {
         toggleCloudFileSelection,
         handleZipItem, handleUnzipItem,
         toggleBreadcrumbMenu, closeBreadcrumbMenus,
+        showCloudProgressToast, hideCloudProgressToast,
+        showSyncInstructionsAlert, copyInfoSyncCommand,
         toggleVideoQualityMenu: function (e) {
             if (e) e.stopPropagation();
             const menu = document.getElementById('video-quality-menu');
@@ -6211,158 +5191,9 @@ function initCloud() {
     });
 }
 
-let _tokenTimerInterval = null;
-
-async function handleGenerateLinkToken() {
-    try {
-        if (_tokenTimerInterval) clearInterval(_tokenTimerInterval);
-
-        const pcName = currentCloudContextItem ? currentCloudContextItem.name : '';
-        const res = await fetch('/api/cloud/sync-agent/generate-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_device: pcName })
-        });
-        const data = await _cloudJson(res);
-        if (res.ok && data.temp_token) {
-            const introText = window.currentLang === 'en'
-                ? `Enter this token in the desktop app to connect <b style="color: #e8edf8;">${pcName || 'your device'}</b>:`
-                : `Introduce este token en la aplicación de escritorio para conectar <b style="color: #e8edf8;">${pcName || 'tu dispositivo'}</b>:`;
-            const copyToast = window.currentLang === 'en' ? 'Token copied to clipboard' : 'Token copiado al portapapeles';
-            
-            let secondsLeft = data.remaining_seconds !== undefined ? Math.max(0, parseInt(data.remaining_seconds)) : 300;
-            const initialMins = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
-            const initialSecs = String(secondsLeft % 60).padStart(2, '0');
-
-            const msg = `
-                <div style="text-align: center; padding: 4px 0;">
-                    <p style="margin-bottom: 14px; font-size: 0.88rem; color: var(--text-muted, #8b95b0); line-height: 1.4;">
-                        ${introText}
-                    </p>
-                    <div id="nv-token-box" style="font-family: monospace; font-size: 1.05rem; font-weight: 700; color: #a5b4fc; background: rgba(99, 102, 241, 0.12); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 10px; padding: 12px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: all; cursor: pointer; transition: all 0.3s ease;"
-                         onmouseover="if(!this.dataset.expired){ this.style.background='rgba(99, 102, 241, 0.25)'; this.style.borderColor='#818cf8'; }"
-                         onmouseout="if(!this.dataset.expired){ this.style.background='rgba(99, 102, 241, 0.12)'; this.style.borderColor='rgba(99, 102, 241, 0.4)'; }"
-                         onclick="if(!this.dataset.expired){ navigator.clipboard.writeText('${jsStr(data.temp_token)}'); const alertToast = document.getElementById('nv-copy-toast'); if(alertToast){ alertToast.style.opacity='1'; setTimeout(()=>alertToast.style.opacity='0', 2000); } }">
-                        <span id="nv-token-text">${esc(data.temp_token)}</span>
-                    </div>
-                    <div id="nv-copy-toast" style="opacity: 0; transition: opacity 0.3s; font-size: 0.78rem; color: #34d399; font-weight: 600; margin-top: 6px; height: 18px;">
-                        ${copyToast}
-                    </div>
-                    <div id="nv-timer-badge" style="margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.04); padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s ease;">
-                        <svg id="nv-timer-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                        <span id="nv-token-timer" style="font-size: 0.80rem; font-weight: 700; color: #818cf8; font-family: monospace;">${initialMins}:${initialSecs}</span>
-                    </div>
-                    <p id="nv-token-expiry-hint" style="margin-top: 10px; font-size: 0.78rem; color: #8b95b0; font-weight: 500; transition: color 0.3s ease;">
-                        ${window.currentLang === 'en' ? 'Token expires in 5 minutes (one-time use).' : 'Este token es de un solo uso y expira en 5 minutos.'}
-                    </p>
-                </div>
-            `;
-
-            // Iniciar temporizador regresivo y verificación de uso
-            _tokenTimerInterval = setInterval(async () => {
-                secondsLeft--;
-                const timerEl = document.getElementById('nv-token-timer');
-                const tokenBox = document.getElementById('nv-token-box');
-                const expiryHint = document.getElementById('nv-token-expiry-hint');
-                const timerIcon = document.getElementById('nv-timer-icon');
-
-                const mins = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
-                const secs = String(secondsLeft % 60).padStart(2, '0');
-
-                if (timerEl && secondsLeft >= 0) {
-                    timerEl.innerText = `${mins}:${secs}`;
-                }
-
-                // Consultar si la app ya usó el token
-                if ((secondsLeft % 2 === 0 && secondsLeft > 0) || secondsLeft === data.remaining_seconds) {
-                    try {
-                        const checkRes = await fetch('/api/cloud/sync-agent/check-token-status', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ temp_token: data.temp_token, target_device: pcName })
-                        });
-                        const checkData = await _cloudJson(checkRes);
-                        if (checkData.used) {
-                            if (_tokenTimerInterval) {
-                                clearInterval(_tokenTimerInterval);
-                                _tokenTimerInterval = null;
-                            }
-
-                            if (tokenBox) {
-                                tokenBox.dataset.expired = 'true';
-                                tokenBox.style.background = 'rgba(16, 185, 129, 0.12)';
-                                tokenBox.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-                                tokenBox.style.color = '#34d399';
-                                tokenBox.style.cursor = 'default';
-                            }
-                            if (timerEl) {
-                                timerEl.innerText = window.currentLang === 'en' ? 'Linked' : 'Vinculado';
-                                timerEl.style.color = '#34d399';
-                            }
-                            if (timerIcon) {
-                                timerIcon.setAttribute('stroke', '#34d399');
-                            }
-                            if (expiryHint) {
-                                expiryHint.style.color = '#34d399';
-                                expiryHint.style.fontWeight = '600';
-                                const dName = checkData.device_name || pcName;
-                                expiryHint.innerText = window.currentLang === 'en'
-                                    ? `✔ Vinculado correctamente${dName ? ' (' + dName + ')' : ''}`
-                                    : `✔ Vinculado correctamente${dName ? ' (' + dName + ')' : ''}`;
-                            }
-                            if (typeof fetchCloudFiles === 'function') {
-                                fetchCloudFiles();
-                            }
-                            return;
-                        }
-                    } catch (e) {}
-                }
-
-                if (secondsLeft <= 0) {
-                    clearInterval(_tokenTimerInterval);
-                    _tokenTimerInterval = null;
-
-                    if (timerEl) {
-                        timerEl.innerText = '00:00';
-                        timerEl.style.color = '#8b95b0';
-                    }
-                    if (timerIcon) {
-                        timerIcon.setAttribute('stroke', '#8b95b0');
-                    }
-                    if (tokenBox) {
-                        tokenBox.dataset.expired = 'true';
-                        tokenBox.style.opacity = '0.45';
-                        tokenBox.style.background = 'rgba(255, 255, 255, 0.04)';
-                        tokenBox.style.borderColor = 'rgba(255, 255, 255, 0.12)';
-                        tokenBox.style.color = '#8b95b0';
-                        tokenBox.style.cursor = 'default';
-                    }
-                    if (expiryHint) {
-                        expiryHint.style.color = '#8b95b0';
-                        expiryHint.style.fontWeight = '500';
-                        expiryHint.innerText = window.currentLang === 'en'
-                            ? 'Token expired. Generate a new one from the menu.'
-                            : 'Token expirado. Genera uno nuevo desde el menú.';
-                    }
-                }
-            }, 1000);
-
-            await NV_Alert(msg, window.t_cloud('title_token', 'Token de Enlace Generado'));
-            if (_tokenTimerInterval) {
-                clearInterval(_tokenTimerInterval);
-                _tokenTimerInterval = null;
-            }
-        } else {
-            await NV_Alert(data.error || (window.currentLang === 'en' ? 'Could not generate token.' : 'No se pudo generar el token.'));
-        }
-    } catch (e) {
-        await NV_Alert(window.currentLang === 'en' ? 'Connection error generating token.' : 'Error de conexión al generar el token.');
-    }
-}
-
 export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud, handleZipItem, handleUnzipItem };
 
-window.handleCloudBack = function() {
+window.handleCloudBack = function () {
     if (window.currentCloudView !== 'drive' && window.currentCloudView !== 'computers') {
         if (typeof window.nvGoBack === 'function') window.nvGoBack();
         return;

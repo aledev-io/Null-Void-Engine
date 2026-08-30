@@ -1,6 +1,11 @@
 import { Events } from './events.js';
 import { App } from './app.js';
 
+function _escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 const VIEW_START_HOUR = 0;
 const VIEW_END_HOUR = 24;
 const HOUR_PX = 60;
@@ -81,9 +86,9 @@ export const Calendar = {
         return `<div class="event-chip${ev.completed ? ' completed' : ''}${isMultiDay ? ' multi-day-chip' : ''}" 
                      data-id="${ev.id}" 
                      style="background:${bg};color:${color};${isMultiDay && !isStart ? 'border-top-left-radius:0;border-bottom-left-radius:0;' : ''}${isMultiDay && !isEnd ? 'border-top-right-radius:0;border-bottom-right-radius:0;' : ''}"
-                     title="${ev.title.replace(/"/g, '&quot;')}">
+                     title="${_escHtml(ev.title)}">
                   <span class="event-chip-dot" style="background:${color}"></span>
-                  <span class="event-chip-label">${contStart}${label}${contEnd}</span>
+                  <span class="event-chip-label">${contStart}${_escHtml(label)}${contEnd}</span>
                 </div>`;
       }).join('');
 
@@ -196,8 +201,8 @@ export const Calendar = {
           return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
                        data-id="${ev.id}"
                        style="top:${top}px;height:${height}px;width:calc(${w}% - 6px);left:calc(${l}% + 3px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
-                       title="${ev.title}">
-                    <div class="time-event-title">${icon} ${ev.title}</div>
+                       title="${_escHtml(ev.title)}">
+                    <div class="time-event-title">${icon} ${_escHtml(ev.title)}</div>
                     ${height > 36 && timeDisplay ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
                   </div>`;
         }).join('');
@@ -232,7 +237,7 @@ export const Calendar = {
         const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
         return `<div class="event-chip${ev.completed ? ' completed' : ''}" data-id="${ev.id}"
           style="background:${bg};color:${color};font-size:10px;margin-bottom:2px;cursor:pointer;padding:2px 6px;">
-          ${icon} ${ev.title}
+          ${icon} ${_escHtml(ev.title)}
         </div>`;
       }).join('');
       allDayRowHtml += `<div style="border-right:1px solid var(--border);padding:3px 4px;min-height:26px;">${chips}</div>`;
@@ -336,8 +341,8 @@ export const Calendar = {
         return `<div class="time-event${ev.completed ? ' completed' : ''}${ev.inProgress ? ' in-progress' : ''}" 
                      data-id="${ev.id}" 
                      style="top:${top}px;height:${height}px;width:calc(${w}% - 12px);left:calc(${l}% + 6px);background:${bg};color:${color};border-left-color:${color};${ev.inProgress ? 'box-shadow: 0 0 8px rgba(56,189,248,0.5);' : ''}"
-                     title="${ev.title}">
-                  <div class="time-event-title" style="font-size:13px;">${icon} ${ev.title}</div>
+                     title="${_escHtml(ev.title)}">
+                  <div class="time-event-title" style="font-size:13px;">${icon} ${_escHtml(ev.title)}</div>
                   ${height > 36 && timeDisplay ? `<div class="time-event-time">${timeDisplay}</div>` : ''}
                 </div>`;
       }).join('');
@@ -360,7 +365,7 @@ export const Calendar = {
         const icon = ev.type === 'task' ? (ev.completed ? SVG_TASK_COMPLETED : SVG_TASK_PENDING) : SVG_EVENT;
         return `<div class="event-chip${ev.completed ? ' completed' : ''}" data-id="${ev.id}" 
                          style="background:${bg};color:${color};cursor:pointer;padding:4px 10px;font-size:12px;">
-                      ${icon} ${ev.title}
+                      ${icon} ${_escHtml(ev.title)}
                     </div>`;
       }).join('')}
         </div>`
@@ -374,7 +379,7 @@ export const Calendar = {
         const noteSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
         return `<div class="note-chip" data-note-id="${note.id}" title="Ver nota en Dashboard"
                          style="background:var(--bg-hover);color:var(--text-main);cursor:pointer;padding:4px 10px;font-size:12px;border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;gap:4px;">
-                      ${noteSvg} ${note.title || 'Sin título'}
+                      ${noteSvg} ${_escHtml(note.title) || 'Sin título'}
                     </div>`;
       }).join('')}
         </div>`

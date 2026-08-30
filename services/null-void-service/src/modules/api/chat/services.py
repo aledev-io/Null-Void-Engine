@@ -1,5 +1,7 @@
 from . import repository
 from modules.session import session as sess
+from config.config import CONFIG
+import sys
 
 
 def get_conversations(user_id):
@@ -110,8 +112,10 @@ def delete_message(user_id, msg_id, delete_type='for_me', delete_files=False):
         ok = repository.delete_message_for_everyone(msg_id, user_id)
         if ok and delete_files and msg and msg.get('file_path'):
             try:
-                if os.path.exists(msg['file_path']):
-                    os.remove(msg['file_path'])
+                upload_dir = os.path.join(CONFIG.DATA_DIR, 'chat', 'uploads')
+                full_path = os.path.join(upload_dir, msg['file_path'])
+                if os.path.exists(full_path):
+                    os.remove(full_path)
             except Exception:
                 pass
     else:
@@ -123,7 +127,7 @@ def delete_conversation(user_id, contact_id):
     ok = repository.delete_conversation(user_id, contact_id)
     return ok, "Conversación eliminada" if ok else "No se pudo eliminar"
 
-import sys
+
 def clear_conversation(user_id, contact_id, delete_files=False):
     if delete_files:
         try:
@@ -201,11 +205,24 @@ def search_users(query, user_id):
 
 def poll_messages(user_id, since, contact_id):
     rows = repository.get_poll_messages(user_id, contact_id, since)
-    return [{
-        'id': m['id'], 'sender_id': m['sender_id'],
-        'receiver_id': m['receiver_id'], 'message': m['message'],
-        'time': m['created_at'], 'read': bool(m['read']),
-        'mine': m['sender_id'] == user_id,
-        'file_path': m['file_path'], 'file_name': m['file_name'],
-        'file_size': m['file_size'], 'edited_at': m['edited_at']
-    } for m in rows]
+    result = []
+    for m in rows:
+        is_group = m['receiver_id'].startswith('group_')
+        sender_name = None
+        is_owner = False
+        if is_group:
+            sender_info = repository.get_contact_info(m['sender_id'])
+            sender_name = sender_info['username'] if sender_info else m['sender_id']
+            creator_id = repository.get_group_creator(m['receiver_id'])
+            is_owner = (m['sender_id'] == creator_id)
+        result.append({
+            'id': m['id'], 'sender_id': m['sender_id'],
+            'sender_name': sender_name,
+            'is_owner': is_owner,
+            'receiver_id': m['receiver_id'], 'message': m['message'],
+            'time': m['created_at'], 'read': bool(m['read']),
+            'mine': m['sender_id'] == user_id,
+            'file_path': m['file_path'], 'file_name': m['file_name'],
+            'file_size': m['file_size'], 'edited_at': m['edited_at']
+        })
+    return result

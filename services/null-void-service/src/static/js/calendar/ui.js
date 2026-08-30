@@ -582,7 +582,7 @@ export const UI = {
       return `<div class="today-item${ev.completed ? ' completed' : ''}" data-id="${ev.id}">
         <div class="today-item-bar" style="background:${color}"></div>
         <div class="today-item-info">
-          <div class="today-item-title">${ev.title}</div>
+          <div class="today-item-title">${String(ev.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
           <div class="today-item-time">${timeStr}</div>
         </div>
         <div class="today-check${ev.completed ? ' done' : ''}" data-check="${ev.id}" title="${window.t('mark_complete')}"></div>

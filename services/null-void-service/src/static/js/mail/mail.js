@@ -89,23 +89,6 @@ export function showToast(message, type = 'info') {
     }, 3000);
 }
 
-export function toggleTheme() {
-    const html = document.documentElement;
-    const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    updateThemeIcon();
-}
-
-function updateThemeIcon() {
-    const icon = document.getElementById('theme-icon-svg');
-    if (!icon) return;
-    const theme = document.documentElement.getAttribute('data-theme');
-    icon.innerHTML = theme === 'dark'
-        ? '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>'
-        : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
-}
-
 export async function setMailMode(targetMode, targetEmail = null) {
     if (targetMode === 'google') {
         if (!targetEmail && googleAccounts.length === 0) {
@@ -387,7 +370,7 @@ export async function loadCurrentFolder(silent = false, forceRefresh = false, lo
             console.log(`Debug: Total correos individuales en el servidor IMAP para esta carpeta: ${data.total_raw}`);
         }
         if (data.error) {
-            if (!silent) list.innerHTML = `<div style="padding:20px;color:#f87171;text-align:center;font-size:0.85rem;">${data.error}</div>`;
+            if (!silent) list.innerHTML = `<div style="padding:20px;color:#f87171;text-align:center;font-size:0.85rem;">${escapeHtml(data.error)}</div>`;
             return;
         }
 
@@ -588,7 +571,7 @@ export async function emptyTrash() {
         showToast('Papelera vaciada.');
         loadCurrentFolder(false, true);
     } catch (err) {
-        showToast(err.message, true);
+        showToast(err.message, 'error');
     }
 }
 
@@ -615,7 +598,7 @@ export async function bulkAction(action) {
             loadCurrentFolder();
         }
     } catch (err) {
-        showToast(err.message, true);
+        showToast(err.message, 'error');
     }
 }
 
@@ -637,7 +620,7 @@ export async function singleAction(action) {
         backToList();
         loadCurrentFolder();
     } catch (err) {
-        showToast(err.message, true);
+        showToast(err.message, 'error');
     }
 }
 
@@ -659,7 +642,7 @@ export async function toggleStar(folder, id, element) {
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || window.t('conn_error'));
     } catch (err) {
-        showToast('Error: ' + err.message, true);
+        showToast('Error: ' + err.message, 'error');
         element.classList.toggle('starred', !newStarred);
         element.querySelector('svg').setAttribute('fill', !newStarred ? 'currentColor' : 'none');
     }
@@ -695,7 +678,7 @@ export async function readEmail(folder, id, element) {
 
             if (fetchId !== currentEmailFetchId) return;
             if (!data || data.error) {
-                if (bodyEl) bodyEl.innerHTML = `<div style="color:#f87171;padding:20px;">${(data && data.error) || 'Error desconocido'}</div>`;
+                if (bodyEl) bodyEl.innerHTML = `<div style="color:#f87171;padding:20px;">${escapeHtml((data && data.error) || 'Error desconocido')}</div>`;
                 return;
             }
             emailCache[id] = data;
@@ -752,7 +735,7 @@ function renderEmailBody(data) {
             if (rawSender.includes('@nullvoid')) {
                 const username = pureEmail.split('@')[0];
                 avatarEl.style.background = 'transparent';
-                avatarEl.innerHTML = `<img src="/api/system/user/avatar/${username}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.outerHTML='<span style=\\'display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:${color};border-radius:50%;\\'>${initial}</span>'">`;
+                avatarEl.innerHTML = `<img src="/api/system/user/avatar/${encodeURIComponent(username)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.outerHTML='<span style=\\'display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:${color};border-radius:50%;\\'>${initial}</span>'">`;
             } else {
                 avatarEl.style.background = color;
                 avatarEl.innerHTML = initial;
@@ -1056,7 +1039,7 @@ function updateContactsFromEmails(emails) {
     if (datalist) {
         datalist.innerHTML = Array.from(knownContacts)
             .filter(addr => addr && addr.includes('@'))
-            .map(addr => `<option value="${addr}">`)
+            .map(addr => `<option value="${escapeHtml(addr)}">`)
             .join('');
     }
 }
@@ -1073,6 +1056,15 @@ export function toggleMailSidebar() {
             overlay.classList.remove('show');
         }
     }
+}
+
+function updateThemeIcon() {
+    const icon = document.getElementById('theme-icon-svg');
+    if (!icon) return;
+    const theme = document.documentElement.getAttribute('data-theme');
+    icon.innerHTML = theme === 'dark'
+        ? '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>'
+        : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
 }
 
 export function init() {
@@ -1098,9 +1090,18 @@ export function init() {
         if (document.hidden) clearInterval(pollTimer);
     });
 
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const compose = document.getElementById('compose-modal');
+            if (compose && compose.classList.contains('show')) {
+                closeCompose();
+            }
+        }
+    });
+
     // Expose functions needed by inline onclick attributes in the HTML
     const expose = {
-        toggleTheme, setMailMode, openGoogleConfigModal, saveGoogleConfig,
+        setMailMode, openGoogleConfigModal, saveGoogleConfig,
         removeGoogleAccount, loadMoreEmails,
         openCompose, closeCompose, toggleMinimize, toggleExpand, toggleCc,
         updateAttachmentsList, openScheduleModal, executeScheduledSend, sendEmail,

@@ -145,6 +145,8 @@ def perform_registration(test_urls, temp_token, device_name=None, local_dir=None
         log(f"Probando conexión de registro con: {url}...")
         
         for verify_ssl in (True, False):
+            if not verify_ssl and expected_cert_hash:
+                continue
             try:
                 res = _pinned_request("POST", reg_url, expected_cert_hash, verify_ssl,
                                       json=payload, timeout=5)

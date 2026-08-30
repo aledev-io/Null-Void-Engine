@@ -83,7 +83,8 @@ export function addPermission() {
         if (empty) empty.remove();
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);font-size:0.84rem;';
-        row.innerHTML = `<div style="width:30px;height:30px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:white;flex-shrink:0;">${val[0].toUpperCase()}</div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${val}</span><span style="font-size:0.78rem;color:var(--text-dim);">Puede ver</span><button onclick="this.closest('div').remove(); if(!document.getElementById('perm-list-body').children.length) document.getElementById('perm-list-body').innerHTML='<div class=\\'perm-empty\\'>Sin acceso concedido. Privado para ti.</div>';" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:0.78rem;">✕</button>`;
+        const esc = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+        row.innerHTML = `<div style="width:30px;height:30px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:white;flex-shrink:0;">${esc[0].toUpperCase()}</div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc}</span><span style="font-size:0.78rem;color:var(--text-dim);">Puede ver</span><button onclick="this.closest('div').remove(); if(!document.getElementById('perm-list-body').children.length) document.getElementById('perm-list-body').innerHTML='<div class=\\'perm-empty\\'>Sin acceso concedido. Privado para ti.</div>';" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:0.78rem;">✕</button>`;
         body.appendChild(row);
     });
 }
@@ -1926,8 +1927,8 @@ export function saveModelSettings() {
 export function toggleApiKeyVisibility() {
     const input = document.getElementById('api-keys-key');
     const icon = document.getElementById('eye-icon');
-    const isHidden = input.style.webkitTextSecurity !== 'none';
-    input.style.webkitTextSecurity = isHidden ? 'none' : 'disc';
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
     icon.innerHTML = isHidden
         ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
         : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;

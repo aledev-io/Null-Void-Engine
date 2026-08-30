@@ -76,11 +76,12 @@ export async function loadWorkspaces() {
                     ? `Actualizado ${formatRelativeTime(s.updated_at || s.created_at)}` 
                     : `Creado ${formatRelativeTime(s.created_at)}`;
 
-                const descHtml = s.description ? `<p style="font-size:0.85rem;color:var(--text-dim);margin-top:5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${s.description}</p>` : '';
+                const _esc = (s) => s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;') : '';
+                const descHtml = s.description ? `<p style="font-size:0.85rem;color:var(--text-dim);margin-top:5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${_esc(s.description)}</p>` : '';
 
                 div.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                        <h3 style="margin:0;font-size:1rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85%;color:var(--text-main);">${s.name}</h3>
+                        <h3 style="margin:0;font-size:1rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85%;color:var(--text-main);">${_esc(s.name)}</h3>
                         <button class="note-dots" id="dots-${s.id}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                         </button>
@@ -97,7 +98,7 @@ export async function loadWorkspaces() {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                             Editar detalles
                         </div>
-                        <div class="menu-item" onclick="window.showConfirmDialog('Eliminar proyecto', '¿Estás seguro de que deseas eliminar el proyecto &quot;${s.name}&quot;?', 'Eliminar', () => { deleteWorkspace('${s.id}'); })" style="padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;color:#ef4444;">
+                        <div class="menu-item" onclick="window.showConfirmDialog('Eliminar proyecto', '¿Estás seguro de que deseas eliminar el proyecto &quot;${s.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}&quot;?', 'Eliminar', () => { deleteWorkspace('${s.id}'); })" style="padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;color:#ef4444;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                             Eliminar
                         </div>
@@ -438,7 +439,7 @@ export async function loadWorkspaceFiles() {
                 div.innerHTML = `
                     <div style="display:flex;align-items:center;gap:10px;overflow:hidden;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--primary);"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
-                        <span style="font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${f.filename}">${f.filename}</span>
+                        <span style="font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${f.filename.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}">${f.filename.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}</span>
                     </div>
                     <button class="btn-icon" style="color:#ef4444;padding:4px;" title="Eliminar archivo">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -542,7 +543,7 @@ export function renderWorkspaceChats() {
             const div = document.createElement('div');
             div.style.cssText = "background:var(--bg-secondary);padding:15px;border-radius:12px;border:1px solid var(--border);cursor:pointer;transition:border 0.2s;";
             div.innerHTML = `
-                <div style="font-weight:600;font-size:0.95rem;margin-bottom:5px;color:var(--text-main);">${chat.title}</div>
+                <div style="font-weight:600;font-size:0.95rem;margin-bottom:5px;color:var(--text-main);">${chat.title ? chat.title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''}</div>
                 <div style="font-size:0.8rem;color:var(--text-dim);">${chat.messages ? chat.messages.length : 0} mensajes</div>
             `;
             div.onmouseover = () => div.style.borderColor = 'var(--primary)';
@@ -686,7 +687,7 @@ function renderStarredWorkspaces(spaces) {
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name ? s.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''}</span>
         `;
         list.appendChild(item);
     });

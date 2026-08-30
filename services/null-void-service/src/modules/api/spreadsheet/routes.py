@@ -87,7 +87,8 @@ def run_python():
 
         safe_builtins = {
             'abs': abs, 'min': min, 'max': max, 'sum': sum, 'len': len,
-            'str': str, 'int': int, 'float': float, 'bool': bool, 'list': list, 'dict': dict, 'round': round
+            'str': str, 'int': int, 'float': float, 'bool': bool, 'list': list, 'dict': dict, 'round': round,
+            'True': True, 'False': False, 'None': None, 'print': print
         }
 
         ctx = {

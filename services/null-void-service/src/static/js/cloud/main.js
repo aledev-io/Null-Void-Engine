@@ -1,4 +1,5 @@
-import { initCloud, updateCloudQuotaInfo, fetchCloudFiles } from './cloud.js';
+import { initCloud, fetchCloudFiles } from './cloud.js';
+import { updateCloudQuotaInfo } from './quota.js';
 
 function bootCloud() {
     // Cada componente en su propio try/catch: un fallo en frío (localStorage,

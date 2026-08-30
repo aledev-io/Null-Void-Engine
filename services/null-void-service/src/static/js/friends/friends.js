@@ -211,10 +211,10 @@ function renderFriends() {
                 const avatarChar = f.friend_name.charAt(0).toUpperCase();
 
                 return `
-                    <div class="fr-event-row" onclick="window.openChatWithFriend('${f.friend_id}', '${f.friend_name.replace(/'/g, "\\'")}')">
+                    <div class="fr-event-row" data-friend-id="${f.friend_id}" data-friend-name="${f.friend_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}">
                         <div class="fr-event-indicator" style="background: ${indicatorColor};"></div>
                         <div class="fr-avatar" style="margin-left: 8px;">
-                            <img src="/api/system/user/avatar/${f.friend_name}" onerror="this.style.display='none';" />
+                            <img src="/api/system/user/avatar/${encodeURIComponent(f.friend_name)}" onerror="this.style.display='none';" />
                             <span>${avatarChar}</span>
                             <span class="${status.isOnline ? 'fr-online-dot' : 'fr-offline-dot'}"></span>
                         </div>
@@ -224,14 +224,14 @@ function renderFriends() {
                                     ${status.text}
                                 </span>
                             </div>
-                            <div class="fr-event-title">${f.friend_name}</div>
+                            <div class="fr-event-title">${f.friend_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
                             <div class="fr-event-desc">${window.t('fr_friend_click_chat')}</div>
                         </div>
                         <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; padding-right: 12px;" onclick="event.stopPropagation();">
-                            <button class="fr-btn-chat" onclick="window.openChatWithFriend('${f.friend_id}', '${f.friend_name.replace(/'/g, "\\'")}')" title="${window.t('fr_send_message')}">
+                            <button class="fr-btn-chat" data-friend-id="${f.friend_id}" data-friend-name="${f.friend_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}" title="${window.t('fr_send_message')}">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
                             </button>
-                            <button class="fr-btn-action reject" onclick="window.removeFriendship('${f.friend_id}', '${f.friend_name.replace(/'/g, "\\'")}')" title="${window.t('fr_remove_friend')}" style="padding: 8px 10px; border-radius: 50%; min-width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                            <button class="fr-btn-action reject" data-friend-id="${f.friend_id}" data-friend-name="${f.friend_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}" title="${window.t('fr_remove_friend')}" style="padding: 8px 10px; border-radius: 50%; min-width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                             </button>
                         </div>
@@ -255,7 +255,7 @@ function renderFriends() {
                     <div class="fr-event-row" style="cursor: default;">
                         <div class="fr-event-indicator" style="background: #f59e0b;"></div>
                         <div class="fr-avatar" style="margin-left: 8px;">
-                            <img src="/api/system/user/avatar/${r.requester_name}" onerror="this.style.display='none';" />
+                            <img src="/api/system/user/avatar/${encodeURIComponent(r.requester_name)}" onerror="this.style.display='none';" />
                             <span>${avatarChar}</span>
                             <span class="${status.isOnline ? 'fr-online-dot' : 'fr-offline-dot'}"></span>
                         </div>
@@ -265,7 +265,7 @@ function renderFriends() {
                                     ${window.t('fr_received')}
                                 </span>
                             </div>
-                            <div class="fr-event-title">${r.requester_name}</div>
+                            <div class="fr-event-title">${r.requester_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
                             <div class="fr-event-desc">${window.t('fr_sent_request_desc')}</div>
                         </div>
                         <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; padding-right: 12px;">
@@ -298,7 +298,7 @@ function renderFriends() {
                     <div class="fr-event-row" style="cursor: default;">
                         <div class="fr-event-indicator" style="background: var(--indigo);"></div>
                         <div class="fr-avatar" style="margin-left: 8px;">
-                            <img src="/api/system/user/avatar/${r.addressee_name}" onerror="this.style.display='none';" />
+                            <img src="/api/system/user/avatar/${encodeURIComponent(r.addressee_name)}" onerror="this.style.display='none';" />
                             <span>${avatarChar}</span>
                             <span class="${status.isOnline ? 'fr-online-dot' : 'fr-offline-dot'}"></span>
                         </div>
@@ -308,7 +308,7 @@ function renderFriends() {
                                     ${window.t('fr_sent_badge')}
                                 </span>
                             </div>
-                            <div class="fr-event-title">${r.addressee_name}</div>
+                            <div class="fr-event-title">${r.addressee_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
                             <div class="fr-event-desc">${window.t('fr_waiting_accept')}</div>
                         </div>
                         <div style="margin-left: auto; display: flex; align-items: center; padding-right: 12px;">
@@ -324,6 +324,23 @@ function renderFriends() {
     }
 
     container.innerHTML = itemsHtml;
+
+    container.onclick = (e) => {
+        const chatBtn = e.target.closest('.fr-btn-chat');
+        if (chatBtn) {
+            window.openChatWithFriend(chatBtn.dataset.friendId, chatBtn.dataset.friendName);
+            return;
+        }
+        const removeBtn = e.target.closest('.fr-btn-action.reject');
+        if (removeBtn) {
+            window.removeFriendship(removeBtn.dataset.friendId, removeBtn.dataset.friendName);
+            return;
+        }
+        const row = e.target.closest('.fr-event-row');
+        if (row && row.dataset.friendId) {
+            window.openChatWithFriend(row.dataset.friendId, row.dataset.friendName);
+        }
+    };
 }
 
 export function openAddFriendDialog() {

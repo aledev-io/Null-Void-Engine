@@ -61,15 +61,28 @@ def handle_typing(data):
         user_id = _get_socket_user_id(data)
         if user_id:
             from modules.api.chat import repository
-            with repository.get_db() as conn:
-                exists = conn.execute(
-                    "SELECT 1 FROM user_connections WHERE user_id = ? AND contact_id = ?",
-                    (user_id, receiver_id)
-                ).fetchone()
 
-            if exists:
-                socketio.emit('typing', {
-                    'sender_id': user_id
-                }, room=f"user_{receiver_id}")
+            if receiver_id.startswith('group_'):
+                members = repository.get_group_members(receiver_id)
+                sender_info = repository.get_contact_info(user_id)
+                sender_name = sender_info['username'] if sender_info else user_id
+                for member_id in members:
+                    if member_id != user_id:
+                        socketio.emit('typing', {
+                            'sender_id': user_id,
+                            'group_id': receiver_id,
+                            'sender_name': sender_name
+                        }, room=f"user_{member_id}")
+            else:
+                with repository.get_db() as conn:
+                    exists = conn.execute(
+                        "SELECT 1 FROM user_connections WHERE user_id = ? AND contact_id = ?",
+                        (user_id, receiver_id)
+                    ).fetchone()
+
+                if exists:
+                    socketio.emit('typing', {
+                        'sender_id': user_id
+                    }, room=f"user_{receiver_id}")
     except Exception as e:
         sys.stderr.write(f"[SocketIO][ERROR] Excepción en typing: {e}\n")

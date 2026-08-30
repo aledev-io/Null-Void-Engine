@@ -1,3 +1,5 @@
+import { notes } from './notes.js';
+
 export async function fetchModels() {
     // Timeout: una petición colgada nunca debe bloquear el arranque del chat
     // (el spinner de "Cargando conversación..." se quedaría para siempre).

@@ -107,7 +107,7 @@ def preview_file(view, name, subpath, trash_id, owner_id, token):
             # XSS almacenado: los SVG se sirven inline en el mismo origen;
             # el CSP bloquea scripts/eventos dentro del documento.
             resp.headers['Content-Security-Policy'] = (
-                "default-src 'none'; script-src 'none'; object-src 'none'; img-src data:"
+                "default-src 'none'; script-src 'none'; object-src 'none'; img-src 'none'"
             )
         return resp, None
 

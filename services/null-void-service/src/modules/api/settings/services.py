@@ -25,7 +25,7 @@ def load_settings(user_id):
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except (json.JSONDecodeError, OSError):
         return defaults
 
 def save_settings_internal(user_id, new_settings):

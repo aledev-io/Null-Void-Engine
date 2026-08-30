@@ -283,10 +283,11 @@ export function renderNotesList(filterQuery = '') {
                         row.className = 'note-row';
                         const authorName = note.author === 'Usuario' ? (document.getElementById('user-name-display')?.textContent.trim() || 'Usuario') : (note.author || 'Usuario');
                         const noteTs = note.updatedAt || note.updated || note.createdAt || note.created;
+                        const _t = (note.title || 'Nota sin título').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
                         row.innerHTML = `
                     <svg class="note-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                     <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
-                        <span class="note-row-title" style="margin-bottom: 2px;">${note.title || 'Nota sin título'}</span>
+                        <span class="note-row-title" style="margin-bottom: 2px;">${_t}</span>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <span class="note-row-meta">${formatNoteDate(noteTs)}</span>
                             <span class="note-row-author" style="font-size: 0.75rem; color: var(--text-dim);">Por ${authorName}</span>
@@ -307,7 +308,9 @@ export function renderNotesList(filterQuery = '') {
                         card.className = 'note-card';
                         const authorName = note.author === 'Usuario' ? (document.getElementById('user-name-display')?.textContent.trim() || 'Usuario') : (note.author || 'Usuario');
                         const noteTs = note.updatedAt || note.updated || note.createdAt || note.created;
-                        card.innerHTML = `<div class="note-card-title">${note.title || 'Nota sin título'}</div><div class="note-card-preview">${note.content || 'Sin contenido'}</div><div class="note-card-meta">${formatNoteDate(noteTs)} · Por ${authorName}</div>`;
+                        const _t2 = (note.title || 'Nota sin título').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+                        const _c2 = (note.content || 'Sin contenido').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+                        card.innerHTML = `<div class="note-card-title">${_t2}</div><div class="note-card-preview">${_c2}</div><div class="note-card-meta">${formatNoteDate(noteTs)} · Por ${authorName}</div>`;
                         card.onclick = () => openNoteEditor(note.id);
                         grid.appendChild(card);
                     });

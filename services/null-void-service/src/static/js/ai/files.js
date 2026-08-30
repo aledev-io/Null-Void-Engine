@@ -1,3 +1,7 @@
+let currentAttachType = '';
+let selectModalCloudPath = '';
+let selectorAllItems = [];
+
 export function openAttachSelectorModal(type) {
     currentAttachType = type;
     selectModalCloudPath = '';
@@ -84,13 +88,15 @@ export function renderAttachSelectorItems(items) {
             itemDiv.onclick = () => selectKnowledgeForAttach(item);
         }
 
+        const _et = (title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+        const _em = (meta || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
         itemDiv.innerHTML = `
                     <div class="attach-selector-item-icon" style="font-size: 1.2rem;">
                         ${iconHtml}
                     </div>
                     <div class="attach-selector-item-info">
-                        <div class="attach-selector-item-title">${title}</div>
-                        <div class="attach-selector-item-meta">${meta}</div>
+                        <div class="attach-selector-item-title">${_et}</div>
+                        <div class="attach-selector-item-meta">${_em}</div>
                     </div>
                 `;
 
@@ -572,7 +578,7 @@ export function renderAttachedFiles() {
                     <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer;" onclick="openFilePreview(${attr.id})">
                         ${thumbHTML}
                         <div class="attachment-info">
-                            <span class="attachment-name" title="Clic para renombrar / Haz clic fuera para previsualizar" onclick="renameAttachment(event, ${attr.id})">${attr.name}</span>
+                            <span class="attachment-name" title="Clic para renombrar / Haz clic fuera para previsualizar" onclick="renameAttachment(event, ${attr.id})">${attr.name ? attr.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''}</span>
                             <span class="attachment-size">${attr.size}</span>
                         </div>
                     </div>
@@ -756,7 +762,7 @@ export function openAttachmentPreview(att) {
         bodyEl.innerHTML = `
             <div style="text-align:center;color:var(--text-dim);display:flex;flex-direction:column;align-items:center;gap:12px;padding:30px 20px;">
                 ${fileIconSVG}
-                <div style="font-weight:600;color:var(--text-main);font-size:1.05rem;">${att.name || 'Archivo adjunto'}</div>
+                <div style="font-weight:600;color:var(--text-main);font-size:1.05rem;">${att.name ? att.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : 'Archivo adjunto'}</div>
                 <div style="font-size:0.82rem;color:var(--text-dim);">Archivo de contexto (${att.size || 'Historial'})</div>
             </div>
         `;

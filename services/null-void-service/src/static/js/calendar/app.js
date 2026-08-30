@@ -708,7 +708,7 @@ export const App = {
             return `<div class="search-result-item" data-event-id="${ev.id}">
             <div class="search-result-dot" style="background:${color}"></div>
             <div class="search-result-info">
-              <div class="search-result-title">${ev.title}</div>
+              <div class="search-result-title">${String(ev.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
               <div class="search-result-date">${dateStr}${timeStr ? ' · ' + timeStr : ''}</div>
             </div>
           </div>`;

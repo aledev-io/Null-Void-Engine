@@ -84,7 +84,7 @@ def pccomponentes_routine():
     terms = data.get('terms', [])
     
     try:
-        resp = scraper_request("POST", "/scrape_routine", json={"terms": terms}, timeout=5)
+        resp = scraper_request("POST", "/scrape_routine", json={"terms": terms, "user_id": user_id}, timeout=5)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify(error="Error comunicándose con el microservicio del scraper: " + str(e)), 500
@@ -120,7 +120,7 @@ def webhook_scraper_state():
     # Autenticación interna: misma clave compartida con el microservicio scraper
     import os
     key = os.environ.get("SCRAPER_API_KEY", "").strip()
-    if key and request.headers.get('X-Internal-Token', '') != key:
+    if not key or request.headers.get('X-Internal-Token', '') != key:
         return jsonify(error="Forbidden"), 403
     data = request.get_json(silent=True) or {}
     
@@ -307,7 +307,7 @@ def telegram_manual_send():
         
     try:
         from core.notifications import notifier
-        all_prods = services.get_scraped_data(user_id=None)
+        all_prods = services.get_scraped_data(user_id=user_id)
         
         sent_count = 0
         errors = []

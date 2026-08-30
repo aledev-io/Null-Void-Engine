@@ -64,7 +64,7 @@ import { fetchAPI } from './api.js';
       const countLabel = document.getElementById('bulk-action-count');
       if (state.selectedSkus.size > 0) {
         bar.style.display = 'flex';
-        countLabel.textContent = `${selectedSkus.size} seleccionado${selectedSkus.size !== 1 ? 's' : ''}`;
+        countLabel.textContent = `${state.selectedSkus.size} seleccionado${state.selectedSkus.size !== 1 ? 's' : ''}`;
       } else {
         bar.style.display = 'none';
         const selectAll = document.getElementById('selectAllCheckbox');
@@ -798,7 +798,7 @@ export async function showConfigView() {
     }
 
     export function copyAtHomeSummary() {
-      const p = allData.find(x => x.sku === currentProductSku);
+      const p = state.allData.find(x => x.sku === state.currentProductSku);
       if (!p) return;
 
       const descEl = document.getElementById('raw-desc-text');
