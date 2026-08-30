@@ -1660,8 +1660,8 @@
             style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; min-height: 60px; gap: 16px;">
             <div style="display: flex; align-items: center; flex: 1; min-width: 0;">
                 <div class="cloud-header-brand" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
-                    <button onclick="handleCloudBack()" title="Volver" data-i18n-title="back" aria-label="Volver"
-                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
+                    <button id="btn-cloud-back" onclick="handleCloudBack()" title="Volver" data-i18n-title="back" aria-label="Volver"
+                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: none; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="19" y1="12" x2="5" y2="12"></line>
@@ -2032,6 +2032,31 @@
                 </script>
             </div>
             <div id="cloud-explorer-main" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <!-- Filter Pills para búsqueda/exploración en Cloud -->
+                <div id="cloud-search-filter-bar" style="display: none; gap: 8px; padding: 10px 24px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; white-space: nowrap; scrollbar-width: none; -ms-overflow-style: none; flex-shrink: 0; align-items: center;">
+                    <style>#cloud-search-filter-bar::-webkit-scrollbar { display: none; }</style>
+                    <div class="filter-pill active" data-filter="all" onclick="handleCloudFilterClick('all')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: var(--accent); color: white; border: 1px solid var(--accent); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_all">Todos</div>
+                    <div class="filter-pill" data-filter="folder" onclick="handleCloudFilterClick('folder')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_folders">Carpetas</div>
+                    <div class="filter-pill" data-filter="document" onclick="handleCloudFilterClick('document')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_documents">Documentos</div>
+                    <div class="filter-pill" data-filter="image" onclick="handleCloudFilterClick('image')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_images">Imágenes</div>
+                    <div class="filter-pill" data-filter="video" onclick="handleCloudFilterClick('video')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_videos">Vídeos</div>
+                    <div class="filter-pill" data-filter="audio" onclick="handleCloudFilterClick('audio')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_audio">Audio</div>
+                    <div class="filter-pill" data-filter="archive" onclick="handleCloudFilterClick('archive')"
+                        style="padding: 4px 12px; font-size: 0.75rem; border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid var(--border); transition: all 0.2s; user-select: none;"
+                        data-i18n="filter_archives">Archivos comprimidos</div>
+                </div>
                 <div id="cloud-multi-select-bar"
                     style="display: none; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(99, 102, 241, 0.08); border-bottom: 1px solid rgba(99, 102, 241, 0.2); font-size: 0.85rem; color: var(--text-main); backdrop-filter: blur(10px); animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
                     <div style="display: flex; align-items: center; gap: 12px;">
@@ -2051,8 +2076,8 @@
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <button id="btn-cloud-multi-restore" onclick="restoreSelectedItems()" class="btn-primary"
                             title="Restaurar" data-i18n-title="btn_restore"
-                            style="display: none; width: 38px; height: 38px; border-radius: 8px; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(99,102,241,0.3); transition: all 0.2s;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            style="display: none; width: 34px; height: 34px; border-radius: 8px; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(99,102,241,0.3); transition: all 0.2s;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <polyline points="1 4 1 10 7 10"></polyline>
                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
@@ -2060,10 +2085,10 @@
                         </button>
                         <button id="btn-cloud-multi-preview" onclick="openCloudMultiPreview()" class="btn-secondary"
                             title="Previsualizar" data-i18n-title="ctx_preview"
-                            style="display: none; width: 38px; height: 38px; border-radius: 8px; background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
+                            style="display: none; width: 34px; height: 34px; border-radius: 8px; background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(16,185,129,0.2)'"
                             onmouseout="this.style.background='rgba(16,185,129,0.1)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -2071,10 +2096,10 @@
                         </button>
                         <button id="btn-cloud-multi-download" onclick="downloadSelectedItems()" class="btn-secondary"
                             title="Descargar" data-i18n-title="btn_download"
-                            style="width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                            style="width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(255,255,255,0.1)'"
                             onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                 <polyline points="7 10 12 15 17 10"></polyline>
@@ -2083,10 +2108,10 @@
                         </button>
                         <button id="btn-cloud-multi-zip" onclick="downloadSelectedAsZip()" class="btn-secondary"
                             title="Descargar ZIP" data-i18n-title="btn_download_zip"
-                            style="width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                            style="width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(255,255,255,0.1)'"
                             onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path
                                     d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
@@ -2097,10 +2122,10 @@
                         </button>
                         <button id="btn-cloud-multi-move" onclick="moveSelectedItems()" class="btn-secondary"
                             title="Mover" data-i18n-title="btn_move"
-                            style="width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                            style="width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(255,255,255,0.1)'"
                             onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
                                 </path>
@@ -2110,10 +2135,10 @@
                         </button>
                         <button id="btn-cloud-multi-protect" onclick="protectSelectedItems()" class="btn-secondary"
                             title="Proteger" data-i18n-title="ctx_protect"
-                            style="display: none; width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
+                            style="display: none; width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(255,255,255,0.1)'"
                             onmouseout="this.style.background='rgba(255,255,255,0.05)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <rect x="3" y="11" width="18" height="11" rx="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -2121,10 +2146,10 @@
                         </button>
                         <button id="btn-cloud-multi-delete" onclick="deleteSelectedItems()" class="btn-danger"
                             title="Eliminar" data-i18n-title="btn_delete"
-                            style="width: 38px; height: 38px; border-radius: 8px; background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                            style="width: 34px; height: 34px; border-radius: 8px; background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
                             onmouseover="this.style.background='rgba(248,113,113,0.2)'"
                             onmouseout="this.style.background='rgba(248,113,113,0.1)'">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path
@@ -2135,12 +2160,29 @@
                     </div>
                 </div>
                 <div class="cloud-table-header"
-                    style="display: none; grid-template-columns: 2fr 1fr 1.2fr 1fr 40px; column-gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none;">
-                    <span data-i18n="col_name">Nombre</span>
-                    <span data-i18n="col_owner">Propietario</span>
-                    <span data-i18n="col_date">Fecha de modificación</span>
-                    <span data-i18n="col_size">Tamaño del archivo</span>
-                    <span></span>
+                    style="display: none; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) 40px; column-gap: 16px; padding: 0 24px; height: 40px; align-items: center; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none; user-select: none;">
+                    <span id="col-header-name" onclick="handleCloudSort('name')" style="padding-left: 28px; cursor: pointer; display: flex; align-items: center; gap: 4px;"><span data-i18n="col_name">Nombre</span><span id="col-sort-arrow-name" style="display: none; font-size: 0.65rem; color: var(--indigo);"></span></span>
+                    <span id="col-header-owner" onclick="handleCloudSort('owner')" style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><span data-i18n="col_owner">Propietario</span><span id="col-sort-arrow-owner" style="display: none; font-size: 0.65rem; color: var(--indigo);"></span></span>
+                    <span id="col-header-date" onclick="handleCloudSort('date')" style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><span id="col-header-date-label" data-i18n="col_date">Fecha de modificación</span><span id="col-sort-arrow-date" style="display: none; font-size: 0.65rem; color: var(--indigo);"></span></span>
+                    <span id="col-header-size" onclick="handleCloudSort('size')" style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><span data-i18n="col_size">Tamaño del archivo</span><span id="col-sort-arrow-size" style="display: none; font-size: 0.65rem; color: var(--indigo);"></span></span>
+                    <div id="cloud-table-header-actions" style="width: 40px; display: flex; justify-content: flex-end; align-items: center; position: relative;">
+                        <button id="btn-trash-header-menu" onclick="event.stopPropagation(); toggleTrashHeaderMenu(event)" title="Opciones" data-i18n-title="options"
+                            style="display: none; background: none; border: none; color: #94a3b8; cursor: pointer; width: 28px; height: 28px; border-radius: 50%; opacity: 0.7; align-items: center; justify-content: center; font-size: 1.1rem; line-height: 1; transition: all 0.2s;"
+                            onmouseover="this.style.background='rgba(255, 255, 255, 0.08)'; this.style.opacity='1'; this.style.color='#fff';"
+                            onmouseout="this.style.background='transparent'; this.style.opacity='0.7'; this.style.color='#94a3b8';">⋮</button>
+                        <div id="trash-header-dropdown"
+                            style="display: none; position: absolute; top: calc(100% + 4px); right: 0; background: var(--bg-card, #1e293b); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); z-index: 9999; min-width: 170px; padding: 4px; animation: fadeIn 0.15s ease;">
+                            <div onclick="event.stopPropagation(); closeTrashHeaderMenu(); emptyCloudTrash()"
+                                style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; font-size: 0.82rem; color: #f87171; cursor: pointer; transition: background 0.15s;"
+                                onmouseover="this.style.background='rgba(248,113,113,0.1)'" onmouseout="this.style.background='transparent'">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                <span data-i18n="ctx_empty_trash">Vaciar papelera</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div id="cloud-file-list" style="flex: 1; overflow-y: auto;">
                 </div>
@@ -3458,15 +3500,7 @@
         <div id="global-upload-details" style="display: block; max-height: 250px; overflow-y: auto; padding: 0;">
         </div>
     </div>
-    <button id="btn-empty-trash-fab" onclick="emptyCloudTrash()" title="Vaciar papelera"
-        data-i18n-title="ctx_empty_trash"
-        style="display: none; position: fixed; bottom: 24px; right: 24px; z-index: 9800; width: 56px; height: 56px; border-radius: 50%; background: var(--indigo); color: #fff; border: none; cursor: pointer; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: transform 0.2s, box-shadow 0.2s, background 0.2s;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-    </button>
+
     <style>
         @keyframes slideUpPanel {
             from {

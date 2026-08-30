@@ -18,6 +18,151 @@ let currentCloudInfoItem = null;
 let CLOUD_FILES = [];
 
 
+let currentCloudSort = { column: null, asc: true };
+let activeCloudFilters = new Set(['all']);
+
+function matchesCloudFilter(f, filterType) {
+    if (!f) return false;
+    const isDir = Boolean(f.is_dir);
+    const ext = String(f.ext || '').toLowerCase();
+    if (filterType === 'folder') return isDir;
+    if (isDir) return false;
+    if (filterType === 'image') return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico', '.tiff'].includes(ext);
+    if (filterType === 'video') return ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.wmv', '.flv'].includes(ext);
+    if (filterType === 'audio') return ['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac'].includes(ext);
+    if (filterType === 'archive') return ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2'].includes(ext);
+    if (filterType === 'document') return ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.odt', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.json', '.xml', '.html', '.css', '.js', '.py', '.c', '.cpp', '.h', '.sh'].includes(ext);
+    return false;
+}
+
+function filterCloudFilesByType(files) {
+    if (!files || !Array.isArray(files)) return [];
+    if (activeCloudFilters.has('all') || activeCloudFilters.size === 0) {
+        return files;
+    }
+    return files.filter(f => {
+        for (const type of activeCloudFilters) {
+            if (matchesCloudFilter(f, type)) return true;
+        }
+        return false;
+    });
+}
+
+function updateCloudFilterBarVisibility() {
+    const bar = document.getElementById('cloud-search-filter-bar');
+    if (!bar) return;
+    const hasSearch = Boolean(window._cloudSearchQuery);
+    if (hasSearch) {
+        bar.style.display = 'flex';
+    } else {
+        bar.style.display = 'none';
+        activeCloudFilters = new Set(['all']);
+        updateCloudFilterPillsUI();
+    }
+}
+
+function updateCloudFilterPillsUI() {
+    const pills = document.querySelectorAll('#cloud-search-filter-bar .filter-pill');
+    if (!pills || pills.length === 0) return;
+    pills.forEach(pill => {
+        const type = pill.getAttribute('data-filter');
+        const isActive = activeCloudFilters.has(type);
+        if (isActive) {
+            pill.classList.add('active');
+            pill.style.background = 'var(--accent)';
+            pill.style.color = 'white';
+            pill.style.border = '1px solid var(--accent)';
+        } else {
+            pill.classList.remove('active');
+            pill.style.background = 'transparent';
+            pill.style.color = 'var(--text-muted)';
+            pill.style.border = '1px solid var(--border)';
+        }
+    });
+}
+
+function handleCloudFilterClick(filterType) {
+    if (!filterType) return;
+    if (filterType === 'all') {
+        if (activeCloudFilters.has('all') && activeCloudFilters.size === 1) {
+            return;
+        }
+        activeCloudFilters.clear();
+        activeCloudFilters.add('all');
+    } else {
+        if (activeCloudFilters.has('all')) {
+            activeCloudFilters.delete('all');
+        }
+        if (activeCloudFilters.has(filterType)) {
+            activeCloudFilters.delete(filterType);
+            if (activeCloudFilters.size === 0) {
+                activeCloudFilters.add('all');
+            }
+        } else {
+            activeCloudFilters.add(filterType);
+        }
+    }
+    updateCloudFilterPillsUI();
+    
+    if (window._cloudSearchQuery && window._cloudSearchLastFiles) {
+        renderCloudFiles(window._cloudSearchLastFiles, false);
+    } else {
+        renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
+    }
+}
+
+function sortCloudFiles(files) {
+    if (!files || !Array.isArray(files) || !currentCloudSort.column) return files;
+    const { column, asc } = currentCloudSort;
+    const sorted = [...files];
+
+    sorted.sort((a, b) => {
+        let res = 0;
+        if (column === 'name') {
+            const nameA = String(a.name || '');
+            const nameB = String(b.name || '');
+            res = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+        } else if (column === 'owner') {
+            const ownerA = String(a.owner || 'Yo');
+            const ownerB = String(b.owner || 'Yo');
+            res = ownerA.localeCompare(ownerB, undefined, { numeric: true, sensitivity: 'base' });
+        } else if (column === 'date') {
+            const timeA = Number(a.mtime) || 0;
+            const timeB = Number(b.mtime) || 0;
+            res = timeA - timeB;
+        } else if (column === 'size') {
+            const sizeA = Number(a.size) || 0;
+            const sizeB = Number(b.size) || 0;
+            res = sizeA - sizeB;
+        }
+
+        return asc ? res : -res;
+    });
+
+    return sorted;
+}
+
+function handleCloudSort(column) {
+    if (!column) return;
+    if (currentCloudView === 'trash' && column === 'owner') return;
+
+    if (currentCloudSort.column === column) {
+        currentCloudSort.asc = !currentCloudSort.asc;
+    } else {
+        currentCloudSort.column = column;
+        currentCloudSort.asc = true;
+    }
+
+    updateTableHeaderVisibility(currentCloudView, currentCloudPath);
+
+    const query = document.getElementById('cloud-search')?.value.toLowerCase() || '';
+    if (query && window._cloudSearchLastFiles) {
+        renderCloudFiles(window._cloudSearchLastFiles, false);
+    } else {
+        renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
+    }
+}
+
 function updateTableHeaderVisibility(targetView = currentCloudView, targetPath = currentCloudPath) {
     const tableHeader = document.querySelector('.cloud-table-header');
     if (!tableHeader) return;
@@ -31,14 +176,71 @@ function updateTableHeaderVisibility(targetView = currentCloudView, targetPath =
     } else {
         tableHeader.style.display = 'grid';
     }
+
+    // Cabecera dinámica para columna de fecha: Fecha de eliminación en Papelera, Fecha de modificación en otras vistas
+    const dateLabelEl = document.getElementById('col-header-date-label');
+    if (dateLabelEl) {
+        if (targetView === 'trash') {
+            dateLabelEl.setAttribute('data-i18n', 'col_date_deleted');
+            dateLabelEl.textContent = window.t_cloud('col_date_deleted', 'Fecha de eliminación');
+        } else {
+            dateLabelEl.setAttribute('data-i18n', 'col_date');
+            dateLabelEl.textContent = window.t_cloud('col_date', 'Fecha de modificación');
+        }
+    }
+
+    // Columna de propietario: no interactiva / sin cursor pointer en Papelera si todos son del usuario actual
+    const ownerColEl = document.getElementById('col-header-owner');
+    if (ownerColEl) {
+        ownerColEl.style.cursor = targetView === 'trash' ? 'default' : 'pointer';
+        ownerColEl.style.opacity = targetView === 'trash' ? '0.7' : '1';
+    }
+
+    // Indicadores visuales de ordenación ▲ / ▼
+    ['name', 'owner', 'date', 'size'].forEach(col => {
+        const arrowEl = document.getElementById(`col-sort-arrow-${col}`);
+        if (arrowEl) {
+            if (currentCloudSort.column === col && !(targetView === 'trash' && col === 'owner')) {
+                arrowEl.textContent = currentCloudSort.asc ? ' ▲' : ' ▼';
+                arrowEl.style.display = 'inline';
+            } else {
+                arrowEl.textContent = '';
+                arrowEl.style.display = 'none';
+            }
+        }
+    });
+
+    const trashMenuBtn = document.getElementById('btn-trash-header-menu');
+    if (trashMenuBtn) {
+        const inMulti = typeof SELECTED_CLOUD_ITEMS !== 'undefined' && SELECTED_CLOUD_ITEMS.length > 0;
+        trashMenuBtn.style.display = (targetView === 'trash' && !inMulti) ? 'inline-flex' : 'none';
+        if (targetView !== 'trash' || inMulti) {
+            closeTrashHeaderMenu();
+        }
+    }
 }
 
 async function fetchCloudFiles(path = '', view = 'home') {
+    if (view === 'trash') path = '';
     if (path === undefined) path = '';
+    const prevPath = currentCloudPath;
+    const prevView = currentCloudView;
+    const locationChanged = path !== prevPath || view !== prevView;
+    if (locationChanged) {
+        window._cloudSearchQuery = '';
+        window._cloudSearchLastFiles = null;
+        const searchInput = document.getElementById('cloud-search');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        updateCloudFilterBarVisibility();
+    }
     currentCloudPath = path;
     currentCloudView = view;
     window.currentCloudPath = path;
     window.currentCloudView = view;
+    updateCloudBackButton();
+    currentCloudSort = { column: null, asc: true };
 
     if (window.cloudFolderRefreshInterval) {
         clearInterval(window.cloudFolderRefreshInterval);
@@ -215,6 +417,7 @@ async function filterCloudFiles() {
 
     if (!query) {
         window._cloudSearchQuery = '';
+        updateCloudFilterBarVisibility();
         renderCloudFiles(CLOUD_FILES, currentCloudView === 'home' || currentCloudView === 'recent');
         renderCloudBreadcrumbs(currentCloudPath, currentCloudView === 'home' ? null : (currentCloudView === 'recent' ? window.t_cloud('nav_recent', 'Recientes') : (currentCloudView === 'starred' ? window.t_cloud('nav_starred', 'Destacados') : null)));
         return;
@@ -225,10 +428,12 @@ async function filterCloudFiles() {
             const res = await fetch(`/api/cloud/search?q=${encodeURIComponent(query)}`, { headers: HEADERS });
             if (!res.ok) return;
             const data = await _cloudJson(res);
+            window._cloudSearchLastFiles = data.files || [];
             const displayQuery = query.length > 15 ? query.substring(0, 15) + '...' : query;
             window._cloudSearchQuery = query;
+            updateCloudFilterBarVisibility();
             renderCloudBreadcrumbs(null, `Resultados para "${displayQuery}"`);
-            renderCloudFiles(data.files || [], false);
+            renderCloudFiles(window._cloudSearchLastFiles, false);
             const live = document.getElementById('cloud-search-live');
             if (live) {
                 const n = (data.files || []).length;
@@ -246,13 +451,6 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
     const container = document.getElementById('cloud-breadcrumbs');
     if (!container) return;
 
-    // Botón flotante "Vaciar papelera" (estilo widget de chat, abajo a la derecha): solo en raíz de la papelera con contenido
-    const fabTrashBtn = document.getElementById('btn-empty-trash-fab');
-    if (fabTrashBtn) {
-        const showFabTrash = currentCloudView === 'trash' && (!path || path === '') && CLOUD_FILES && CLOUD_FILES.length > 0;
-        fabTrashBtn.style.display = showFabTrash ? 'flex' : 'none';
-    }
-
     if (currentCloudView === 'home' && (!path || path === '')) {
         container.innerHTML = `<span class="breadcrumb-item active hide-desktop">${window.t_cloud('nav_home', 'Home')}</span>`;
         return;
@@ -260,6 +458,11 @@ function renderCloudBreadcrumbs(path, customTitle = null) {
 
     if (currentCloudView === 'computers' && currentCloudPath === '') {
         container.innerHTML = `<span class="breadcrumb-item active hide-desktop" style="color: var(--text-main);">${window.t_cloud('nav_computers', 'Computadoras')}</span>`;
+        return;
+    }
+
+    if (currentCloudView === 'trash') {
+        container.innerHTML = `<span class="breadcrumb-item active hide-desktop" style="color: var(--text-main);">${window.t_cloud('nav_trash', 'Papelera')}</span>`;
         return;
     }
 
@@ -473,7 +676,9 @@ function closeBreadcrumbMenus() {
     });
 }
 
-function renderCloudFiles(files, isRecent = false) {
+function renderCloudFiles(rawFiles, isRecent = false) {
+    const filtered = filterCloudFilesByType(rawFiles);
+    const files = sortCloudFiles(filtered);
     const list = document.getElementById('cloud-file-list');
     const header = document.querySelector('.cloud-table-header');
     if (!list) return;
@@ -533,9 +738,11 @@ function renderCloudFiles(files, isRecent = false) {
         const ownerDisplay = (ownerDisplayRaw === 'Yo') ? window.t_cloud('me', 'Yo') : ownerDisplayRaw;
         const isMine = (ownerDisplayRaw === 'Yo') || (currentCloudView === 'shared_by_me');
 
-        const clickAction = f.is_dir
-            ? `navigateCloud(\`${jsStr(fullPath)}\`, '${f.view || currentCloudView}')`
-            : `downloadCloudFile(\`${jsStr(f.name)}\`, \`${jsStr(fpath)}\`, false, '${jsStr(f.owner_id || '')}', '${jsStr(f.view || currentCloudView)}', '${currentCloudView === 'trash' ? jsStr(f.id || '') : ''}', \`${jsStr(ownerDisplay)}\`, ${f.shared ? 'true' : 'false'})`;
+        const clickAction = currentCloudView === 'trash'
+            ? (f.is_dir ? '' : `downloadCloudFile(\`${jsStr(f.name)}\`, \`${jsStr(fpath)}\`, false, '${jsStr(f.owner_id || '')}', '${jsStr(f.view || currentCloudView)}', '${jsStr(f.id || '')}', \`${jsStr(ownerDisplay)}\`, ${f.shared ? 'true' : 'false'})`)
+            : (f.is_dir
+                ? `navigateCloud(\`${jsStr(fullPath)}\`, '${f.view || currentCloudView}')`
+                : `downloadCloudFile(\`${jsStr(f.name)}\`, \`${jsStr(fpath)}\`, false, '${jsStr(f.owner_id || '')}', '${jsStr(f.view || currentCloudView)}', '', \`${jsStr(ownerDisplay)}\`, ${f.shared ? 'true' : 'false'})`);
 
         let icon = f.is_dir ? getFolderIcon() : getFileIcon(f.ext);
         let statusBadge = '';
@@ -751,7 +958,7 @@ function renderCloudFiles(files, isRecent = false) {
     }
 
     list.innerHTML = html;
-    if (currentCloudView !== 'home' && currentCloudView !== 'shared') {
+    if (currentCloudView !== 'home' && currentCloudView !== 'shared' && currentCloudView !== 'trash') {
         list.querySelectorAll('.cloud-file-row, .cloud-folder-row, .cloud-file-card').forEach(row => {
             const name = row.getAttribute('data-name');
             const isDir = row.getAttribute('data-is-dir') === 'true';
@@ -914,7 +1121,24 @@ function renderListRow(f, isRecent, getFileTemplateData) {
             <div style="display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0;">
                 <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${(currentCloudView === 'computers' && currentCloudPath === '') ? 'color: #818cf8; font-weight: 600;' : ''}">${highlightMatch(d.cleanName, window._cloudSearchQuery)}</span>
                 ${f.match_type === 'content' ? `<span style="display: block; margin-top: 1px; min-width: 0; overflow: hidden;">${searchMatchLine(f.match_type, f.snippet, window._cloudSearchQuery)}</span>` : ''}
-                ${(!isRecent && (f.path !== undefined || (f.trash && f.origin))) ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${(f.trash && f.origin) ? window.t_cloud('trash_origin_from', 'sale de') + ' ' + esc(f.origin) : window.t_cloud('in_lower', 'en') + ' ' + d.cleanDisplayPath}</span>` : ''}
+                ${currentCloudView === 'trash' ? (() => {
+                    const isUnlinkedComp = (f.view === 'computers' && !f.original_path && f.is_dir);
+                    if (isUnlinkedComp) {
+                        return `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">Computador · Desvinculado</span>`;
+                    }
+                    const typeLabel = f.is_dir ? 'Carpeta' : 'Archivo';
+                    let originLabel = 'Mi unidad';
+                    if (f.view === 'computers') {
+                        originLabel = (f.original_path ? f.original_path.split('/')[0] : (f.origin || 'Computador'));
+                    } else if (f.view === 'backups') {
+                        originLabel = 'Backups';
+                    } else if (f.view === 'business') {
+                        originLabel = 'Facturación';
+                    } else if (f.view === 'ai') {
+                        originLabel = 'Módulo de IA';
+                    }
+                    return `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${typeLabel} · ${esc(originLabel)}</span>`;
+                })() : (!isRecent && f.path !== undefined ? `<span style="font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${window.t_cloud('in_lower', 'en') + ' ' + d.cleanDisplayPath}</span>` : '')}
             </div>
         </div>
         <div class="cloud-file-owner" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim); display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
@@ -932,8 +1156,8 @@ function renderListRow(f, isRecent, getFileTemplateData) {
         <div class="cloud-file-size" style="flex: 1; font-size: 0.9rem; opacity: 1; color: var(--text-dim);">
             ${formatBytes(f.size || 0)}
         </div>
-        <div class="cloud-file-actions" style="width: 40px; display: flex; justify-content: flex-end;">
-             <button onclick="handleCloudAction(event, '${d.safeName}', ${f.is_dir}, '${d.safePath}')" style="background: none; border: none; color: inherit; cursor: pointer; padding: 5px; opacity: 0.5;">⋮</button>
+        <div class="cloud-file-actions" style="width: 40px; display: flex; justify-content: flex-end; align-items: center;">
+             <button onclick="handleCloudAction(event, '${d.safeName}', ${f.is_dir}, '${d.safePath}')" style="background: none; border: none; color: #94a3b8; cursor: pointer; width: 28px; height: 28px; border-radius: 50%; opacity: 0.7; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.08)'; this.style.opacity='1'; this.style.color='#fff';" onmouseout="this.style.background='transparent'; this.style.opacity='0.7'; this.style.color='#94a3b8';">⋮</button>
         </div>
     </div>`;
 }
@@ -2699,7 +2923,7 @@ function _ctxHideAllBtns() {
     ['ctx-download-btn', 'ctx-rename-btn', 'ctx-share-btn', 'ctx-unshare-btn',
         'ctx-organize-btn', 'ctx-star-btn', 'ctx-move-btn', 'ctx-copy-btn',
         'ctx-zip-btn', 'ctx-unzip-btn', 'ctx-protect-btn', 'ctx-restore-btn',
-        'ctx-empty-trash-btn'].forEach(id => {
+        'ctx-empty-trash-btn', 'ctx-token-btn'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
@@ -2782,6 +3006,11 @@ function _applyCtxMenuStandard(ctx, multi) {
 
     setCloudDeleteVisible(!isMine ? false : true);
     document.getElementById('ctx-delete-text').innerText = window.t_cloud('ctx_trash', 'Mover a la papelera');
+
+    // El token de enlace es exclusivo de vincular computadoras; no debe
+    // mostrarse en vistas estándar (Drive, shared, etc.).
+    const tokenBtn = document.getElementById('ctx-token-btn');
+    if (tokenBtn) tokenBtn.style.display = 'none';
 }
 
 // Muestra y posiciona el menú contextual. Centraliza el posicionamiento para
@@ -4054,7 +4283,21 @@ function updateCloudMultiSelectBar() {
         bar.style.display = 'none';
     }
 
+    updateTableHeaderVisibility();
     _syncCloudFabVisibility();
+}
+
+function toggleTrashHeaderMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('trash-header-dropdown');
+    if (!menu) return;
+    const isVisible = menu.style.display === 'block';
+    menu.style.display = isVisible ? 'none' : 'block';
+}
+
+function closeTrashHeaderMenu() {
+    const menu = document.getElementById('trash-header-dropdown');
+    if (menu) menu.style.display = 'none';
 }
 
 function _syncCloudFabVisibility() {
@@ -5001,12 +5244,13 @@ function initCloud() {
         }
     });
 
-    // Cierre global del menú "…" del breadcrumb (click fuera, scroll o resize)
+    // Cierre global del menú "…" del breadcrumb y menú de cabecera de papelera (click fuera, scroll o resize)
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.breadcrumb-more')) closeBreadcrumbMenus();
+        if (!e.target.closest('#cloud-table-header-actions')) closeTrashHeaderMenu();
     });
-    window.addEventListener('scroll', closeBreadcrumbMenus, true);
-    window.addEventListener('resize', closeBreadcrumbMenus);
+    window.addEventListener('scroll', () => { closeBreadcrumbMenus(); closeTrashHeaderMenu(); }, true);
+    window.addEventListener('resize', () => { closeBreadcrumbMenus(); closeTrashHeaderMenu(); });
 
     window.addEventListener('language_changed', () => {
         if (typeof fetchCloudFiles === 'function') {
@@ -5021,6 +5265,8 @@ function initCloud() {
         handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs,
         handleCloudUpload, deleteCloudItem, requestMoreCloudQuota,
         fetchAdminQuotaRequests, resolveQuotaRequest,
+        toggleTrashHeaderMenu, closeTrashHeaderMenu,
+        handleCloudSort, handleCloudFilterClick,
         setCloudLayout, handleCloudAction, handleCloudRowClick,
         triggerNewItemAction, openLinkDeviceModal, removeSelectedUser,
         emptyCloudTrash, downloadCloudFile, downloadSelectedItems,
@@ -5193,16 +5439,19 @@ function initCloud() {
 
 export { fetchCloudFiles, updateCloudQuotaInfo, filterCloudFiles, navigateCloud, handleCloudNavClick, renderCloudFiles, renderCloudBreadcrumbs, handleCloudUpload, deleteCloudItem, initCloud, handleZipItem, handleUnzipItem };
 
+function updateCloudBackButton() {
+    const btn = document.getElementById('btn-cloud-back');
+    if (!btn) return;
+    const HIERARCHICAL_VIEWS = ['drive', 'computers', 'backups', 'business', 'shared'];
+    const hierarchical = HIERARCHICAL_VIEWS.includes(window.currentCloudView);
+    const hasParent = hierarchical && window.currentCloudPath && window.currentCloudPath.trim() !== '';
+    btn.style.display = hasParent ? 'flex' : 'none';
+}
+
 window.handleCloudBack = function () {
-    if (window.currentCloudView !== 'drive' && window.currentCloudView !== 'computers') {
-        if (typeof window.nvGoBack === 'function') window.nvGoBack();
-        return;
-    }
     if (window.currentCloudPath && window.currentCloudPath.trim() !== '') {
-        let parts = window.currentCloudPath.split('/').filter(p => p.trim() !== '');
+        const parts = window.currentCloudPath.split('/').filter(p => p.trim() !== '');
         parts.pop();
         window.navigateCloud(parts.join('/'), window.currentCloudView);
-    } else {
-        if (typeof window.nvGoBack === 'function') window.nvGoBack();
     }
 };

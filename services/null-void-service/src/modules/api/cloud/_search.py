@@ -40,8 +40,9 @@ def build_user_search_index(user_id):
         return
 
     local_index = {}
-    for view_name in ('', '.computers'):
-        target_scan = os.path.join(user_root, view_name)
+    for view_dir, view in (('', 'drive'), ('.computers', 'computers'),
+                           ('.backups', 'backups'), ('.business', 'business')):
+        target_scan = os.path.join(user_root, view_dir)
         if not os.path.exists(target_scan):
             continue
 
@@ -54,11 +55,11 @@ def build_user_search_index(user_id):
             for f in files:
                 if f.startswith('.'):
                     continue
-                local_index.setdefault(f.lower(), []).append({"name": f, "path": rel_dir, "is_dir": False, "view": "drive" if not view_name else "computers"})
+                local_index.setdefault(f.lower(), []).append({"name": f, "path": rel_dir, "is_dir": False, "view": view})
             for d in dirs:
                 if d.startswith('.'):
                     continue
-                local_index.setdefault(d.lower(), []).append({"name": d, "path": rel_dir, "is_dir": True, "view": "drive" if not view_name else "computers"})
+                local_index.setdefault(d.lower(), []).append({"name": d, "path": rel_dir, "is_dir": True, "view": view})
 
     with index_lock:
         search_index[user_id] = local_index

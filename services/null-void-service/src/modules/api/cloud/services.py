@@ -412,7 +412,7 @@ def list_trash(token, user_root):
                     "origin": origin,
                     "is_dir": os.path.isdir(fp), "size": info.st_size,
                     "mtime": item['deleted_at'], "ext": os.path.splitext(item['name'])[1].lower(),
-                    "owner": "Papelera", "view": item.get('view', 'drive'), "trash": True,
+                    "owner": "Yo", "view": item.get('view', 'drive'), "trash": True,
                 })
         except ValueError:
             continue
