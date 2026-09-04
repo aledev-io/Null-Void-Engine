@@ -113,7 +113,6 @@ def create_app():
     from modules.api.ai import ai_bp
     from modules.api.ai.workspaces import workspaces_bp
     from modules.api.scraper.routes import scraper_bp
-    from modules.api.vault import vault_bp
     from core.telemetry.collector import record_request
 
     @app.before_request
@@ -125,7 +124,7 @@ def create_app():
     blueprints = [
         auth_bp, events_bp, invoices_bp, spreadsheet_bp, transactions_bp,
         metrics_bp, backup_bp, system_bp, cloud_bp, settings_bp, chat_bp, 
-        friends_bp, mail_bp, ai_bp, workspaces_bp, scraper_bp, vault_bp
+        friends_bp, mail_bp, ai_bp, workspaces_bp, scraper_bp
     ]
     for bp in blueprints:
         app.register_blueprint(bp)

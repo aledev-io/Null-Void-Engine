@@ -28,10 +28,6 @@
     --bg-card: var(--bg-sidebar);
     --surface: var(--bg-secondary);
     --surface-hi: var(--bg-hover);
-
-    /* AI Specific */
-    --user-bubble: #1f2937;
-    --ai-bubble: transparent;
 }
 
 [data-theme="light"] {
@@ -52,7 +48,71 @@
     --bg-card: var(--bg-sidebar);
     --surface: var(--bg-secondary);
     --surface-hi: var(--bg-hover);
+}
 
-    --user-bubble: #e8f0fe;
-    --ai-bubble: #f1f3f4;
+/* ════════════════════════════════════════════════════════════════════════
+   COGNITIVE SLATE — token layer (AI module / Nexus AI)
+   Vocabulario nuevo, delimitado con prefijo --cs-*. Ningún componente
+   existente lo consume aún, por lo que la apariencia actual NO cambia.
+
+   Fuente de verdad: docs/UI/UIPLAN.md (YAML) + tokens formales de la
+   especificación Cognitive Slate. Los valores son invariantes de tema (la
+   paleta CS es única, orientada a dark). Se incorporan gradualmente en las
+   fases de migración de componentes.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+    /* ── Superficies (basadas en surface-container-* de UIPLAN.md) ── */
+    --cs-surface-950: #0e0e11;   /* container-lowest */
+    --cs-surface-900: #131316;   /* canvas / background / surface */
+    --cs-surface-800: #1b1b1e;   /* container-low */
+    --cs-surface-750: #1f1f22;   /* container */
+    --cs-surface-700: #2a2a2d;   /* container-high */
+    --cs-surface-600: #353438;   /* container-highest / surface-variant */
+
+    /* ── Texto ── */
+    --cs-text-primary: #e4e1e6;  /* on-surface */
+    --cs-text-secondary: #c7c4d7;/* on-surface-variant */
+    --cs-text-muted: #94a3b8;
+
+    /* ── Inteligencia / acentos (no sustituyen estados semánticos) ── */
+    --cs-primary: #c0c1ff;       /* surface-tint / primary */
+    --cs-primary-dim: #818cf8;
+    --cs-on-primary: #1000a9;    /* on-primary (texto accesible sobre primary) */
+    --cs-secondary: #7bd0ff;     /* secundario cyan */
+    --cs-tertiary: #ddb7ff;      /* terciario violeta */
+
+    /* ── Bordes ── */
+    --cs-border: rgba(255, 255, 255, 0.08);
+    --cs-border-strong: rgba(255, 255, 255, 0.14);
+    --cs-border-focus: #818cf8;
+
+    /* ── Espaciado ── */
+    --cs-space-1: 4px;
+    --cs-space-2: 8px;
+    --cs-space-3: 12px;
+    --cs-space-4: 16px;
+    --cs-space-5: 20px;
+    --cs-space-6: 24px;
+    --cs-space-8: 32px;
+    --cs-space-10: 40px;
+
+    /* ── Radios ── */
+    --cs-radius-xs: 4px;
+    --cs-radius-sm: 6px;
+    --cs-radius-md: 10px;
+    --cs-radius-lg: 14px;
+    --cs-radius-xl: 20px;
+    --cs-radius-full: 9999px;
+
+    /* ── Alias semánticos (nombre de rol → primitiva numérica) ──
+       Capa de compatibilidad para Phase 2. Mapean exclusivamente dentro del
+       espacio --cs-*; NO reasignan las variables globales heredadas. */
+    --cs-surface-canvas: var(--cs-surface-900);
+    --cs-surface-container-lowest: var(--cs-surface-950);
+    --cs-surface-container-low: var(--cs-surface-800);
+    --cs-surface-container: var(--cs-surface-750);
+    --cs-surface-container-high: var(--cs-surface-700);
+    --cs-surface-container-highest: var(--cs-surface-600);
+    --cs-on-surface: var(--cs-text-primary);
+    --cs-on-surface-variant: var(--cs-text-secondary);
 }

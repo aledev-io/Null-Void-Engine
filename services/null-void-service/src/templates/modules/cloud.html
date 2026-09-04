@@ -1660,16 +1660,16 @@
             style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; min-height: 60px; gap: 16px;">
             <div style="display: flex; align-items: center; flex: 1; min-width: 0;">
                 <div class="cloud-header-brand" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
-                    <button id="btn-cloud-back" onclick="handleCloudBack()" title="Volver" data-i18n-title="back" aria-label="Volver"
-                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: none; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
+                    <button class="app-back-header" onclick="window.location.href='/app'" title="Volver al Dashboard" data-i18n-title="back" aria-label="Volver al Dashboard"
+                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="19" y1="12" x2="5" y2="12"></line>
                             <polyline points="12 19 5 12 12 5"></polyline>
                         </svg>
                     </button>
-                    <button id="btn-cloud-sidebar-toggle" onclick="toggleCloudSidebar()" aria-label="Abrir menú"
-                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <button id="btn-cloud-sidebar-toggle" class="mobile-menu-btn" onclick="toggleCloudSidebar()" aria-label="Abrir menú"
+                        style="background: transparent; border: none; color: var(--text-main); cursor: pointer; padding: 4px; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="3" y1="12" x2="21" y2="12"></line>

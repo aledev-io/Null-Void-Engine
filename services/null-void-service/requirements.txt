@@ -19,8 +19,7 @@ cloudscraper==1.2.71
 reportlab
 ddgs
 
-argon2-cffi==25.1.0
-pycryptodome==3.23.0
+
 Flask-Limiter==3.10.1
 pywebpush
 cryptography

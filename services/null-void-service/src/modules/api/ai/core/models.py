@@ -167,7 +167,13 @@ class OpenRouterProvider(OpenAICompatibleProvider):
                     continue
                 ctx_len = (m or {}).get("context_length") or 131072
                 top_prov = (m or {}).get("top_provider") or {}
-                max_comp = top_prov.get("max_completion_tokens") or 32768
+                per_req = (m or {}).get("per_request_limits") or {}
+                max_comp = (
+                    top_prov.get("max_completion_tokens")
+                    or per_req.get("completion_tokens")
+                    or (m or {}).get("max_output_tokens")
+                    or _infer_model_output_tokens(mid, ctx_len)
+                )
                 entries.append(_ui_entry(
                     "openrouter", mid,
                     context_length=ctx_len,
@@ -305,10 +311,24 @@ def _invalidate_models_cache():
     _MODELS_CACHE["models"] = None
 
 
+def _infer_model_output_tokens(model_name: str, context_len: int = 131072) -> int:
+    """Infiere el límite real de tokens de salida según la arquitectura del modelo."""
+    name = (model_name or "").lower()
+    if any(k in name for k in ("0.5b", "1.5b", "1b", "agenda")):
+        return min(context_len, 4096)
+    if any(k in name for k in ("2b", "3b", "7b", "8b", "9b", "phi", "granite", "gemma", "mistral-7b")):
+        return min(context_len, 8192)
+    if any(k in name for k in ("14b", "27b", "32b", "70b", "llama3", "llama-3", "qwen", "deepseek")):
+        return min(context_len, 32768)
+    if any(k in name for k in ("claude", "gemini", "gpt-4o")):
+        return min(context_len, 65536)
+    return min(context_len, 8192)
+
+
 _CTX_PROFILES = (
-    (32768, 8192, ("0.5b", "1.5b", "agenda")),
-    (65536, 16384, ("2b", "3b", "7b", "phi3")),
-    (131072, 32768, ("27b", "32b", "70b", "qwen", "llama3")),
+    (32768, 4096, ("0.5b", "1.5b", "1b", "agenda")),
+    (65536, 8192, ("2b", "3b", "7b", "8b", "9b", "phi", "granite", "gemma", "mistral")),
+    (131072, 32768, ("14b", "27b", "32b", "70b", "qwen", "llama3", "deepseek")),
 )
 
 
@@ -317,7 +337,7 @@ def _ollama_context_for(model_name: str):
     for ctx_len, max_out, tags in _CTX_PROFILES:
         if any(tag in model_name for tag in tags):
             return ctx_len, max_out
-    return 131072, 32768
+    return 131072, _infer_model_output_tokens(model_name, 131072)
 
 
 def _resolve_requested_model(model: Optional[str]) -> str:

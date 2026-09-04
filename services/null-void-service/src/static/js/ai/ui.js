@@ -1061,33 +1061,39 @@ window.formatKTokens = function (kVal) {
 };
 
 window.getModelSpecs = function (modelName) {
-    if (!modelName) return { maxCtx: 2048, maxPredict: 128, label: '2M (Masivo)' };
+    if (!modelName) return { maxCtx: 128, maxPredict: 8, label: '128K' };
     const name = String(modelName).toLowerCase();
 
     // Massive Context Models (Gemini: 2M, Claude: 200K)
     if (name.includes('gemini')) {
-        return { maxCtx: 2048, maxPredict: 128, label: '2M (Contexto Extremo)' };
+        return { maxCtx: 2048, maxPredict: 64, label: '2M (Contexto Extremo)' };
     }
     if (name.includes('claude')) {
-        return { maxCtx: 200, maxPredict: 128, label: '200K (Nube Masivo)' };
+        return { maxCtx: 200, maxPredict: 8, label: '200K (Nube Masivo)' };
+    }
+    if (name.includes('o1') || name.includes('o3') || name.includes('gpt-4o') || name.includes('gpt-4.5')) {
+        return { maxCtx: 128, maxPredict: 16, label: '128K (OpenAI)' };
     }
 
-    // High capacity models (DeepSeek-V3/R1/V4, Qwen 2.5/3.8, Grok, Llama3.1/3.3, APIs) -> 128K context, 128K output
-    if (name.includes('qwen') || name.includes('deepseek') || name.includes('grok') || name.includes('llama3') || name.includes('27b') || name.includes('14b') || name.includes('32b') || name.includes('70b') || name.startsWith('api:')) {
-        return { maxCtx: 128, maxPredict: 128, label: '128K (Alta Capacidad)' };
+    // Ultra-light local models (0.5B, 1.5B, 1B, agenda) -> Max 32K context, 4K predict
+    if (name.includes('0.5b') || name.includes('1.5b') || name.includes('1b') || name.includes('agenda')) {
+        return { maxCtx: 32, maxPredict: 4, label: '32K (Modelo Ligero)' };
     }
 
-    // Ultra-light local models (0.5B, 1.5B, agenda) -> Max 32K context
-    if (name.includes('0.5b') || name.includes('1.5b') || name.includes('agenda')) {
-        return { maxCtx: 32, maxPredict: 16, label: '32K (Modelo Ligero)' };
+    // Small and medium architectures (2B - 9B: Phi, Granite, Gemma, Mistral, Llama, Qwen, DeepSeek)
+    if (name.includes('2b') || name.includes('3b') || name.includes('7b') || name.includes('8b') || name.includes('9b') ||
+        name.includes('phi') || name.includes('granite') || name.includes('gemma') || name.includes('mistral') ||
+        name.includes('llama') || name.includes('qwen') || name.includes('deepseek')) {
+        const isHighCtx = name.includes('deepseek') || name.includes('qwen') || name.includes('llama3') || name.includes('granite');
+        return { maxCtx: isHighCtx ? 128 : 64, maxPredict: 8, label: `${isHighCtx ? '128K' : '64K'} (8K Salida)` };
     }
 
-    // Medium local models (2B, 3B, 7B, phi3) -> Max 64K context
-    if (name.includes('2b') || name.includes('3b') || name.includes('7b') || name.includes('phi3')) {
-        return { maxCtx: 64, maxPredict: 32, label: '64K (Modelo Mediano)' };
+    // Large architectures (14B, 27B, 32B, 70B)
+    if (name.includes('14b') || name.includes('27b') || name.includes('32b') || name.includes('70b')) {
+        return { maxCtx: 128, maxPredict: 16, label: '128K (Alta Capacidad)' };
     }
 
-    return { maxCtx: 128, maxPredict: 128, label: '128K (Estándar)' };
+    return { maxCtx: 128, maxPredict: 8, label: '128K (Estándar)' };
 };
 
 window.onModelSelectionChanged = function (modelId) {
@@ -1100,18 +1106,23 @@ window.onModelSelectionChanged = function (modelId) {
         return m.id === modelId || m.name === modelId;
     });
 
-    // Extract real context_length and max_output_tokens from API object
-    let rawContextTokens = selectedModel && selectedModel.context_length ? selectedModel.context_length : null;
-    let rawOutputTokens = selectedModel && selectedModel.max_output_tokens ? selectedModel.max_output_tokens : null;
+    const specs = window.getModelSpecs(modelId);
 
-    if (!rawContextTokens) {
-        const specs = window.getModelSpecs(modelId);
-        rawContextTokens = specs.maxCtx * 1024;
-        rawOutputTokens = specs.maxPredict * 1024;
+    // Extract real context_length and max_output_tokens from API object with dynamic fallback
+    let rawContextTokens = (selectedModel && selectedModel.context_length)
+        ? parseInt(selectedModel.context_length)
+        : (specs.maxCtx * 1024);
+
+    let rawOutputTokens = (selectedModel && selectedModel.max_output_tokens)
+        ? parseInt(selectedModel.max_output_tokens)
+        : (specs.maxPredict * 1024);
+
+    if (rawOutputTokens > rawContextTokens) {
+        rawOutputTokens = rawContextTokens;
     }
 
-    const maxCtxK = Math.round(rawContextTokens / 1024);
-    const maxPredictK = Math.round((rawOutputTokens || 32768) / 1024);
+    const maxCtxK = Math.max(4, Math.round(rawContextTokens / 1024));
+    const maxPredictK = Math.max(2, Math.round(rawOutputTokens / 1024));
 
     const ctxSlider = document.getElementById('model-settings-ctx');
     const predictSlider = document.getElementById('model-settings-predict');

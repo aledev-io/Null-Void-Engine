@@ -56,6 +56,10 @@ body {
     justify-content: flex-end;
 }
 
+#topbar-folder-title {
+    display: none;
+}
+
 .btn-theme {
     background: var(--surface-hi);
     border: 1px solid var(--border);
@@ -1145,6 +1149,10 @@ input:-webkit-autofill:active {
 
     #btn-mobile-menu {
         display: flex !important;
+    }
+
+    #topbar-folder-title {
+        display: inline-block;
     }
 
     /* Panels: full width, no margin, no radius */

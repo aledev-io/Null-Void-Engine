@@ -3,13 +3,15 @@ from core.database import get_db
 
 
 def load_installed_modules(username):
+    valid_ids = {m["id"] for m in ALL_MODULES}
     try:
         with get_db() as conn:
             row = conn.execute(
                 "SELECT modules FROM users WHERE username = ?", (username,)
             ).fetchone()
             if row and row['modules']:
-                return json.loads(row['modules'])
+                raw_modules = json.loads(row['modules'])
+                return [m for m in raw_modules if m in valid_ids]
     except Exception:
         pass
     return [m["id"] for m in ALL_MODULES if m.get("core")]
@@ -83,4 +85,3 @@ ALL_MODULES.append({"id": "chat", "name": "Mensajes", "icon": "💬", "desc": "C
 ALL_MODULES.append({"id": "friends", "name": "Amigos", "icon": "👥", "desc": "Gestiona tus amigos y solicitudes.", "core": True})
 ALL_MODULES.append({"id": "mail", "name": "Correo", "icon": "📧", "desc": "Bandeja de entrada SMTP/IMAP.", "url": "/mail", "core": True})
 ALL_MODULES.append({"id": "scraper_pcc", "name": "Scraper BD", "icon": "🛒", "desc": "Base de datos de PcComponentes", "url": "/scraper", "core": True})
-ALL_MODULES.append({"id": "vault", "name": "Vault", "icon": "🔐", "desc": "Gestor de Contraseñas", "url": "/vault", "core": True})

@@ -1131,7 +1131,7 @@ export function addCodeCopyButtons(container, forceWidget = false) {
 
         const headerBar = document.createElement('div');
         headerBar.className = 'code-header-bar';
-        headerBar.style.cssText = 'display: flex; align-items: center; justify-content: space-between; background: rgba(22, 27, 34, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding: 8px 12px; font-size: 0.78rem; font-family: inherit; color: var(--text-dim, #8b95b0); border-top-left-radius: 8px; border-top-right-radius: 8px; margin: 0; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); flex-wrap: wrap; gap: 6px;';
+        headerBar.style.cssText = 'display: flex; align-items: center; justify-content: space-between; background: var(--cs-surface-container); border-bottom: 1px solid var(--cs-border); padding: 8px 12px; font-size: 0.78rem; font-family: inherit; color: var(--cs-text-muted); border-top-left-radius: 8px; border-top-right-radius: 8px; margin: 0; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); flex-wrap: wrap; gap: 6px;';
 
         code.style.display = 'block';
         code.style.padding = '14px 16px';
@@ -1798,6 +1798,11 @@ function _welcomeHtml() {
     const username = userNameEl ? userNameEl.textContent.trim() : 'Usuario';
     return `
         <div id="welcome-screen" class="welcome-screen">
+            <div class="ai-identity" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+                    <path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z"></path>
+                </svg>
+            </div>
             <div class="welcome-title">Hola, ${username}</div>
             <div class="welcome-subtitle">¿Cómo puedo ayudarte hoy?</div>
             <div class="welcome-hint" style="margin:0 0 24px 0;display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--text-dim);background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:4px 10px;border-radius:16px;opacity:0.7;">
@@ -2010,7 +2015,6 @@ export function loadHistory() {
                 const sidebar = document.getElementById('sidebar');
                 if (sidebar && sidebar.classList.contains('open')) {
                     sidebar.classList.remove('open');
-                    localStorage.setItem('sidebar_collapsed', true);
                 }
             }
         };
@@ -2683,15 +2687,9 @@ export async function submitEditedMessage(index, newText) {
 export function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     if (window.innerWidth <= 767) {
-        // Móvil: el cajón se abre/cierra con .open (nunca con .collapsed,
-        // que en escritorio significa barra estrecha).
+        // Móvil: el cajón se abre/cierra con .open
         sidebar.classList.toggle('open');
-        localStorage.setItem('sidebar_collapsed', !sidebar.classList.contains('open'));
-    } else {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
     }
-    if (sidebar.classList.contains('collapsed')) document.getElementById('user-menu').classList.remove('show');
 }
 
 export function toggleUserMenu(event) {

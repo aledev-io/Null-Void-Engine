@@ -37,7 +37,6 @@ The repository contains the following core and auxiliary components:
 * **Main Backend (`services/null-void-service`):** Flask application providing REST APIs, authentication, SQLite persistence (`manager.db`), WebSocket event streaming, and static web assets. Listens on port `5000`.
 * **AI Assistant:** Integrated AI client supporting local Ollama models and external AI providers, with provider credentials stored securely per user.
 * **Null-Void Cloud:** Private file storage module supporting document previews (PDF.js), media streaming, and on-demand video transcoding (FFmpeg).
-* **Vault:** Password and credentials manager implementing client-side AES-256-GCM encryption with automated `.bak` backup rotation.
 * **Telemetry:** Hardware and system monitoring collector (CPU, RAM, storage, network) streamed via WebSockets.
 * **Sync Agent (`apps/client_agent`):** Desktop synchronization client written in Python (PySide6 / Qt6) for continuous bi-directional directory sync.
 * **Mobile Client (`apps/null-void-app`):** Android application built with Capacitor for remote access and push notification handling.

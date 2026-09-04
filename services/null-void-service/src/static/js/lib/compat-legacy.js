@@ -350,7 +350,7 @@ function nvGoBack() {
             // Mecanismo fijo por página (memorizado):
             //  - .mobile-hidden            → scraper (quitar/añadir clase)
             //  - <div id="sidebar">        → mail (mobile-open + overlay.show)
-            //  - <aside id="sidebar">      → estándar .open (ai/vault/reminders/calendar)
+            //  - <aside id="sidebar">      → estándar .open (ai/reminders/calendar)
             if (sidebarMode === null) {
                 if (sb.classList.contains('mobile-hidden')) {
                     sidebarMode = 'scraper';

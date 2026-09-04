@@ -1027,6 +1027,7 @@ html {
     overflow-y: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    align-self: center;
 }
 
 #chat-input::-webkit-scrollbar {
@@ -2255,6 +2256,7 @@ html {
         font-size: 1rem !important;
         line-height: 1.5;
         padding: 6px 0;
+        align-self: center;
     }
 
     /* El toolbar comparte fila con el textarea: ancho natural, shrink
@@ -3046,6 +3048,7 @@ html {
     .input-wrapper textarea {
         font-size: 0.95rem !important;
         line-height: 1.55 !important;
+        align-self: center;
     }
 
     /* El toolbar comparte fila con el textarea: ancho natural (contenido),
@@ -3441,6 +3444,20 @@ html {
     overflow: hidden;
     overscroll-behavior: contain;
     animation: modalScaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Entrance de modales/sheets (decelerate) — antes no estaba definida y la
+   animación fallaba silenciosamente. */
+@keyframes modalScaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
 .model-picker-header {
@@ -4011,5 +4028,391 @@ html {
 
     .model-picker-list {
         padding: 4px 10px calc(env(safe-area-inset-bottom, 8px) + 12px) 10px !important;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PHASE 2A — Cognitive Slate: migración selectiva por componente (solo DARK)
+
+   Todas las reglas quedan restringidas a html[data-theme="dark"] para NO
+   afectar a light mode (que sigue resolviendo con sus tokens claros).
+   Cada regla cambia exclusivamente superficies / bordes / color de texto;
+   NO altera dimensiones, layout, posicionamiento ni comportamiento.
+   No se usa !important: se gana por especificidad y orden de carga.
+
+   Tokens consumidos: capa --cs-* definida en global-theme.css.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* 2A.1 — Lienzo / fondo de la app AI
+   Actual: body/html/.app-layout → var(--bg-canvas) (#0a0a0a en dark).
+   Nuevo: var(--cs-surface-canvas) (#131316). Rol de "canvas/background". */
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+html[data-theme="dark"] .app-layout {
+    background: var(--cs-surface-canvas);
+}
+
+/* 2A.2 — Header top-nav
+   Actual (desktop): fondo transparente + blur(10px); borde inferior sólido
+   var(--border) (#333). Nuevo: superficie CS traslúcida contenida + borde
+   translúcido + blur suave. El modo móvil (<=767px) conserva su propio
+   ajuste translúcido existente. El borde de sticky-hide no se toca. */
+html[data-theme="dark"] .top-nav {
+    background: rgba(19, 19, 22, 0.72);
+    border-bottom-color: var(--cs-border);
+    backdrop-filter: blur(16px) saturate(1.3);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+/* 2A.3 — Welcome: superficie transparente (hereda el lienzo CS). Se ajusta
+   solo el tono del texto al vocabulario CS (título / subtítulo). */
+html[data-theme="dark"] .welcome-title {
+    color: var(--cs-text-primary);
+}
+
+html[data-theme="dark"] .welcome-subtitle {
+    color: var(--cs-text-secondary);
+}
+
+/* 2A.4 — Tarjetas de sugerencia
+   Actual: transparente, borde var(--border), radius 12px; hover bg-hover.
+   Nuevo: superficie container-low, borde cs-border, radius cs-lg;
+   hover container-high + borde cs-border-strong. En móvil conserva su
+   tratamiento glass existente (reglas !important previas). */
+html[data-theme="dark"] .suggestion-card {
+    background: var(--cs-surface-container-low);
+    border-color: var(--cs-border);
+    border-radius: var(--cs-radius-lg);
+}
+
+html[data-theme="dark"] .suggestion-card:hover {
+    background: var(--cs-surface-container-high);
+    border-color: var(--cs-border-strong);
+}
+
+/* 2A.5 — Píldora del modelo actual (top-nav)
+   Actual: rgba(255,255,255,0.05) + borde blanco translúcido + radius 18px.
+   Nuevo: superficie container + borde cs-border; hover container-high.
+   El punto verde (.top-model-dot) es estado semántico online → intacto.
+   No se modifica radius/dimensiones. */
+html[data-theme="dark"] .top-model-btn {
+    background: var(--cs-surface-container);
+    border-color: var(--cs-border);
+    color: var(--cs-text-primary);
+}
+
+html[data-theme="dark"] .top-model-btn:hover {
+    background: var(--cs-surface-container-high);
+    border-color: var(--cs-border-strong);
+}
+/* ════════════════════════════════════════════════════════════════════════
+   PHASE 2B-1 — Cognitive Slate: Sidebar + Composer (solo DARK)
+
+   Misma estrategia que Phase 2A: reglas restringidas a html[data-theme="dark"]
+   para no tocar light mode. Cambian exclusivamente superficies / bordes /
+   color de texto; NO alteran dimensiones, layout, posicionamiento ni
+   comportamiento. Sin !important salvo dos excepciones acotadas que replican
+   !important ya existentes en el modo escritorio (bg de focus-within y
+   anillo de borde), de modo que la superficie del composer permanezca
+   estable al enfocar y NO provoque un "flash" de color.
+
+   Sidebar: al elevar el lienzo a --cs-surface-canvas (#131316) no existe en
+   la escala CS un neutro "más claro" para el carril de navegación, por lo que
+   el sidebar se resuelve como panel recesado (--cs-surface-container-lowest),
+   conservando la sutileza original (#0f0f0f ≈ #0e0e11) y su jerarquía.
+
+   Composer: superficie sólida --cs-surface-container con borde translúcido
+   CS. El modo móvil (<=767px) conserva intacto su tratamiento glass existente
+   (reglas !important previas a mayor especificidad de carga). El foco
+   escritorio pasa a un anillo --cs-border-focus (indigo, mayor contraste).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* 2B-1.1 — Sidebar: superficie recesada + borde translúcido */
+html[data-theme="dark"] .sidebar {
+    background: var(--cs-surface-container-lowest);
+    border-right-color: var(--cs-border);
+}
+
+/* 2B-1.2 — Botón "nuevo chat" (cabecera del sidebar) */
+html[data-theme="dark"] .btn-new-chat {
+    border-color: var(--cs-border);
+    color: var(--cs-text-primary);
+}
+
+html[data-theme="dark"] .btn-new-chat:hover {
+    background: var(--cs-surface-container);
+}
+
+/* 2B-1.3 — Navegación principal (nav-item) */
+html[data-theme="dark"] .nav-item {
+    color: var(--cs-text-primary);
+}
+
+html[data-theme="dark"] .nav-item svg {
+    color: var(--cs-text-secondary);
+}
+
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .nav-item.active {
+    background: var(--cs-surface-container);
+}
+
+/* 2B-1.4 — Título de sección */
+html[data-theme="dark"] .sidebar-section-title {
+    color: var(--cs-text-muted);
+}
+
+/* 2B-1.5 — Historial de conversaciones */
+html[data-theme="dark"] .history-item {
+    color: var(--cs-text-secondary);
+}
+
+html[data-theme="dark"] .history-item:hover,
+html[data-theme="dark"] .history-item.active {
+    background: var(--cs-surface-container);
+    color: var(--cs-text-primary);
+}
+
+html[data-theme="dark"] .history-item-dots:hover {
+    background: var(--cs-border);
+    color: var(--cs-text-primary);
+}
+
+/* 2B-1.6 — Composer: superficie sólida CS + borde translúcido
+   Solo afecta escritorio/base; en móvil el glass existente (!important)
+   gana por cascada y se conserva intacto. El radio 24px y la elevación
+   (box-shadow) existentes no se modifican. */
+html[data-theme="dark"] .input-wrapper {
+    background: var(--cs-surface-container);
+    border-color: var(--cs-border);
+}
+
+html[data-theme="dark"] .input-wrapper:hover {
+    border-color: var(--cs-border-strong);
+}
+
+/* 2B-1.7 — Foco del composer en escritorio (replica !important previos):
+   superficie estable + anillo de borde CS (indigo, mayor contraste que el
+   violeta oscuro var(--primary) en dark). Acotado a ≥768px para no alterar
+   el tratamiento de foco glass móvil. */
+@media (min-width: 768px) {
+    html[data-theme="dark"] .input-wrapper:focus-within {
+        background: var(--cs-surface-container) !important;
+        border-color: var(--cs-border-focus) !important;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PHASE 3 — Cognitive Slate: welcome / chat landing (solo DARK)
+
+   Composición visual del estado vacío (saludo), traducida de la referencia
+   Google hacia los componentes reales existentes. Jerarquía:
+   AI identity → saludo → subtítulo → acciones rápidas → (espacio) → composer.
+   La identidad es una marca decorativa CSS-only (aria-hidden) sin proveedor
+   ni modelo: representa a Nexus AI. Sin glass, sin rediseño de layout:
+   el saludo sigue alineado a la izquierda y centrado verticalmente como antes.
+
+   Misma estrategia: reglas restringidas a html[data-theme="dark"] para no
+   tocar light mode. Los componentes reales (saludo dinámico, handlers
+   setInput de /agenda y /web) NO cambian.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Marca de identidad Nexus — orbe recesado CS sobre una superficie
+   translúcida (sin proveedor/modelo). Solo visible en dark: la paleta
+   Cognitive Slate es oscura y light mode debe quedar inalterado. */
+html[data-theme="dark"] .ai-identity {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin: 0 0 28px 0;
+    border-radius: var(--cs-radius-xl);
+    background: radial-gradient(120% 120% at 22% 18%, var(--cs-surface-container-highest), var(--cs-surface-container-high) 58%, var(--cs-surface-container) 100%);
+    border: 1px solid var(--cs-border-strong);
+    color: var(--cs-primary);
+    box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.7);
+}
+
+html[data-theme="light"] .ai-identity {
+    display: none;
+}
+
+/* Respiración vertical del saludo: título más pegado al subtítulo y aire
+   controlado antes de las acciones. En móvil siguen mandando los !important
+   existentes (1.5rem / 6px / 16px). */
+html[data-theme="dark"] .welcome-title {
+    margin-bottom: 12px;
+}
+
+html[data-theme="dark"] .welcome-subtitle {
+    margin-bottom: 20px;
+}
+
+/* Acciones rápidas: refuerzo de jerarquía CS en escritorio. La superficie
+   ya la fija Phase 2A; aquí solo una elevación sutil al pasar el ratón,
+   acotada a ≥768px para no interferir con el :active scale del modo móvil. */
+html[data-theme="dark"] .suggestion-card {
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+@media (min-width: 768px) {
+    html[data-theme="dark"] .suggestion-card:hover {
+        transform: translateY(-2px);
+    }
+}
+
+/* Móvil: identidad escalada y armonizada con el cajón sin tocar el glass
+   existente de las tarjetas ni del composer. */
+@media (max-width: 767px) {
+    html[data-theme="dark"] .ai-identity {
+        width: 42px;
+        height: 42px;
+        margin-bottom: 20px;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PHASE 4A — Cognitive Slate: burbujas de mensaje (solo DARK · móvil)
+
+   Las burbujas asimétricas existen ÚNICAMENTE en el modo móvil (<=767px /
+   landscape corto): en escritorio >=768px la conversación es un transcript
+   integrado en el lienzo, sin superficie de burbuja (NO se toca).
+
+   Aquí se migra la SUPERFICIE de esas burbujas ya existentes a Cognitive
+   Slate, manteniendo intactos radio asimétrico, alineación, max-width,
+   padding y sombras. No se rediseña layout ni se añaden burbujas a
+   escritorio.
+
+   Jerarquía visual CS (solo dark):
+     lienzo --cs-surface-canvas
+       ↓ burbuja IA  --cs-surface-container-low   (integrada, peso ligero)
+       ↓ burbuja usuario --cs-surface-container-high (ligeramente elevada)
+
+   El contenido anidado (pre/code/KaTeX/tablas/listas/links) NO cambia:
+   `pre` conserva su propia superficie dedicada. Sin !important: se gana por
+   especificidad (html[data-theme="dark"] añade 1 atributo) y orden.
+   ════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px), (max-height: 500px) and (orientation: landscape) {
+    /* Usuario: superficie CS más elevada, borde translúcido. El radio
+       asimétrico 18px 18px 4px 18px y la alineación derecha se conservan. */
+    html[data-theme="dark"] .message-row.user-row .message-content {
+        background: var(--cs-surface-container-high);
+        border-color: var(--cs-border);
+    }
+
+    /* Nexus/IA: superficie CS baja, más integrada con el lienzo que el
+       usuario. El radio asimétrico 18px 18px 18px 4px se conserva. */
+    html[data-theme="dark"] .message-row.ai-row .message-content,
+    html[data-theme="dark"] #streaming-message {
+        background: var(--cs-surface-container-low);
+        border-color: var(--cs-border);
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PHASE 4B — Cognitive Slate: bloques de código (solo DARK)
+
+   Superficie técnica dedicada para <pre><code> (código renderizado por
+   marked.parse()) dentro de las conversaciones. Jerarquía visual:
+     lienzo → superficie de mensaje → superficie de código.
+
+   La superficie de código debe leerse MÁS recesada (más oscura) que la
+   burbuja que la contiene y que el propio lienzo:
+     móvil burbuja usuario --cs-surface-container-high (#2a2a2d)
+     móvil burbuja Nexus    --cs-surface-container-low  (#1b1b1e)
+     escritorio lienzo       --cs-surface-canvas        (#131316)
+   El único neutro de la escala CS más oscuro que todos ellos es
+   --cs-surface-container-lowest (#0e0e11) → bloque recesado, calmo y técnico,
+   sin colapsar con ninguna superficie de mensaje (usuario o Nexus) y sin
+   despegarse de ella.
+
+   Se migra la superficie dedicada existente (background #161b22 de la regla
+   .message-content pre). También se neutraliza el velo translúcido blanco que
+   la regla COMPARTIDA .message-content code (código en línea) aplicaba sobre
+   el <code> interior de un bloque, para que el bloque apoye directo sobre la
+   superficie CS del <pre>.
+
+   Se conservan intactos: sintaxis hljs (theme vendor github-dark), geometría,
+   radio, max-height, scroll horizontal, padding del <pre>, streaming y el
+   comportamiento de copiar/expandir/descargar (toolbar añadida por JS).
+
+   Solo dark: light mode queda inalterado (ahí el código ya era oscuro por el
+   theme github-dark, comportamiento previo que se conserva). Sin !important:
+   se gana por especificidad (html[data-theme="dark"] + descendiente) y orden.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* 4B.1 — Contenedor <pre>: superficie dedicada #161b22 → CS container-lowest
+   + borde translúcido CS. Radio/max-height/overflow/scroll intactos. */
+html[data-theme="dark"] .message-content pre {
+    background: var(--cs-surface-container-lowest);
+    border-color: var(--cs-border);
+}
+
+/* 4B.2 — <code> interior de un bloque: elimina el velo rgba blanco heredado
+   de la regla compartida de código en línea para apoyar el bloque directo
+   sobre la superficie CS del <pre>. No toca colores de tokens hljs. */
+html[data-theme="dark"] .message-content pre code {
+    background: transparent;
+}
+
+/* 4B.3 — Código en línea (fuera de <pre>, dentro de párrafo/lista/encabezado):
+   tratamiento contenido y discreto, manteniendo su flujo inline. NO es un
+   bloque: superficie pequeña (no píldora), sin elevación ni radio grande. */
+html[data-theme="dark"] .message-content :not(pre) code {
+    background: var(--cs-surface-container);
+    border: 1px solid var(--cs-border);
+    border-radius: var(--cs-radius-xs);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PHASE 5A — Cognitive Slate: tarjetas de sugerencia del welcome (solo DARK ·
+   escritorio)
+
+   Eleva SOLO la superficie de las tarjetas de sugerencia reales (/agenda,
+   /web) hacia una superficie CS pulida y con aire, conservando la arquitectura,
+   el markup, los textos, las acciones y los breakpoints existentes.
+
+   Solo escritorio (>=768px): el modo móvil conserva intacto su tratamiento
+   glass existente (reglas !important previas) y su :active scale. Light mode
+   inalterado. Los textos internos de la tarjeta llevan estilos inline de la app
+   (tokens --text-*) y NO se tocan aquí (CSS no puede vencerlos sin !important,
+   que no se fuerza). Sin !important: se gana por especificidad y orden.
+   ════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 768px) {
+    /* 5A.1 — Grid: aire coherente entre tarjetas (16px) */
+    html[data-theme="dark"] .suggestion-grid {
+        gap: var(--cs-space-4);
+    }
+
+    /* 5A.2 — Superficie elevada + aire interior. Phase 2A.4 usaba container-low;
+       aquí se sube a container (ligeramente más claro que el lienzo) para que la
+       tarjeta lea como capacidad accionable, con más aire interior y una sombra
+       contenida que la despega del lienzo (sin glow ni glassmorphism). */
+    html[data-theme="dark"] .suggestion-card {
+        background: var(--cs-surface-container);
+        border-color: var(--cs-border);
+        border-radius: var(--cs-radius-lg);
+        padding: var(--cs-space-5);
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15), 0 4px 12px -8px rgba(0, 0, 0, 0.45);
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    }
+
+    /* 5A.3 — Hover refinado: sube la superficie, refina el borde y hace un lift
+       sutil (-2px) con sombra apenas más marcada. Sin glow ni scale exagerado. */
+    html[data-theme="dark"] .suggestion-card:hover {
+        background: var(--cs-surface-container-high);
+        border-color: var(--cs-border-strong);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* 5A.4 — Foco accesible si el control llegara a recibir foco: anillo CS.
+       No elimina indicador previo (no existía). */
+    html[data-theme="dark"] .suggestion-card:focus-visible {
+        outline: 2px solid var(--cs-border-focus);
+        outline-offset: 2px;
     }
 }

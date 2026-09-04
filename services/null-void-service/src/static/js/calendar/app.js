@@ -240,7 +240,7 @@ export const App = {
     newOkBtn.addEventListener('click', () => {
       modal.style.display = 'none';
       Events.delete(id);
-      UI.toast(isEn ? 'Event deleted' : 'Evento eliminado');
+      UI.toast(window.t('event_deleted'));
       UI.closeModal();
       this.render();
     });

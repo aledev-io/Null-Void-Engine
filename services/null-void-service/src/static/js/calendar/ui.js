@@ -105,6 +105,8 @@ export const UI = {
     }
     const impCheck = document.getElementById('qp-important');
     if (impCheck) impCheck.checked = !!(ev ? (ev.isImportant || ev.is_important) : (opts.prefill && opts.prefill.important));
+    const compCheck = document.getElementById('qp-completed');
+    if (compCheck) compCheck.checked = !!(ev ? ev.completed : (opts.prefill && opts.prefill.completed));
 
     // Category
     const catName = (ev && ev.category) || (opts.prefill && opts.prefill.category) || 'trabajo';
@@ -156,36 +158,6 @@ export const UI = {
     }
 
     setTimeout(() => { if (titleEl) titleEl.focus(); }, 60);
-  },
-
-  updateQpTypeUI(type) {
-    const isTask = type === 'task';
-    const guestsRow = document.getElementById('qp-guests-row');
-    const locRow = document.getElementById('qp-location-row');
-    if (guestsRow) guestsRow.style.display = isTask ? 'none' : 'flex';
-    if (locRow) locRow.style.display = isTask ? 'none' : 'flex';
-  },
-
-  updateQpAllDayUI(isChecked) {
-    const startTimeWrap = document.getElementById('qp-time-start-wrap');
-    const endTimeWrap = document.getElementById('qp-time-end-wrap');
-    const inpCheck = document.getElementById('qp-in-progress');
-    const isIndefinite = inpCheck ? inpCheck.checked : false;
-
-    if (startTimeWrap) startTimeWrap.style.display = isChecked ? 'none' : 'flex';
-    if (endTimeWrap) endTimeWrap.style.display = (isChecked || isIndefinite) ? 'none' : 'flex';
-  },
-
-  updateQpInProgressUI(isChecked) {
-    const endSep = document.querySelector('.qp-tsep');
-    const endDateInput = document.getElementById('qp-date-end-input');
-    const endTimeWrap = document.getElementById('qp-time-end-wrap');
-    const alldayCheck = document.getElementById('qp-allday');
-    const isAllDay = alldayCheck ? alldayCheck.checked : false;
-
-    if (endSep) endSep.style.display = isChecked ? 'none' : '';
-    if (endDateInput) endDateInput.style.display = isChecked ? 'none' : '';
-    if (endTimeWrap) endTimeWrap.style.display = (isChecked || isAllDay) ? 'none' : 'flex';
   },
 
   updateModalInProgressUI(isChecked) {
@@ -392,6 +364,38 @@ export const UI = {
     });
   },
 
+  updateQpTypeUI(type) {
+    const isTask = type === 'task';
+    const guestsRow = document.getElementById('qp-guests-row');
+    const locRow = document.getElementById('qp-location-row');
+    const completedWrap = document.getElementById('qp-completed-wrap');
+    if (guestsRow) guestsRow.style.display = isTask ? 'none' : 'flex';
+    if (locRow) locRow.style.display = isTask ? 'none' : 'flex';
+    if (completedWrap) completedWrap.style.display = isTask ? 'inline-flex' : 'none';
+  },
+
+  updateQpAllDayUI(isChecked) {
+    const startTimeWrap = document.getElementById('qp-time-start-wrap');
+    const endTimeWrap = document.getElementById('qp-time-end-wrap');
+    const inpCheck = document.getElementById('qp-in-progress');
+    const isIndefinite = inpCheck ? inpCheck.checked : false;
+
+    if (startTimeWrap) startTimeWrap.style.display = isChecked ? 'none' : 'flex';
+    if (endTimeWrap) endTimeWrap.style.display = (isChecked || isIndefinite) ? 'none' : 'flex';
+  },
+
+  updateQpInProgressUI(isChecked) {
+    const endSep = document.querySelector('.qp-tsep');
+    const endDateInput = document.getElementById('qp-date-end-input');
+    const endTimeWrap = document.getElementById('qp-time-end-wrap');
+    const alldayCheck = document.getElementById('qp-allday');
+    const isAllDay = alldayCheck ? alldayCheck.checked : false;
+
+    if (endSep) endSep.style.display = isChecked ? 'none' : '';
+    if (endDateInput) endDateInput.style.display = isChecked ? 'none' : '';
+    if (endTimeWrap) endTimeWrap.style.display = (isChecked || isAllDay) ? 'none' : 'flex';
+  },
+
   getQuickPopupData() {
     const popup = document.getElementById('quick-popup');
     const typeBtn = document.querySelector('[data-qptype].active');
@@ -423,6 +427,7 @@ export const UI = {
         document.getElementById('qp-loc-country')?.value?.trim()
       ].filter(Boolean).join(', '),
       important: document.getElementById('qp-important')?.checked || false,
+      completed: isTask ? (document.getElementById('qp-completed')?.checked || false) : false,
       reminders: this.qpReminders || [],
       noteId: (this.qpLinkedNotes && this.qpLinkedNotes.length) ? this.qpLinkedNotes.join(',') : null,
       guests: isTask ? [] : (this.qpGuests || []),
@@ -806,6 +811,32 @@ export const UI = {
     }
 
     // Wire up buttons
+    const completeBtn = document.getElementById('detail-btn-toggle-complete');
+    const completeBtnText = document.getElementById('detail-btn-toggle-complete-text');
+    if (completeBtn) {
+      if (isTask) {
+        completeBtn.style.display = 'inline-flex';
+        if (ev.completed) {
+          completeBtnText.textContent = isEn ? 'Mark pending' : 'Marcar pendiente';
+          completeBtn.style.background = 'rgba(148, 163, 184, 0.15)';
+          completeBtn.style.color = '#94a3b8';
+          completeBtn.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+        } else {
+          completeBtnText.textContent = isEn ? 'Mark complete' : 'Marcar realizada';
+          completeBtn.style.background = 'rgba(74, 222, 128, 0.15)';
+          completeBtn.style.color = '#4ade80';
+          completeBtn.style.borderColor = 'rgba(74, 222, 128, 0.3)';
+        }
+        completeBtn.onclick = () => {
+          Events.toggleComplete(ev.id);
+          this.closeDetailView();
+          App.refresh();
+        };
+      } else {
+        completeBtn.style.display = 'none';
+      }
+    }
+
     const finishBtn = document.getElementById('detail-btn-finish');
     if (finishBtn) {
       if (ev.inProgress) {

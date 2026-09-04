@@ -1,6 +1,8 @@
 services:
   nullvoid-engine:
-    build: ./services/null-void-service
+    build:
+      context: ./services/null-void-service
+      network: host
     container_name: nullvoid-engine
     network_mode: "host"
     volumes:
@@ -49,7 +51,8 @@ services:
     cap_drop:
       - ALL 
     cap_add:
-      - NET_BIND_SERVICE                    
+      - NET_BIND_SERVICE
+      - DAC_OVERRIDE
     read_only: false            
     tmpfs:
       - /tmp                    
@@ -60,6 +63,7 @@ services:
   nullvoid-scraper:
     build:
       context: ./services/scraper_service
+      network: host
     profiles: ["scraper"]
     network_mode: "host"
     container_name: nullvoid-scraper

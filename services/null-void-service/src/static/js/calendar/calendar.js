@@ -80,7 +80,7 @@ export const Calendar = {
         const isMultiDay = ev.endDate && ev.endDate !== ev.date;
         const icon = ev.type === 'task' ? (ev.completed ? '' : SVG_TASK_PENDING) : (ev.allDay ? SVG_EVENT : '');
         const timeHtml = ev.inProgress ? `<span class="event-time" style="color:#38bdf8;font-weight:bold;">${window.t('indefinido')} </span>` : (ev.allDay || !ev.startTime || isMultiDay ? '' : `<span class="event-time">${ev.startTime} </span>`);
-        const label = `${icon ? icon + ' ' : ''}${timeHtml}${ev.title}`.trim();
+        const labelHtml = `${icon ? icon + ' ' : ''}${timeHtml}${_escHtml(ev.title)}`;
         const contStart = isMultiDay && !isStart ? '▶ ' : '';
         const contEnd = isMultiDay && !isEnd ? ' ▶' : '';
         return `<div class="event-chip${ev.completed ? ' completed' : ''}${isMultiDay ? ' multi-day-chip' : ''}" 
@@ -88,7 +88,7 @@ export const Calendar = {
                      style="background:${bg};color:${color};${isMultiDay && !isStart ? 'border-top-left-radius:0;border-bottom-left-radius:0;' : ''}${isMultiDay && !isEnd ? 'border-top-right-radius:0;border-bottom-right-radius:0;' : ''}"
                      title="${_escHtml(ev.title)}">
                   <span class="event-chip-dot" style="background:${color}"></span>
-                  <span class="event-chip-label">${contStart}${_escHtml(label)}${contEnd}</span>
+                  <span class="event-chip-label">${contStart}${labelHtml}${contEnd}</span>
                 </div>`;
       }).join('');
 

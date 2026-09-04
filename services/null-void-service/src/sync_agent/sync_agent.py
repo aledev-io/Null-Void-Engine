@@ -14,24 +14,10 @@ def _db_store_link_token(token, original_token, username, expires, target_device
     from core.database import get_db
     with get_db() as conn:
         conn.execute("DELETE FROM agent_link_tokens WHERE expires < ?", (time.time(),))
-        try:
-            conn.execute(
-                "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, target_device, expires, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (token, original_token, username, str(target_device or ''), expires, time.time())
-            )
-        except Exception:
-            # Fallback si la columna target_device aún no existe en la tabla
-            try:
-                conn.execute("ALTER TABLE agent_link_tokens ADD COLUMN target_device TEXT DEFAULT ''")
-                conn.execute(
-                    "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, target_device, expires, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (token, original_token, username, str(target_device or ''), expires, time.time())
-                )
-            except Exception:
-                conn.execute(
-                    "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, expires, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (token, original_token, username, expires, time.time())
-                )
+        conn.execute(
+            "INSERT OR REPLACE INTO agent_link_tokens (token, original_token, username, target_device, expires, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (token, original_token, username, str(target_device or ''), expires, time.time())
+        )
         conn.commit()
 
 
